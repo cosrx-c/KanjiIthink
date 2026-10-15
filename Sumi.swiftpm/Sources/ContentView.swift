@@ -14,7 +14,8 @@
 //    7. Screens            Today, Kanji, Read, Progress, Settings, onboarding
 //    8. Built-in content   the starter pack as embedded JSON
 //
-//  The research behind each decision is in docs/RESEARCH.md.
+//  The research behind each decision is in docs/RESEARCH.md at the root
+//  of the repository (next to this Sumi.swiftpm package).
 //
 
 import SwiftUI
@@ -4925,7 +4926,7 @@ struct SettingsView: View {
         } header: {
             Text("Content & data")
         } footer: {
-            Text("Content packs are JSON files (see docs/CONTENT_SCHEMA.md); swipe a pack to remove it. Progress is stored on this device — export a backup to move it.")
+            Text("Content packs are JSON files that add kanji and reading texts; swipe a pack to remove it. Progress is stored on this device — export a backup to move it.")
         }
     }
 

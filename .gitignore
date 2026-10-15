@@ -3,3 +3,6 @@
 xcuserdata/
 *.xcuserstate
 __pycache__/
+
+# Per-device workspace state Swift Playgrounds and Xcode write inside the package
+.swiftpm/

@@ -3,7 +3,7 @@
 This document records *why* Sumi works the way it does: what learners
 struggle with in existing apps, what the learning-science and linguistics
 research says, which UX principles were applied, and how each one maps to a
-concrete decision in `Sources/ContentView.swift`. It also lists the open
+concrete decision in `Sumi.swiftpm/Sources/ContentView.swift`. It also lists the open
 questions that only testing with real learners can answer.
 
 ---
@@ -208,7 +208,7 @@ Increase Contrast palette variants, Reduce Motion, keyboard shortcuts on iPad.
 
 ## 6. Architecture notes
 
-- One file (`Sources/ContentView.swift`) by request, organized into eight
+- One file (`Sumi.swiftpm/Sources/ContentView.swift`) by request, organized into eight
   marked sections. `ContentView` owns the store, so `WindowGroup {
   ContentView() }` is all an app needs.
 - iOS 17+, SwiftUI, Swift 5.9 language mode. No SwiftData/`@Observable`

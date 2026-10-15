@@ -1,4 +1,4 @@
-"""Re-embed content/core-n5.json into Sources/ContentView.swift.
+"""Re-embed content/core-n5.json into Sumi.swiftpm/Sources/ContentView.swift.
 
 The app ships its starter content as a JSON string inside ContentView.swift
 (so the Swift file stays self-contained). Edit content/core-n5.json, run
@@ -37,7 +37,7 @@ assert json.loads(pretty) == {**content, "passages": content.get("passages", [])
 if '"""' in pretty or "\\" in pretty:
     raise SystemExit('Content may not contain """ or backslashes (they would break the Swift raw string).')
 
-swift_path = root / "Sources" / "ContentView.swift"
+swift_path = root / "Sumi.swiftpm" / "Sources" / "ContentView.swift"
 swift = swift_path.read_text(encoding="utf-8")
 pattern = re.compile(r'(let builtInContentJSON = #""")\n[\s\S]*?\n("""#)')
 if not pattern.search(swift):

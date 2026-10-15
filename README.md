@@ -33,49 +33,61 @@ The research behind every decision is in [docs/RESEARCH.md](docs/RESEARCH.md).
 ## Project layout
 
 ```
-Package.swift            Swift Playgrounds app manifest (iOS 17+, iPhone + iPad)
-Sources/
-  MyApp.swift            @main entry point — just WindowGroup { ContentView() }
-  ContentView.swift      the whole app: design system, FSRS, store, all screens,
-                         and the starter content embedded as JSON
-content/core-n5.json     editable source of the starter content
-docs/RESEARCH.md         pain points, learning science, UX and design-system rationale
-docs/CONTENT_SCHEMA.md   how to write content packs for N4–N1
-tools/                   validate and re-embed content (Python 3, optional)
+Sumi.swiftpm/              ← the app. Open this folder in Swift Playgrounds or Xcode.
+  Package.swift            app manifest (iOS 17+, iPhone + iPad)
+  Sources/
+    MyApp.swift            @main entry point — just WindowGroup { ContentView() }
+    ContentView.swift      the whole app: design system, FSRS, store, all screens,
+                           and the starter content embedded as JSON
+content/core-n5.json       editable source of the starter content
+docs/RESEARCH.md           pain points, learning science, UX and design-system rationale
+docs/CONTENT_SCHEMA.md     how to write content packs for N4–N1
+tools/                     validate and re-embed content (Python 3, optional)
 ```
 
+Swift Playgrounds treats any folder ending in `.swiftpm` as an app project, so
+`Sumi.swiftpm` opens directly — nothing to create or copy first. Docs and tools
+live outside it so the project stays clean in Playgrounds.
+
 `ContentView.swift` is self-contained: it owns its data store, so any App can
-host it with `ContentView()`. If your repository already has its own
-`MyApp.swift` and `Package.swift`, keep yours — the only requirement is that
-the target's `path` is `"Sources"`.
+host it with `ContentView()`.
 
-## Running it in Swift Playgrounds via GitHub
+## Opening and building it
 
-Swift Playgrounds (4.4 or later, iPadOS 17+) opens folders whose name ends in
-`.swiftpm`. A Git client on the iPad — [Working Copy](https://workingcopy.app)
-is the usual choice — keeps that folder in sync with GitHub.
+Requires Swift Playgrounds 4.4 or later on iPadOS 17+ (or a Mac with Swift
+Playgrounds or Xcode 15+).
 
-1. **Push this folder to GitHub** (from a computer):
+### On iPad, with GitHub sync (recommended)
 
-   ```bash
-   git init && git add . && git commit -m "Initial commit"
-   ```
+[Working Copy](https://workingcopy.app) is a Git client whose repositories
+appear in the Files app, so Swift Playgrounds can open the package in place
+and every edit lands straight in the Git checkout.
 
-   ```bash
-   git remote add origin https://github.com/<you>/sumi.git && git push -u origin main
-   ```
-
-2. **On the iPad, create an empty app** in Swift Playgrounds named `Sumi`.
-   This creates `Sumi.swiftpm` in iCloud Drive → Playgrounds.
-3. **In Working Copy, clone the repository**, then open it and choose
-   *Link Repository to Directory* (or *Setup Synced Directory*), and pick the
-   `Sumi.swiftpm` folder. Let Working Copy replace its contents with the
-   repository's.
-4. **Open `Sumi` in Swift Playgrounds** and press ▶︎. First launch shows the
-   onboarding.
-5. **To sync:** edits made in Playgrounds appear as changes in Working Copy —
+1. In Working Copy, tap **+ → Clone repository** and enter
+   `https://github.com/cosrx-c/KanjiIthink.git`.
+2. Open Swift Playgrounds, tap **Locations** (or the folder icon) and choose
+   **Working Copy → KanjiIthink → Sumi.swiftpm**. It opens as the app *Sumi*.
+3. Press **▶︎** to build and run. First launch shows the onboarding.
+4. **To sync:** edits made in Playgrounds show up as changes in Working Copy —
    commit and push there. Pull in Working Copy to bring in changes made
-   elsewhere.
+   elsewhere, then reopen the project.
+
+If Swift Playgrounds can't see the Working Copy location, use Working Copy's
+*Link Repository to Directory* instead: link the repository to a folder in
+iCloud Drive and open `Sumi.swiftpm` from there.
+
+### On iPad, without Git (quick try)
+
+1. In Safari, open the repository on GitHub and choose **Code → Download ZIP**.
+2. In Files, tap the ZIP to unzip it, open the folder and tap
+   **Sumi.swiftpm** — it opens in Swift Playgrounds.
+3. Press **▶︎**. (Changes made this way aren't synced back to GitHub.)
+
+### On a Mac
+
+Clone the repository and double-click `Sumi.swiftpm` to open it in Swift
+Playgrounds, or open it from Xcode (**File → Open**) and run it on a
+simulator or device.
 
 Notes:
 
@@ -85,6 +97,9 @@ Notes:
 - Signing in with an Apple ID in Playgrounds adds a `teamIdentifier` to
   `Package.swift`; commit that change.
 - Change `bundleIdentifier` to your own reverse-domain ID before publishing.
+- To rename the project, rename the folder (e.g. `KanjiIthink.swiftpm`) and the
+  `name` fields in `Package.swift`; then update the path in
+  `tools/embed_content.py`.
 
 ## Adding content
 

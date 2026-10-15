@@ -2,7 +2,7 @@
 
 All kanji, words, reading passages and look-alike sets are plain JSON. The
 starter pack lives in [`content/core-n5.json`](../content/core-n5.json) and is
-embedded in `Sources/ContentView.swift`. Anything else can be added two ways:
+embedded in `Sumi.swiftpm/Sources/ContentView.swift`. Anything else can be added two ways:
 
 1. **In the app, no rebuild:** Settings → Content & data → *Import content
    pack or backup*, then pick a `.json` file. A pack with the same `name`
