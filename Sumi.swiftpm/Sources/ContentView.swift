@@ -403,7 +403,9 @@ struct FlowLayout: Layout {
     }
 }
 
-final class Speaker: NSObject, AVSpeechSynthesizerDelegate {
+/// Only ever used from the main thread, so the unchecked conformance (which
+/// the delegate protocol requires) is safe.
+final class Speaker: NSObject, AVSpeechSynthesizerDelegate, @unchecked Sendable {
     static let shared = Speaker()
     private let synthesizer = AVSpeechSynthesizer()
 
@@ -1524,9 +1526,9 @@ final class Store: ObservableObject {
         let directory = (try? FileManager.default.url(for: .applicationSupportDirectory, in: .userDomainMask,
                                                       appropriateFor: nil, create: true))
             ?? FileManager.default.temporaryDirectory
-        fileURL = directory.appendingPathComponent("sumi-progress.json")
+        let url = directory.appendingPathComponent("sumi-progress.json")
         var loaded = SaveFile()
-        if let raw = try? Data(contentsOf: fileURL) {
+        if let raw = try? Data(contentsOf: url) {
             if let decoded = try? JSONDecoder().decode(SaveFile.self, from: raw) {
                 loaded = decoded
             } else {
@@ -1535,6 +1537,7 @@ final class Store: ObservableObject {
                 try? raw.write(to: directory.appendingPathComponent("sumi-progress-unreadable-\(stamp).json"))
             }
         }
+        fileURL = url
         data = loaded
         library = ContentLibrary(packs: [BuiltIn.pack] + loaded.packs)
     }
@@ -5449,27 +5452,44 @@ struct MethodView: View {
         .navigationBarTitleDisplayMode(.inline)
     }
 
+    private struct Shortcut: Identifiable {
+        let key: String
+        let action: String
+        var id: String { key }
+    }
+
+    private let shortcuts: [Shortcut] = [
+        Shortcut(key: "Space", action: "Show answer"),
+        Shortcut(key: "Return", action: "Remembered / Continue"),
+        Shortcut(key: "1", action: "Forgot"),
+        Shortcut(key: "2 · 4", action: "Hard · Easy (detailed grading)"),
+        Shortcut(key: "⌘Z", action: "Undo last answer"),
+        Shortcut(key: "Esc", action: "End session")
+    ]
+
     private var shortcutsCard: some View {
         VStack(alignment: .leading, spacing: Space.s) {
             Eyebrow(text: "Keyboard shortcuts (iPad)")
-            ForEach([("Space", "Show answer"), ("Return", "Remembered / Continue"), ("1", "Forgot"),
-                     ("2 · 4", "Hard · Easy (detailed grading)"), ("⌘Z", "Undo last answer"), ("Esc", "End session")],
-                    id: \.0) { key, action in
-                HStack {
-                    Text(key)
-                        .font(.subheadline.monospaced().weight(.semibold))
-                        .foregroundStyle(Palette.ink)
-                        .padding(.horizontal, Space.xs)
-                        .padding(.vertical, Space.xxs)
-                        .background(Palette.sunken, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
-                    Spacer()
-                    Text(action)
-                        .font(.subheadline)
-                        .foregroundStyle(Palette.ink2)
-                }
+            ForEach(shortcuts) { shortcut in
+                shortcutRow(shortcut)
             }
         }
         .surfaceCard()
+    }
+
+    private func shortcutRow(_ shortcut: Shortcut) -> some View {
+        HStack {
+            Text(shortcut.key)
+                .font(.subheadline.monospaced().weight(.semibold))
+                .foregroundStyle(Palette.ink)
+                .padding(.horizontal, Space.xs)
+                .padding(.vertical, Space.xxs)
+                .background(Palette.sunken, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+            Spacer()
+            Text(shortcut.action)
+                .font(.subheadline)
+                .foregroundStyle(Palette.ink2)
+        }
     }
 }
 
