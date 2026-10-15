@@ -1,0 +1,1125 @@
+{
+  "name": "Core N5 starter",
+  "kanji": [
+    {
+      "glyph": "一", "level": 5, "strokes": 1,
+      "meanings": ["one"],
+      "on": ["イチ", "イツ"], "kun": ["ひと", "ひと.つ"],
+      "kind": "indicative", "parts": [],
+      "mnemonic": "A single flat stroke — one finger laid on the table.",
+      "words": [
+        {"word": "一つ", "reading": "ひとつ", "meaning": "one (thing)"},
+        {"word": "一人", "reading": "ひとり", "meaning": "one person; alone"},
+        {"word": "一月", "reading": "いちがつ", "meaning": "January"}
+      ],
+      "sentence": "{一人|ひとり}で{東京|とうきょう}へ{行|い}きました。",
+      "translation": "I went to Tokyo on my own.",
+      "usage": "Japanese has two counting systems: いち、に、さん… from Chinese, and native ひとつ、ふたつ… for counting things up to ten."
+    },
+    {
+      "glyph": "二", "level": 5, "strokes": 2,
+      "meanings": ["two"],
+      "on": ["ニ"], "kun": ["ふた", "ふた.つ"],
+      "kind": "indicative", "parts": [],
+      "mnemonic": "Two lines stacked — the longer bottom one is a shelf holding up the top.",
+      "words": [
+        {"word": "二つ", "reading": "ふたつ", "meaning": "two (things)"},
+        {"word": "二人", "reading": "ふたり", "meaning": "two people"},
+        {"word": "二月", "reading": "にがつ", "meaning": "February"}
+      ],
+      "sentence": "{猫|ねこ}が{二匹|にひき}います。",
+      "translation": "There are two cats.",
+      "usage": "One and two people are irregular: 一人 ひとり, 二人 ふたり. From three on it's number + にん."
+    },
+    {
+      "glyph": "三", "level": 5, "strokes": 3,
+      "meanings": ["three"],
+      "on": ["サン"], "kun": ["み", "み.つ", "みっ.つ"],
+      "kind": "indicative", "parts": [],
+      "mnemonic": "Three lines — count them. The middle one is the shortest.",
+      "words": [
+        {"word": "三つ", "reading": "みっつ", "meaning": "three (things)"},
+        {"word": "三月", "reading": "さんがつ", "meaning": "March"},
+        {"word": "三人", "reading": "さんにん", "meaning": "three people"}
+      ],
+      "sentence": "りんごを{三|みっ}つください。",
+      "translation": "Three apples, please.",
+      "usage": "Months are simply number + 月: 三月 is March, the end of the Japanese school and business year."
+    },
+    {
+      "glyph": "四", "level": 5, "strokes": 5,
+      "meanings": ["four"],
+      "on": ["シ"], "kun": ["よ", "よ.つ", "よっ.つ", "よん"],
+      "kind": "borrowed", "parts": [{"glyph": "囗", "meaning": "enclosure"}, {"glyph": "儿", "meaning": "legs"}],
+      "mnemonic": "A room (囗) with legs (儿) inside: four walls, four corners.",
+      "words": [
+        {"word": "四つ", "reading": "よっつ", "meaning": "four (things)"},
+        {"word": "四月", "reading": "しがつ", "meaning": "April"},
+        {"word": "四人", "reading": "よにん", "meaning": "four people"}
+      ],
+      "sentence": "{四月|しがつ}に{日本|にほん}へ{行|い}きます。",
+      "translation": "I'm going to Japan in April.",
+      "usage": "し sounds like 死 (death), so よん is usually preferred — some buildings even skip room 4."
+    },
+    {
+      "glyph": "五", "level": 5, "strokes": 4,
+      "meanings": ["five"],
+      "on": ["ゴ"], "kun": ["いつ", "いつ.つ"],
+      "kind": "borrowed", "parts": [],
+      "mnemonic": "Between a sky line and a ground line, a figure twists like a 5 written in a hurry.",
+      "words": [
+        {"word": "五つ", "reading": "いつつ", "meaning": "five (things)"},
+        {"word": "五月", "reading": "ごがつ", "meaning": "May"},
+        {"word": "五日", "reading": "いつか", "meaning": "the 5th (of the month); five days"}
+      ],
+      "sentence": "{毎朝|まいあさ}{五時|ごじ}に{起|お}きます。",
+      "translation": "I get up at five every morning.",
+      "usage": "Early May has Golden Week, a cluster of national holidays when much of Japan travels."
+    },
+    {
+      "glyph": "六", "level": 5, "strokes": 4,
+      "meanings": ["six"],
+      "on": ["ロク"], "kun": ["む", "む.つ", "むっ.つ"],
+      "kind": "borrowed", "parts": [{"glyph": "亠", "meaning": "lid"}, {"glyph": "八", "meaning": "spread legs"}],
+      "mnemonic": "A lid (亠) over spread legs (八): a little hut where six people huddle.",
+      "words": [
+        {"word": "六つ", "reading": "むっつ", "meaning": "six (things)"},
+        {"word": "六月", "reading": "ろくがつ", "meaning": "June"},
+        {"word": "六百", "reading": "ろっぴゃく", "meaning": "six hundred"}
+      ],
+      "sentence": "{会議|かいぎ}は{六時|ろくじ}からです。",
+      "translation": "The meeting starts at six.",
+      "usage": "Sounds merge in numbers: ろく + ひゃく becomes ろっぴゃく."
+    },
+    {
+      "glyph": "七", "level": 5, "strokes": 2,
+      "meanings": ["seven"],
+      "on": ["シチ"], "kun": ["なな", "なな.つ", "なの"],
+      "kind": "borrowed", "parts": [],
+      "mnemonic": "An upside-down 7 with a line through it, like a European-style seven.",
+      "words": [
+        {"word": "七つ", "reading": "ななつ", "meaning": "seven (things)"},
+        {"word": "七月", "reading": "しちがつ", "meaning": "July"},
+        {"word": "七時", "reading": "しちじ", "meaning": "seven o'clock"}
+      ],
+      "sentence": "{毎朝|まいあさ}{七時|しちじ}に{家|いえ}を{出|で}ます。",
+      "translation": "I leave home at seven every morning.",
+      "usage": "なな is often used instead of しち, because しち is easy to mishear as いち."
+    },
+    {
+      "glyph": "八", "level": 5, "strokes": 2,
+      "meanings": ["eight"],
+      "on": ["ハチ"], "kun": ["や", "や.つ", "やっ.つ", "よう"],
+      "kind": "borrowed", "parts": [],
+      "mnemonic": "Two strokes spreading apart like the foot of a mountain.",
+      "words": [
+        {"word": "八つ", "reading": "やっつ", "meaning": "eight (things)"},
+        {"word": "八月", "reading": "はちがつ", "meaning": "August"},
+        {"word": "八百", "reading": "はっぴゃく", "meaning": "eight hundred"}
+      ],
+      "sentence": "{八時|はちじ}に{学校|がっこう}へ{行|い}きます。",
+      "translation": "I go to school at eight.",
+      "usage": "八 widens toward the bottom (末広がり, 'spreading toward the end'), so it's considered a lucky number."
+    },
+    {
+      "glyph": "九", "level": 5, "strokes": 2,
+      "meanings": ["nine"],
+      "on": ["キュウ", "ク"], "kun": ["ここの", "ここの.つ"],
+      "kind": "borrowed", "parts": [{"glyph": "丿", "meaning": "slanted stroke"}, {"glyph": "乙", "meaning": "hook"}],
+      "mnemonic": "A slanted arm (丿) and a hooked elbow (乙) reaching for the ninth cookie.",
+      "words": [
+        {"word": "九つ", "reading": "ここのつ", "meaning": "nine (things)"},
+        {"word": "九月", "reading": "くがつ", "meaning": "September"},
+        {"word": "九時", "reading": "くじ", "meaning": "nine o'clock"}
+      ],
+      "sentence": "{九月|くがつ}はまだ{暑|あつ}いです。",
+      "translation": "September is still hot.",
+      "usage": "く sounds like 苦 (suffering), so like 4 it's sometimes avoided. Times always use く: 九時 くじ."
+    },
+    {
+      "glyph": "十", "level": 5, "strokes": 2,
+      "meanings": ["ten"],
+      "on": ["ジュウ", "ジッ"], "kun": ["とお", "と"],
+      "parts": [],
+      "mnemonic": "A plus sign: two hands of five fingers crossed together make ten.",
+      "words": [
+        {"word": "十", "reading": "とお", "meaning": "ten (things)"},
+        {"word": "十月", "reading": "じゅうがつ", "meaning": "October"},
+        {"word": "十日", "reading": "とおか", "meaning": "the 10th (of the month); ten days"}
+      ],
+      "sentence": "{十分|じゅっぷん}{待|ま}ってください。",
+      "translation": "Please wait ten minutes.",
+      "usage": "十分 can be じゅっぷん (ten minutes) or じゅうぶん (enough) — context decides."
+    },
+    {
+      "glyph": "百", "level": 5, "strokes": 6,
+      "meanings": ["hundred"],
+      "on": ["ヒャク"], "kun": ["もも"],
+      "kind": "phonetic", "phonetic": "白 (ハク) hints at the sound ヒャク",
+      "parts": [{"glyph": "一", "meaning": "one"}, {"glyph": "白", "meaning": "white"}],
+      "mnemonic": "One (一) over white (白): live to a hundred and everything turns white.",
+      "words": [
+        {"word": "百", "reading": "ひゃく", "meaning": "hundred"},
+        {"word": "三百", "reading": "さんびゃく", "meaning": "three hundred"},
+        {"word": "百円", "reading": "ひゃくえん", "meaning": "100 yen"}
+      ],
+      "sentence": "このペンは{百円|ひゃくえん}です。",
+      "translation": "This pen is 100 yen.",
+      "usage": "Sounds shift after some numbers: 三百 さんびゃく, 六百 ろっぴゃく, 八百 はっぴゃく."
+    },
+    {
+      "glyph": "千", "level": 5, "strokes": 3,
+      "meanings": ["thousand"],
+      "on": ["セン"], "kun": ["ち"],
+      "parts": [{"glyph": "丿", "meaning": "slanted stroke"}, {"glyph": "十", "meaning": "ten"}],
+      "mnemonic": "Ten (十) wearing a slanted cap (丿): ten, multiplied up to a thousand.",
+      "words": [
+        {"word": "千", "reading": "せん", "meaning": "thousand"},
+        {"word": "三千", "reading": "さんぜん", "meaning": "three thousand"},
+        {"word": "千円", "reading": "せんえん", "meaning": "1,000 yen"}
+      ],
+      "sentence": "{千円|せんえん}{札|さつ}しかありません。",
+      "translation": "I only have a 1,000-yen note.",
+      "usage": "Large numbers are grouped by 万 (10,000), not by thousands: 10,000 is 一万 いちまん."
+    },
+    {
+      "glyph": "円", "level": 5, "strokes": 4,
+      "meanings": ["yen", "circle"],
+      "on": ["エン"], "kun": ["まる.い"],
+      "parts": [],
+      "mnemonic": "A shop window frame with a bar across it — the price tag says yen.",
+      "words": [
+        {"word": "円", "reading": "えん", "meaning": "yen; circle"},
+        {"word": "千円", "reading": "せんえん", "meaning": "1,000 yen"},
+        {"word": "一万円", "reading": "いちまんえん", "meaning": "10,000 yen"}
+      ],
+      "sentence": "このケーキは{五百円|ごひゃくえん}です。",
+      "translation": "This cake is 500 yen.",
+      "usage": "Both ¥ and 円 are read えん. 百円ショップ (100-yen shops) sell almost everything."
+    },
+    {
+      "glyph": "日", "level": 5, "strokes": 4,
+      "meanings": ["sun", "day"],
+      "on": ["ニチ", "ジツ"], "kun": ["ひ", "-び", "-か"],
+      "kind": "pictograph", "parts": [],
+      "mnemonic": "The sun, once drawn as a circle with a dot, squared off over time.",
+      "words": [
+        {"word": "日曜日", "reading": "にちようび", "meaning": "Sunday"},
+        {"word": "毎日", "reading": "まいにち", "meaning": "every day"},
+        {"word": "今日", "reading": "きょう", "meaning": "today"}
+      ],
+      "sentence": "{今日|きょう}は{日曜日|にちようび}です。",
+      "translation": "Today is Sunday.",
+      "usage": "Shop hours often list 日・祝, meaning 'Sundays and holidays'. 今日 is read きょう as a whole word — a special reading."
+    },
+    {
+      "glyph": "月", "level": 5, "strokes": 4,
+      "meanings": ["moon", "month"],
+      "on": ["ゲツ", "ガツ"], "kun": ["つき"],
+      "kind": "pictograph", "parts": [],
+      "mnemonic": "A crescent moon with two wisps of cloud drifting across it.",
+      "words": [
+        {"word": "月", "reading": "つき", "meaning": "moon; month"},
+        {"word": "月曜日", "reading": "げつようび", "meaning": "Monday"},
+        {"word": "一月", "reading": "いちがつ", "meaning": "January"}
+      ],
+      "sentence": "{今夜|こんや}は{月|つき}がきれいですね。",
+      "translation": "The moon is beautiful tonight, isn't it?",
+      "usage": "月がきれいですね is famously — if probably apocryphally — credited to Natsume Sōseki as a subtle way to say 'I love you'."
+    },
+    {
+      "glyph": "火", "level": 5, "strokes": 4,
+      "meanings": ["fire"],
+      "on": ["カ"], "kun": ["ひ", "-び", "ほ-"],
+      "kind": "pictograph", "parts": [],
+      "mnemonic": "A campfire: flames leaping up with sparks flying out on both sides.",
+      "words": [
+        {"word": "火", "reading": "ひ", "meaning": "fire"},
+        {"word": "火曜日", "reading": "かようび", "meaning": "Tuesday"},
+        {"word": "花火", "reading": "はなび", "meaning": "fireworks"}
+      ],
+      "sentence": "{火|ひ}に{気|き}をつけてください。",
+      "translation": "Please be careful with fire.",
+      "usage": "花火 (fireworks, literally 'flower fire') are the highlight of summer festivals."
+    },
+    {
+      "glyph": "水", "level": 5, "strokes": 4,
+      "meanings": ["water"],
+      "on": ["スイ"], "kun": ["みず"],
+      "kind": "pictograph", "parts": [],
+      "mnemonic": "A main stream running down the middle with splashes to the left and right.",
+      "words": [
+        {"word": "水", "reading": "みず", "meaning": "water"},
+        {"word": "水曜日", "reading": "すいようび", "meaning": "Wednesday"},
+        {"word": "水着", "reading": "みずぎ", "meaning": "swimsuit"}
+      ],
+      "sentence": "{水|みず}を{一杯|いっぱい}ください。",
+      "translation": "A glass of water, please.",
+      "usage": "Restaurants bring お水 (water, with the polite お) free of charge."
+    },
+    {
+      "glyph": "木", "level": 5, "strokes": 4,
+      "meanings": ["tree", "wood"],
+      "on": ["ボク", "モク"], "kun": ["き", "こ-"],
+      "kind": "pictograph", "parts": [],
+      "mnemonic": "A trunk with branches reaching up and roots spreading below.",
+      "words": [
+        {"word": "木", "reading": "き", "meaning": "tree; wood"},
+        {"word": "木曜日", "reading": "もくようび", "meaning": "Thursday"},
+        {"word": "木村", "reading": "きむら", "meaning": "Kimura (surname)"}
+      ],
+      "sentence": "{公園|こうえん}に{大|おお}きい{木|き}があります。",
+      "translation": "There's a big tree in the park.",
+      "usage": "木 appears in many surnames: 木村, 鈴木, 佐々木."
+    },
+    {
+      "glyph": "金", "level": 5, "strokes": 8,
+      "meanings": ["gold", "money"],
+      "on": ["キン", "コン"], "kun": ["かね", "かな-"],
+      "parts": [{"glyph": "人", "meaning": "roof"}, {"glyph": "王", "meaning": "king"}],
+      "mnemonic": "Under a roof (人), a king (王) guards two glittering nuggets of gold.",
+      "words": [
+        {"word": "お金", "reading": "おかね", "meaning": "money"},
+        {"word": "金曜日", "reading": "きんようび", "meaning": "Friday"},
+        {"word": "金", "reading": "きん", "meaning": "gold"}
+      ],
+      "sentence": "{金曜日|きんようび}に{友|とも}だちと{会|あ}います。",
+      "translation": "I'm meeting a friend on Friday.",
+      "usage": "In everyday speech money is お金, with the polite prefix お."
+    },
+    {
+      "glyph": "土", "level": 5, "strokes": 3,
+      "meanings": ["earth", "soil"],
+      "on": ["ド", "ト"], "kun": ["つち"],
+      "kind": "pictograph", "parts": [],
+      "mnemonic": "A cross planted in a mound — the bottom line is the ground, wider than the top.",
+      "words": [
+        {"word": "土", "reading": "つち", "meaning": "soil; earth"},
+        {"word": "土曜日", "reading": "どようび", "meaning": "Saturday"},
+        {"word": "土地", "reading": "とち", "meaning": "land; plot"}
+      ],
+      "sentence": "{土曜日|どようび}は{休|やす}みです。",
+      "translation": "Saturday is a day off.",
+      "usage": "Calendars mark the week with one kanji per day: 月 火 水 木 金 土 日 — the moon, five elements and the sun."
+    },
+    {
+      "glyph": "年", "level": 5, "strokes": 6,
+      "meanings": ["year"],
+      "on": ["ネン"], "kun": ["とし"],
+      "parts": [],
+      "mnemonic": "A person bent under a sheaf of harvested grain — one harvest, one year.",
+      "words": [
+        {"word": "今年", "reading": "ことし", "meaning": "this year"},
+        {"word": "来年", "reading": "らいねん", "meaning": "next year"},
+        {"word": "毎年", "reading": "まいとし/まいねん", "meaning": "every year"}
+      ],
+      "sentence": "{来年|らいねん}、{日本|にほん}に{住|す}みたいです。",
+      "translation": "Next year, I want to live in Japan.",
+      "usage": "Japan also counts years by imperial era: 2019 was 令和元年, the first year of Reiwa."
+    },
+    {
+      "glyph": "時", "level": 5, "strokes": 10,
+      "meanings": ["time", "hour"],
+      "on": ["ジ"], "kun": ["とき"],
+      "kind": "phonetic", "phonetic": "寺 (ジ) gives the sound ジ",
+      "parts": [{"glyph": "日", "meaning": "sun"}, {"glyph": "寺", "meaning": "temple"}],
+      "mnemonic": "Sun (日) + temple (寺): the temple bell rings by the sun to tell the time.",
+      "words": [
+        {"word": "時間", "reading": "じかん", "meaning": "time; hours"},
+        {"word": "何時", "reading": "なんじ", "meaning": "what time"},
+        {"word": "時々", "reading": "ときどき", "meaning": "sometimes"}
+      ],
+      "sentence": "{今|いま}、{何時|なんじ}ですか。",
+      "translation": "What time is it now?",
+      "usage": "Watch the irregular hours: 四時 よじ, 七時 しちじ, 九時 くじ."
+    },
+    {
+      "glyph": "今", "level": 5, "strokes": 4,
+      "meanings": ["now"],
+      "on": ["コン", "キン"], "kun": ["いま"],
+      "parts": [{"glyph": "人", "meaning": "roof"}],
+      "mnemonic": "Someone ducks under a roof (人) right now — the rain has just started.",
+      "words": [
+        {"word": "今", "reading": "いま", "meaning": "now"},
+        {"word": "今日", "reading": "きょう", "meaning": "today"},
+        {"word": "今年", "reading": "ことし", "meaning": "this year"},
+        {"word": "今晩", "reading": "こんばん", "meaning": "this evening"}
+      ],
+      "sentence": "{今日|きょう}は{忙|いそが}しいです。",
+      "translation": "I'm busy today.",
+      "usage": "今日 (きょう) and 今年 (ことし) are whole-word readings — learn them as words, not kanji by kanji."
+    },
+    {
+      "glyph": "何", "level": 5, "strokes": 7,
+      "meanings": ["what"],
+      "on": ["カ"], "kun": ["なに", "なん"],
+      "kind": "phonetic", "phonetic": "可 (カ) gives the sound カ",
+      "parts": [{"glyph": "亻", "meaning": "person"}, {"glyph": "可", "meaning": "possible"}],
+      "mnemonic": "A person (亻) sees something that might be possible (可) and asks: what?",
+      "words": [
+        {"word": "何", "reading": "なに", "meaning": "what"},
+        {"word": "何時", "reading": "なんじ", "meaning": "what time"},
+        {"word": "何人", "reading": "なんにん", "meaning": "how many people"}
+      ],
+      "sentence": "これは{何|なん}ですか。",
+      "translation": "What is this?",
+      "usage": "なに becomes なん before d-, n- and t- sounds and before counters: 何ですか, 何時, 何人."
+    },
+    {
+      "glyph": "前", "level": 5, "strokes": 9,
+      "meanings": ["front", "before"],
+      "on": ["ゼン"], "kun": ["まえ"],
+      "parts": [{"glyph": "月", "meaning": "flesh"}, {"glyph": "刂", "meaning": "knife"}],
+      "mnemonic": "Antlers on top, then flesh (月) and a knife (刂): the hunter always walks in front.",
+      "words": [
+        {"word": "前", "reading": "まえ", "meaning": "front; before"},
+        {"word": "午前", "reading": "ごぜん", "meaning": "a.m.; morning"},
+        {"word": "名前", "reading": "なまえ", "meaning": "name"}
+      ],
+      "sentence": "{駅|えき}の{前|まえ}で{待|ま}っています。",
+      "translation": "I'm waiting in front of the station.",
+      "usage": "駅前 ('in front of the station') is the classic meeting spot in every Japanese town."
+    },
+    {
+      "glyph": "後", "level": 5, "strokes": 9,
+      "meanings": ["after", "behind", "later"],
+      "on": ["ゴ", "コウ"], "kun": ["のち", "うし.ろ", "あと", "おく.れる"],
+      "parts": [{"glyph": "彳", "meaning": "step"}, {"glyph": "幺", "meaning": "thread"}, {"glyph": "夂", "meaning": "slow feet"}],
+      "mnemonic": "Stepping (彳) with a thread (幺) tangled round slow feet (夂) — you fall behind.",
+      "words": [
+        {"word": "後ろ", "reading": "うしろ", "meaning": "behind; back"},
+        {"word": "午後", "reading": "ごご", "meaning": "p.m.; afternoon"},
+        {"word": "後で", "reading": "あとで", "meaning": "later"}
+      ],
+      "sentence": "{仕事|しごと}の{後|あと}で{会|あ}いましょう。",
+      "translation": "Let's meet after work.",
+      "usage": "In speech, times use 午前 (a.m.) and 午後 (p.m.); printed timetables usually use the 24-hour clock."
+    },
+    {
+      "glyph": "人", "level": 5, "strokes": 2,
+      "meanings": ["person"],
+      "on": ["ジン", "ニン"], "kun": ["ひと"],
+      "kind": "pictograph", "parts": [],
+      "mnemonic": "Two legs mid-stride: a person seen from the side.",
+      "words": [
+        {"word": "人", "reading": "ひと", "meaning": "person"},
+        {"word": "日本人", "reading": "にほんじん", "meaning": "Japanese person"},
+        {"word": "三人", "reading": "さんにん", "meaning": "three people"}
+      ],
+      "sentence": "あの{人|ひと}は{先生|せんせい}です。",
+      "translation": "That person is a teacher.",
+      "usage": "Nationality is country + 人 (じん): アメリカ人, 日本人. Counting people is number + 人 (にん)."
+    },
+    {
+      "glyph": "子", "level": 5, "strokes": 3,
+      "meanings": ["child"],
+      "on": ["シ", "ス"], "kun": ["こ"],
+      "kind": "pictograph", "parts": [],
+      "mnemonic": "A baby swaddled in a blanket, arms stretched out wide (一).",
+      "words": [
+        {"word": "子ども", "reading": "こども", "meaning": "child"},
+        {"word": "女の子", "reading": "おんなのこ", "meaning": "girl"},
+        {"word": "男の子", "reading": "おとこのこ", "meaning": "boy"}
+      ],
+      "sentence": "{子|こ}どもが{公園|こうえん}で{遊|あそ}んでいます。",
+      "translation": "Children are playing in the park.",
+      "usage": "子 was a classic ending for women's given names of earlier generations: 花子, 洋子."
+    },
+    {
+      "glyph": "女", "level": 5, "strokes": 3,
+      "meanings": ["woman", "female"],
+      "on": ["ジョ", "ニョ"], "kun": ["おんな", "め"],
+      "kind": "pictograph", "parts": [],
+      "mnemonic": "A figure kneeling gracefully with arms crossed.",
+      "words": [
+        {"word": "女の人", "reading": "おんなのひと", "meaning": "woman"},
+        {"word": "女性", "reading": "じょせい", "meaning": "woman (formal)"},
+        {"word": "女の子", "reading": "おんなのこ", "meaning": "girl"}
+      ],
+      "sentence": "{女|おんな}の{人|ひと}が{歌|うた}っています。",
+      "translation": "A woman is singing.",
+      "usage": "Look for 女 on toilet and bath signs. At hot springs, the curtain marked 女湯 is the women's bath."
+    },
+    {
+      "glyph": "男", "level": 5, "strokes": 7,
+      "meanings": ["man", "male"],
+      "on": ["ダン", "ナン"], "kun": ["おとこ"],
+      "kind": "compound",
+      "parts": [{"glyph": "田", "meaning": "rice field"}, {"glyph": "力", "meaning": "power"}],
+      "mnemonic": "Power (力) in the rice field (田): the field worker.",
+      "words": [
+        {"word": "男の人", "reading": "おとこのひと", "meaning": "man"},
+        {"word": "男性", "reading": "だんせい", "meaning": "man (formal)"},
+        {"word": "男の子", "reading": "おとこのこ", "meaning": "boy"}
+      ],
+      "sentence": "{男|おとこ}の{子|こ}が{走|はし}っています。",
+      "translation": "A boy is running.",
+      "usage": "At hot springs, 男湯 is the men's bath. 男性 and 女性 are the polite forms you'll see on forms and signs."
+    },
+    {
+      "glyph": "先", "level": 5, "strokes": 6,
+      "meanings": ["ahead", "previous", "tip"],
+      "on": ["セン"], "kun": ["さき"],
+      "kind": "compound",
+      "parts": [{"glyph": "儿", "meaning": "legs"}],
+      "mnemonic": "A foot stepping out ahead of a pair of legs (儿) — the one who went first.",
+      "words": [
+        {"word": "先生", "reading": "せんせい", "meaning": "teacher"},
+        {"word": "先週", "reading": "せんしゅう", "meaning": "last week"},
+        {"word": "先", "reading": "さき", "meaning": "ahead; tip"}
+      ],
+      "sentence": "{先週|せんしゅう}、{京都|きょうと}へ{行|い}きました。",
+      "translation": "Last week I went to Kyoto.",
+      "usage": "先生 is also the title for doctors, lawyers and politicians. お先に失礼します ('excuse me for leaving first') is said when leaving work before colleagues."
+    },
+    {
+      "glyph": "生", "level": 5, "strokes": 5,
+      "meanings": ["life", "birth", "raw"],
+      "on": ["セイ", "ショウ"], "kun": ["い.きる", "う.まれる", "は.える", "なま"],
+      "kind": "pictograph", "parts": [{"glyph": "土", "meaning": "ground"}],
+      "mnemonic": "A sprout pushing up through the ground (土) — life being born.",
+      "words": [
+        {"word": "学生", "reading": "がくせい", "meaning": "student"},
+        {"word": "先生", "reading": "せんせい", "meaning": "teacher"},
+        {"word": "生まれる", "reading": "うまれる", "meaning": "to be born"},
+        {"word": "生", "reading": "なま", "meaning": "raw; draft"}
+      ],
+      "sentence": "{私|わたし}は{大学生|だいがくせい}です。",
+      "translation": "I'm a university student.",
+      "usage": "生 has more readings than almost any other kanji, so learn it word by word: 生ビール (なま, draft beer), 一生 (いっしょう, a lifetime)."
+    },
+    {
+      "glyph": "学", "level": 5, "strokes": 8,
+      "meanings": ["study", "learning"],
+      "on": ["ガク"], "kun": ["まな.ぶ"],
+      "parts": [{"glyph": "子", "meaning": "child"}],
+      "mnemonic": "A child (子) under a roof with three sparks of knowledge above — the schoolhouse.",
+      "words": [
+        {"word": "学生", "reading": "がくせい", "meaning": "student"},
+        {"word": "大学", "reading": "だいがく", "meaning": "university"},
+        {"word": "学校", "reading": "がっこう", "meaning": "school"}
+      ],
+      "sentence": "{日本語|にほんご}を{学|まな}んでいます。",
+      "translation": "I'm studying Japanese.",
+      "usage": "In 学校, がく + こう becomes がっこう: the く shrinks to a small っ. You'll see this sound change everywhere."
+    },
+    {
+      "glyph": "名", "level": 5, "strokes": 6,
+      "meanings": ["name", "fame"],
+      "on": ["メイ", "ミョウ"], "kun": ["な"],
+      "kind": "compound",
+      "parts": [{"glyph": "夕", "meaning": "evening"}, {"glyph": "口", "meaning": "mouth"}],
+      "mnemonic": "Evening (夕) + mouth (口): in the dark you call out your name so people know who you are.",
+      "words": [
+        {"word": "名前", "reading": "なまえ", "meaning": "name"},
+        {"word": "有名", "reading": "ゆうめい", "meaning": "famous"},
+        {"word": "名刺", "reading": "めいし", "meaning": "business card"}
+      ],
+      "sentence": "お{名前|なまえ}は{何|なん}ですか。",
+      "translation": "What's your name?",
+      "usage": "Family names come first in Japanese: in 山田太郎, Yamada is the family name. Business cards (名刺) are offered and received with both hands."
+    },
+    {
+      "glyph": "友", "level": 5, "strokes": 4,
+      "meanings": ["friend"],
+      "on": ["ユウ"], "kun": ["とも"],
+      "kind": "compound",
+      "parts": [{"glyph": "ナ", "meaning": "hand"}, {"glyph": "又", "meaning": "hand"}],
+      "mnemonic": "Two hands (ナ and 又) reaching for each other — friends.",
+      "words": [
+        {"word": "友だち", "reading": "ともだち", "meaning": "friend"},
+        {"word": "友人", "reading": "ゆうじん", "meaning": "friend (formal)"},
+        {"word": "親友", "reading": "しんゆう", "meaning": "best friend"}
+      ],
+      "sentence": "{友|とも}だちと{映画|えいが}を{見|み}ました。",
+      "translation": "I watched a film with a friend.",
+      "usage": "友だち is everyday; 友人 sounds formal and appears in writing and speeches. Same meaning, different register."
+    },
+    {
+      "glyph": "上", "level": 5, "strokes": 3,
+      "meanings": ["up", "above"],
+      "on": ["ジョウ"], "kun": ["うえ", "あ.げる", "あ.がる", "のぼ.る"],
+      "kind": "indicative", "parts": [],
+      "mnemonic": "A line rising up from the ground line.",
+      "words": [
+        {"word": "上", "reading": "うえ", "meaning": "above; top"},
+        {"word": "上手", "reading": "じょうず", "meaning": "skilful"},
+        {"word": "上がる", "reading": "あがる", "meaning": "to go up"}
+      ],
+      "sentence": "{机|つくえ}の{上|うえ}に{本|ほん}があります。",
+      "translation": "There's a book on the desk.",
+      "usage": "Learners hear 日本語が上手ですね a lot. The modest reply is いいえ、まだまだです ('no, I still have a long way to go')."
+    },
+    {
+      "glyph": "下", "level": 5, "strokes": 3,
+      "meanings": ["down", "below"],
+      "on": ["カ", "ゲ"], "kun": ["した", "さ.げる", "くだ.さる", "お.りる"],
+      "kind": "indicative", "parts": [],
+      "mnemonic": "A line hanging down from the ceiling line.",
+      "words": [
+        {"word": "下", "reading": "した", "meaning": "below; under"},
+        {"word": "地下鉄", "reading": "ちかてつ", "meaning": "subway"},
+        {"word": "下手", "reading": "へた", "meaning": "unskilful"}
+      ],
+      "sentence": "{椅子|いす}の{下|した}に{猫|ねこ}がいます。",
+      "translation": "There's a cat under the chair.",
+      "usage": "On railways, 上り trains run toward Tokyo or the main city, and 下り trains run away from it."
+    },
+    {
+      "glyph": "中", "level": 5, "strokes": 4,
+      "meanings": ["middle", "inside"],
+      "on": ["チュウ"], "kun": ["なか"],
+      "kind": "indicative", "parts": [{"glyph": "口", "meaning": "box"}],
+      "mnemonic": "A box (口) pierced straight through the middle.",
+      "words": [
+        {"word": "中", "reading": "なか", "meaning": "inside; middle"},
+        {"word": "中国", "reading": "ちゅうごく", "meaning": "China"},
+        {"word": "一日中", "reading": "いちにちじゅう", "meaning": "all day long"}
+      ],
+      "sentence": "かばんの{中|なか}に{何|なに}がありますか。",
+      "translation": "What's in the bag?",
+      "usage": "Shop signs: 営業中 means 'open', 準備中 means 'getting ready' (closed). Here 中 means 'in the middle of'."
+    },
+    {
+      "glyph": "大", "level": 5, "strokes": 3,
+      "meanings": ["big", "large"],
+      "on": ["ダイ", "タイ"], "kun": ["おお.きい"],
+      "kind": "pictograph", "parts": [],
+      "mnemonic": "A person stretching their arms wide: 'it was THIS big!'",
+      "words": [
+        {"word": "大きい", "reading": "おおきい", "meaning": "big"},
+        {"word": "大学", "reading": "だいがく", "meaning": "university"},
+        {"word": "大人", "reading": "おとな", "meaning": "adult"}
+      ],
+      "sentence": "{大|おお}きい{家|いえ}ですね。",
+      "translation": "What a big house.",
+      "usage": "Menus often offer 大盛り (おおもり), a large serving, next to the regular size."
+    },
+    {
+      "glyph": "小", "level": 5, "strokes": 3,
+      "meanings": ["small", "little"],
+      "on": ["ショウ"], "kun": ["ちい.さい", "こ-", "お-"],
+      "parts": [],
+      "mnemonic": "One tiny stroke in the middle with two little drops beside it.",
+      "words": [
+        {"word": "小さい", "reading": "ちいさい", "meaning": "small"},
+        {"word": "小学校", "reading": "しょうがっこう", "meaning": "elementary school"},
+        {"word": "小川", "reading": "おがわ", "meaning": "stream; brook"}
+      ],
+      "sentence": "{小|ちい}さい{犬|いぬ}が{好|す}きです。",
+      "translation": "I like small dogs.",
+      "usage": "As a prefix, 小 can mean small or slight: 小雨 (こさめ) is a light drizzle."
+    },
+    {
+      "glyph": "右", "level": 5, "strokes": 5,
+      "meanings": ["right"],
+      "on": ["ウ", "ユウ"], "kun": ["みぎ"],
+      "parts": [{"glyph": "ナ", "meaning": "hand"}, {"glyph": "口", "meaning": "mouth"}],
+      "mnemonic": "A hand (ナ) bringing food to the mouth (口) — most people eat with their right hand.",
+      "words": [
+        {"word": "右", "reading": "みぎ", "meaning": "right"},
+        {"word": "右手", "reading": "みぎて", "meaning": "right hand"},
+        {"word": "右側", "reading": "みぎがわ", "meaning": "right side"}
+      ],
+      "sentence": "{次|つぎ}の{角|かど}を{右|みぎ}に{曲|ま}がってください。",
+      "translation": "Please turn right at the next corner.",
+      "usage": "In Tokyo, people stand on the left of escalators; in Osaka, on the right."
+    },
+    {
+      "glyph": "左", "level": 5, "strokes": 5,
+      "meanings": ["left"],
+      "on": ["サ"], "kun": ["ひだり"],
+      "parts": [{"glyph": "ナ", "meaning": "hand"}, {"glyph": "工", "meaning": "tool"}],
+      "mnemonic": "A hand (ナ) steadying a tool (工) — the left hand holds while the right one works.",
+      "words": [
+        {"word": "左", "reading": "ひだり", "meaning": "left"},
+        {"word": "左手", "reading": "ひだりて", "meaning": "left hand"},
+        {"word": "左側", "reading": "ひだりがわ", "meaning": "left side"}
+      ],
+      "sentence": "{左|ひだり}に{銀行|ぎんこう}があります。",
+      "translation": "There's a bank on the left.",
+      "usage": "Cars drive on the left in Japan, so look right first when you cross the road."
+    },
+    {
+      "glyph": "山", "level": 5, "strokes": 3,
+      "meanings": ["mountain"],
+      "on": ["サン"], "kun": ["やま"],
+      "kind": "pictograph", "parts": [],
+      "mnemonic": "Three peaks, the middle one the tallest.",
+      "words": [
+        {"word": "山", "reading": "やま", "meaning": "mountain"},
+        {"word": "富士山", "reading": "ふじさん", "meaning": "Mt. Fuji"},
+        {"word": "山田", "reading": "やまだ", "meaning": "Yamada (surname)"}
+      ],
+      "sentence": "{富士山|ふじさん}に{登|のぼ}りたいです。",
+      "translation": "I want to climb Mt. Fuji.",
+      "usage": "Mountain names use the on'yomi: 富士山 is ふじさん, never 'Fuji-yama'."
+    },
+    {
+      "glyph": "川", "level": 5, "strokes": 3,
+      "meanings": ["river"],
+      "on": ["セン"], "kun": ["かわ"],
+      "kind": "pictograph", "parts": [],
+      "mnemonic": "Three streams of water flowing down side by side.",
+      "words": [
+        {"word": "川", "reading": "かわ", "meaning": "river"},
+        {"word": "小川", "reading": "おがわ", "meaning": "stream; brook"},
+        {"word": "川口", "reading": "かわぐち", "meaning": "river mouth; Kawaguchi"}
+      ],
+      "sentence": "{川|かわ}で{泳|およ}ぎました。",
+      "translation": "I swam in the river.",
+      "usage": "After another word, かわ often softens to がわ: 小川 おがわ, 品川 しながわ."
+    },
+    {
+      "glyph": "天", "level": 5, "strokes": 4,
+      "meanings": ["heaven", "sky"],
+      "on": ["テン"], "kun": ["あめ", "あま"],
+      "parts": [{"glyph": "一", "meaning": "line above"}, {"glyph": "大", "meaning": "big person"}],
+      "mnemonic": "A line (一) above a big person (大): what's above your head is the sky.",
+      "words": [
+        {"word": "天気", "reading": "てんき", "meaning": "weather"},
+        {"word": "天国", "reading": "てんごく", "meaning": "heaven; paradise"},
+        {"word": "天ぷら", "reading": "てんぷら", "meaning": "tempura"}
+      ],
+      "sentence": "{明日|あした}の{天気|てんき}はどうですか。",
+      "translation": "What's the weather like tomorrow?",
+      "usage": "天気予報 (てんきよほう), the weather forecast, is a fixture of morning TV."
+    },
+    {
+      "glyph": "気", "level": 5, "strokes": 6,
+      "meanings": ["spirit", "air", "mood"],
+      "on": ["キ", "ケ"], "kun": [],
+      "parts": [{"glyph": "气", "meaning": "steam"}, {"glyph": "メ", "meaning": "cross"}],
+      "mnemonic": "Steam (气) rising with a swirl (メ) inside: energy, spirit, the air around you.",
+      "words": [
+        {"word": "天気", "reading": "てんき", "meaning": "weather"},
+        {"word": "元気", "reading": "げんき", "meaning": "healthy; energetic"},
+        {"word": "気持ち", "reading": "きもち", "meaning": "feeling"}
+      ],
+      "sentence": "お{元気|げんき}ですか。",
+      "translation": "How have you been?",
+      "usage": "お元気ですか is for someone you haven't seen in a while — it isn't a daily 'how are you'."
+    },
+    {
+      "glyph": "雨", "level": 5, "strokes": 8,
+      "meanings": ["rain"],
+      "on": ["ウ"], "kun": ["あめ", "あま-"],
+      "kind": "pictograph", "parts": [],
+      "mnemonic": "Four raindrops falling from a cloud that hangs under the sky line.",
+      "words": [
+        {"word": "雨", "reading": "あめ", "meaning": "rain"},
+        {"word": "大雨", "reading": "おおあめ", "meaning": "heavy rain"},
+        {"word": "雨水", "reading": "あまみず", "meaning": "rainwater"}
+      ],
+      "sentence": "{雨|あめ}が{降|ふ}っています。",
+      "translation": "It's raining.",
+      "usage": "梅雨 (つゆ), the rainy season, soaks most of Japan in June and July."
+    },
+    {
+      "glyph": "本", "level": 5, "strokes": 5,
+      "meanings": ["book", "origin", "main"],
+      "on": ["ホン"], "kun": ["もと"],
+      "kind": "indicative", "parts": [{"glyph": "木", "meaning": "tree"}, {"glyph": "一", "meaning": "line at the root"}],
+      "mnemonic": "A tree (木) with a line marking its root: the origin — and books are the root of knowledge.",
+      "words": [
+        {"word": "本", "reading": "ほん", "meaning": "book"},
+        {"word": "日本", "reading": "にほん/にっぽん", "meaning": "Japan"},
+        {"word": "三本", "reading": "さんぼん", "meaning": "three (long, thin things)"}
+      ],
+      "sentence": "{毎晩|まいばん}、{本|ほん}を{読|よ}みます。",
+      "translation": "I read every night.",
+      "usage": "本 also counts long, thin things — pens, bottles, trains: 一本 いっぽん, 二本 にほん, 三本 さんぼん."
+    },
+    {
+      "glyph": "休", "level": 5, "strokes": 6,
+      "meanings": ["rest", "day off"],
+      "on": ["キュウ"], "kun": ["やす.む"],
+      "kind": "compound",
+      "parts": [{"glyph": "亻", "meaning": "person"}, {"glyph": "木", "meaning": "tree"}],
+      "mnemonic": "A person (亻) leaning against a tree (木): taking a rest.",
+      "words": [
+        {"word": "休む", "reading": "やすむ", "meaning": "to rest; to take time off"},
+        {"word": "休み", "reading": "やすみ", "meaning": "holiday; break"},
+        {"word": "夏休み", "reading": "なつやすみ", "meaning": "summer vacation"}
+      ],
+      "sentence": "{少|すこ}し{休|やす}みましょう。",
+      "translation": "Let's take a short break.",
+      "usage": "Shop signs: 定休日 is the regular closing day; 本日休業 means 'closed today'."
+    },
+    {
+      "glyph": "見", "level": 5, "strokes": 7,
+      "meanings": ["see", "look"],
+      "on": ["ケン"], "kun": ["み.る", "み.える", "み.せる"],
+      "kind": "compound",
+      "parts": [{"glyph": "目", "meaning": "eye"}, {"glyph": "儿", "meaning": "legs"}],
+      "mnemonic": "An eye (目) on legs (儿), walking around to see everything.",
+      "words": [
+        {"word": "見る", "reading": "みる", "meaning": "to see; to watch"},
+        {"word": "見せる", "reading": "みせる", "meaning": "to show"},
+        {"word": "花見", "reading": "はなみ", "meaning": "cherry-blossom viewing"}
+      ],
+      "sentence": "{窓|まど}から{海|うみ}が{見|み}えます。",
+      "translation": "You can see the sea from the window.",
+      "usage": "In shops, 見せてください ('please show me') is how you ask to look at an item."
+    },
+    {
+      "glyph": "行", "level": 5, "strokes": 6,
+      "meanings": ["go", "conduct"],
+      "on": ["コウ", "ギョウ"], "kun": ["い.く", "ゆ.く", "おこな.う"],
+      "kind": "pictograph", "parts": [{"glyph": "彳", "meaning": "step"}],
+      "mnemonic": "A crossroads seen from above: which way will you go?",
+      "words": [
+        {"word": "行く", "reading": "いく", "meaning": "to go"},
+        {"word": "銀行", "reading": "ぎんこう", "meaning": "bank"},
+        {"word": "旅行", "reading": "りょこう", "meaning": "trip; travel"}
+      ],
+      "sentence": "{明日|あした}、{銀行|ぎんこう}に{行|い}きます。",
+      "translation": "I'm going to the bank tomorrow.",
+      "usage": "On train displays, 東京行 means 'bound for Tokyo'."
+    },
+    {
+      "glyph": "来", "level": 5, "strokes": 7,
+      "meanings": ["come", "next"],
+      "on": ["ライ"], "kun": ["く.る", "きた.る"],
+      "kind": "borrowed", "parts": [{"glyph": "木", "meaning": "tree"}],
+      "mnemonic": "A tree (木) with a crossbar: once a drawing of wheat, a crop that came from far away.",
+      "words": [
+        {"word": "来る", "reading": "くる", "meaning": "to come"},
+        {"word": "来年", "reading": "らいねん", "meaning": "next year"},
+        {"word": "来週", "reading": "らいしゅう", "meaning": "next week"}
+      ],
+      "sentence": "{友|とも}だちが{家|いえ}に{来|き}ました。",
+      "translation": "A friend came over to my place.",
+      "usage": "来る is irregular: 来ます (きます), 来ない (こない), 来て (きて)."
+    },
+    {
+      "glyph": "食", "level": 5, "strokes": 9,
+      "meanings": ["eat", "food"],
+      "on": ["ショク"], "kun": ["た.べる", "く.う"],
+      "parts": [{"glyph": "人", "meaning": "lid"}, {"glyph": "良", "meaning": "good"}],
+      "mnemonic": "A lid (人) over something good (良): a covered dish of good food.",
+      "words": [
+        {"word": "食べる", "reading": "たべる", "meaning": "to eat"},
+        {"word": "食べ物", "reading": "たべもの", "meaning": "food"},
+        {"word": "食堂", "reading": "しょくどう", "meaning": "cafeteria; dining hall"}
+      ],
+      "sentence": "{朝|あさ}ご{飯|はん}を{食|た}べましたか。",
+      "translation": "Did you have breakfast?",
+      "usage": "Say いただきます before eating and ごちそうさまでした afterwards — both are expected at the table."
+    },
+    {
+      "glyph": "話", "level": 5, "strokes": 13,
+      "meanings": ["talk", "story"],
+      "on": ["ワ"], "kun": ["はな.す", "はなし"],
+      "parts": [{"glyph": "言", "meaning": "words"}, {"glyph": "舌", "meaning": "tongue"}],
+      "mnemonic": "Words (言) + tongue (舌): talking.",
+      "words": [
+        {"word": "話す", "reading": "はなす", "meaning": "to speak; to talk"},
+        {"word": "電話", "reading": "でんわ", "meaning": "telephone"},
+        {"word": "話", "reading": "はなし", "meaning": "talk; story"}
+      ],
+      "sentence": "{母|はは}と{電話|でんわ}で{話|はな}しました。",
+      "translation": "I talked with my mother on the phone.",
+      "usage": "Casual calls open with もしもし. In business calls you give your company and name first."
+    },
+    {
+      "glyph": "語", "level": 5, "strokes": 14,
+      "meanings": ["language", "word"],
+      "on": ["ゴ"], "kun": ["かた.る"],
+      "kind": "phonetic", "phonetic": "吾 (ゴ) gives the sound ゴ",
+      "parts": [{"glyph": "言", "meaning": "words"}, {"glyph": "吾", "meaning": "I, me"}],
+      "mnemonic": "Words (言) + I (吾): the words I speak — my language.",
+      "words": [
+        {"word": "日本語", "reading": "にほんご", "meaning": "Japanese (language)"},
+        {"word": "英語", "reading": "えいご", "meaning": "English"},
+        {"word": "物語", "reading": "ものがたり", "meaning": "tale; story"}
+      ],
+      "sentence": "{英語|えいご}と{日本語|にほんご}が{話|はな}せます。",
+      "translation": "I can speak English and Japanese.",
+      "usage": "Country + 語 gives its language: 中国語, 韓国語. English is 英語, from 英 for England."
+    },
+    {
+      "glyph": "読", "level": 5, "strokes": 14,
+      "meanings": ["read"],
+      "on": ["ドク", "トク"], "kun": ["よ.む"],
+      "kind": "phonetic",
+      "parts": [{"glyph": "言", "meaning": "words"}, {"glyph": "売", "meaning": "sell"}],
+      "mnemonic": "Words (言) + sell (売): a news-seller reading the headlines aloud.",
+      "words": [
+        {"word": "読む", "reading": "よむ", "meaning": "to read"},
+        {"word": "読書", "reading": "どくしょ", "meaning": "reading (books)"},
+        {"word": "読み方", "reading": "よみかた", "meaning": "way of reading"}
+      ],
+      "sentence": "{新聞|しんぶん}を{読|よ}みますか。",
+      "translation": "Do you read the newspaper?",
+      "usage": "読み方 is the word to use when you ask how a kanji is read: この漢字の読み方は？"
+    },
+    {
+      "glyph": "校", "level": 5, "strokes": 10,
+      "meanings": ["school"],
+      "on": ["コウ"], "kun": [],
+      "kind": "phonetic", "phonetic": "交 (コウ) gives the sound コウ",
+      "parts": [{"glyph": "木", "meaning": "tree"}, {"glyph": "交", "meaning": "mix"}],
+      "mnemonic": "Tree (木) + mix (交): children mixing together under the trees of the schoolyard.",
+      "words": [
+        {"word": "学校", "reading": "がっこう", "meaning": "school"},
+        {"word": "高校", "reading": "こうこう", "meaning": "high school"},
+        {"word": "校長", "reading": "こうちょう", "meaning": "principal"}
+      ],
+      "sentence": "{学校|がっこう}は{八時半|はちじはん}に{始|はじ}まります。",
+      "translation": "School starts at half past eight.",
+      "usage": "The Japanese school year begins in April, under the cherry blossoms."
+    },
+    {
+      "glyph": "車", "level": 5, "strokes": 7,
+      "meanings": ["car", "vehicle"],
+      "on": ["シャ"], "kun": ["くるま"],
+      "kind": "pictograph", "parts": [],
+      "mnemonic": "A cart seen from above: an axle through the middle with a wheel at each end.",
+      "words": [
+        {"word": "車", "reading": "くるま", "meaning": "car"},
+        {"word": "電車", "reading": "でんしゃ", "meaning": "train"},
+        {"word": "自転車", "reading": "じてんしゃ", "meaning": "bicycle"}
+      ],
+      "sentence": "{車|くるま}で{会社|かいしゃ}に{行|い}きます。",
+      "translation": "I drive to work.",
+      "usage": "車 on its own means a car; trains are 電車, 'electric vehicles'."
+    },
+    {
+      "glyph": "電", "level": 5, "strokes": 13,
+      "meanings": ["electricity"],
+      "on": ["デン"], "kun": [],
+      "parts": [{"glyph": "雨", "meaning": "rain"}],
+      "mnemonic": "Under the rain clouds (雨), a lightning bolt with a hooked tail strikes: electricity.",
+      "words": [
+        {"word": "電車", "reading": "でんしゃ", "meaning": "train"},
+        {"word": "電話", "reading": "でんわ", "meaning": "telephone"},
+        {"word": "電気", "reading": "でんき", "meaning": "electricity; light"}
+      ],
+      "sentence": "{電車|でんしゃ}が{来|き}ました。",
+      "translation": "The train is here.",
+      "usage": "電 means electricity in nearly every word — 'turn off the light' is 電気を消して."
+    },
+    {
+      "glyph": "田", "level": 4, "strokes": 5,
+      "meanings": ["rice field"],
+      "on": ["デン"], "kun": ["た"],
+      "kind": "pictograph", "parts": [],
+      "mnemonic": "A rice field divided into four neat plots.",
+      "words": [
+        {"word": "田んぼ", "reading": "たんぼ", "meaning": "rice paddy"},
+        {"word": "田中", "reading": "たなか", "meaning": "Tanaka (surname)"},
+        {"word": "山田", "reading": "やまだ", "meaning": "Yamada (surname)"}
+      ],
+      "sentence": "{田中|たなか}さんは{田|た}んぼで{働|はたら}いています。",
+      "translation": "Tanaka-san works in the rice paddies.",
+      "usage": "Rice paddies shaped many surnames: 田中 ('in the fields'), 山田 ('mountain field')."
+    },
+    {
+      "glyph": "春", "level": 4, "strokes": 9,
+      "meanings": ["spring"],
+      "on": ["シュン"], "kun": ["はる"],
+      "parts": [{"glyph": "日", "meaning": "sun"}],
+      "mnemonic": "Three tiers of new growth and a person stretching under the sun (日): spring.",
+      "words": [
+        {"word": "春", "reading": "はる", "meaning": "spring"},
+        {"word": "春休み", "reading": "はるやすみ", "meaning": "spring break"},
+        {"word": "青春", "reading": "せいしゅん", "meaning": "youth"}
+      ],
+      "sentence": "{春|はる}になると、{桜|さくら}が{咲|さ}きます。",
+      "translation": "When spring comes, the cherry blossoms bloom.",
+      "usage": "The school and business year starts in April, so spring means fresh starts."
+    },
+    {
+      "glyph": "夏", "level": 4, "strokes": 10,
+      "meanings": ["summer"],
+      "on": ["カ", "ゲ"], "kun": ["なつ"],
+      "parts": [{"glyph": "夂", "meaning": "slow feet"}],
+      "mnemonic": "A heavy head on top, slow dragging feet (夂) below: too hot to hurry in summer.",
+      "words": [
+        {"word": "夏", "reading": "なつ", "meaning": "summer"},
+        {"word": "夏休み", "reading": "なつやすみ", "meaning": "summer vacation"},
+        {"word": "真夏", "reading": "まなつ", "meaning": "midsummer"}
+      ],
+      "sentence": "{夏休|なつやす}みに{海|うみ}へ{行|い}きました。",
+      "translation": "I went to the beach during the summer holidays.",
+      "usage": "Summer is festival (祭り) season: yukata, fireworks and street food."
+    },
+    {
+      "glyph": "秋", "level": 4, "strokes": 9,
+      "meanings": ["autumn"],
+      "on": ["シュウ"], "kun": ["あき"],
+      "parts": [{"glyph": "禾", "meaning": "grain"}, {"glyph": "火", "meaning": "fire"}],
+      "mnemonic": "Grain (禾) + fire (火): fields are harvested and the stubble is burned — autumn.",
+      "words": [
+        {"word": "秋", "reading": "あき", "meaning": "autumn"},
+        {"word": "秋分", "reading": "しゅうぶん", "meaning": "autumn equinox"},
+        {"word": "秋田", "reading": "あきた", "meaning": "Akita (prefecture)"}
+      ],
+      "sentence": "{秋|あき}は{食|た}べ{物|もの}がおいしいです。",
+      "translation": "Food tastes great in autumn.",
+      "usage": "Autumn is called 食欲の秋, 'the season of appetite', for its harvest foods."
+    },
+    {
+      "glyph": "冬", "level": 4, "strokes": 5,
+      "meanings": ["winter"],
+      "on": ["トウ"], "kun": ["ふゆ"],
+      "parts": [{"glyph": "夂", "meaning": "slow feet"}],
+      "mnemonic": "Slow feet (夂) shuffling over two flakes of ice: winter.",
+      "words": [
+        {"word": "冬", "reading": "ふゆ", "meaning": "winter"},
+        {"word": "冬休み", "reading": "ふゆやすみ", "meaning": "winter break"},
+        {"word": "真冬", "reading": "まふゆ", "meaning": "midwinter"}
+      ],
+      "sentence": "{冬|ふゆ}は{雪|ゆき}が{降|ふ}ります。",
+      "translation": "It snows in winter.",
+      "usage": "In winter, families gather around a こたつ — a low heated table covered with a quilt."
+    }
+  ],
+  "passages": [
+    {
+      "id": "station",
+      "title": "{駅|えき}で",
+      "titleEN": "At the station",
+      "genre": "Signs & announcements",
+      "topic": "Getting around",
+      "level": 5,
+      "lines": [
+        {"jp": "{東京|とうきょう}{行|ゆ}き　{九時|くじ}{十分|じゅっぷん}{発|はつ}", "en": "Bound for Tokyo — departs 9:10"},
+        {"jp": "まもなく、{一番線|いちばんせん}に{電車|でんしゃ}が{参|まい}ります。", "en": "A train will shortly arrive at platform 1."},
+        {"jp": "{黄色|きいろ}い{線|せん}の{内側|うちがわ}までお{下|さ}がりください。", "en": "Please stand behind the yellow line."},
+        {"jp": "{電車|でんしゃ}の{中|なか}では、{電話|でんわ}はご{遠慮|えんりょ}ください。", "en": "Please refrain from phone calls on the train."},
+        {"jp": "{出口|でぐち}は{左|ひだり}です。", "en": "The exit is on the left."}
+      ],
+      "notes": [
+        {"lens": "Discourse", "text": "Signs drop verbs and particles: 東京行き 九時十分発 is just two noun phrases. Public signage favors this compact style."},
+        {"lens": "Register", "text": "Announcements use keigo: 参ります (humble 'comes'), お下がりください, ご遠慮ください ('kindly refrain'). You'll rarely say these yourself, but you'll hear them every day."},
+        {"lens": "Culture", "text": "Talking on the phone in trains is considered rude in Japan. People switch to マナーモード (silent mode) and text instead."}
+      ],
+      "question": {
+        "prompt": "What are passengers asked not to do on the train?",
+        "options": ["Eat snacks", "Talk on the phone", "Stand near the doors"],
+        "answer": 1,
+        "explanation": "電話はご遠慮ください means 'please refrain from phone calls'."
+      }
+    },
+    {
+      "id": "seasons",
+      "title": "{日本|にほん}の{四季|しき}",
+      "titleEN": "Japan's four seasons",
+      "genre": "Explanation",
+      "topic": "Nature & culture",
+      "level": 4,
+      "lines": [
+        {"jp": "{日本|にほん}には{春|はる}、{夏|なつ}、{秋|あき}、{冬|ふゆ}の{四|よっ}つの{季節|きせつ}があります。", "en": "Japan has four seasons: spring, summer, autumn and winter."},
+        {"jp": "{春|はる}は{桜|さくら}の{下|した}で{花見|はなみ}をします。", "en": "In spring, people hold flower-viewing parties under the cherry trees."},
+        {"jp": "{夏|なつ}は{暑|あつ}くて、{雨|あめ}もたくさん{降|ふ}ります。", "en": "Summer is hot, and it rains a lot too."},
+        {"jp": "{秋|あき}になると、{山|やま}の{木|き}が{赤|あか}くなります。", "en": "When autumn comes, the trees on the mountains turn red."},
+        {"jp": "{冬|ふゆ}は{寒|さむ}いですが、{雪|ゆき}の{山|やま}はとてもきれいです。", "en": "Winter is cold, but the snowy mountains are beautiful."}
+      ],
+      "notes": [
+        {"lens": "Culture", "text": "Seasonal awareness (季節感) runs through Japanese life: food, greetings and even business letters open with a nod to the season."},
+        {"lens": "Discourse", "text": "Each sentence opens with a season + は. Repeating the same topic frame is a simple way a Japanese paragraph signals a list."},
+        {"lens": "Word building", "text": "New words are built from kanji you know: 花 (flower) + 見 (see) = 花見, 'flower viewing'."}
+      ],
+      "question": {
+        "prompt": "What happens to the mountain trees in autumn?",
+        "options": ["They blossom", "They turn red", "They are covered in snow"],
+        "answer": 1,
+        "explanation": "山の木が赤くなります: 'the mountain trees turn red'."
+      }
+    },
+    {
+      "id": "restaurant",
+      "title": "レストランで",
+      "titleEN": "At a restaurant",
+      "genre": "Dialogue",
+      "topic": "Food & service",
+      "level": 5,
+      "lines": [
+        {"speaker": "{店員|てんいん}", "jp": "いらっしゃいませ。{何名様|なんめいさま}ですか。", "en": "Welcome! How many in your party?"},
+        {"speaker": "{客|きゃく}", "jp": "{二人|ふたり}です。", "en": "Two."},
+        {"speaker": "{店員|てんいん}", "jp": "こちらへどうぞ。", "en": "This way, please."},
+        {"speaker": "{客|きゃく}", "jp": "すみません、お{水|みず}をください。", "en": "Excuse me, could we have some water?"},
+        {"speaker": "{店員|てんいん}", "jp": "はい、{少々|しょうしょう}お{待|ま}ちください。", "en": "Certainly — one moment, please."},
+        {"speaker": "{客|きゃく}", "jp": "ごちそうさまでした。", "en": "Thank you for the meal."}
+      ],
+      "notes": [
+        {"lens": "Conversation", "text": "いらっしゃいませ is a greeting that expects no reply — a small nod is enough. A question like 何名様ですか opens an adjacency pair: the answer comes right away, usually short (二人です)."},
+        {"lens": "Register", "text": "Staff speak in keigo (何名様, 少々お待ちください) while customers use plain polite です/ください. The asymmetry is normal in Japanese service encounters."},
+        {"lens": "Culture", "text": "There's no tipping in Japan. Saying ごちそうさまでした as you leave is the thanks."}
+      ],
+      "question": {
+        "prompt": "How many people are in the customer's group?",
+        "options": ["One", "Two", "Three"],
+        "answer": 1,
+        "explanation": "二人です: 'two people'. 二人 is read ふたり."
+      }
+    },
+    {
+      "id": "diary",
+      "title": "{日記|にっき}",
+      "titleEN": "A diary entry",
+      "genre": "Diary",
+      "topic": "Daily life",
+      "level": 5,
+      "lines": [
+        {"jp": "{十月|じゅうがつ}{五日|いつか}　{雨|あめ}", "en": "October 5th — rain"},
+        {"jp": "{今日|きょう}は{学校|がっこう}が{休|やす}みだった。", "en": "There was no school today."},
+        {"jp": "{朝|あさ}、{友|とも}だちと{電話|でんわ}で{話|はな}した。", "en": "In the morning, I talked to a friend on the phone."},
+        {"jp": "{午後|ごご}は{本|ほん}を{読|よ}んで、{日本|にほん}の{映画|えいが}を{見|み}た。", "en": "In the afternoon, I read a book and watched a Japanese film."},
+        {"jp": "{明日|あした}は{山田|やまだ}{先生|せんせい}の{授業|じゅぎょう}だ。{早|はや}く{寝|ね}よう。", "en": "Tomorrow is Professor Yamada's class. I'll get to bed early."}
+      ],
+      "notes": [
+        {"lens": "Register", "text": "Diaries use the plain form (だった, 話した, 見た). With no listener to be polite to, です/ます would sound oddly formal."},
+        {"lens": "Discourse", "text": "Dates are month + day. Days 1–10 use native readings: 五日 is いつか, not ごにち."},
+        {"lens": "Culture", "text": "Teachers are addressed as surname + 先生 — never by their first name, even outside class."}
+      ],
+      "question": {
+        "prompt": "What did the writer do in the afternoon?",
+        "options": ["Went to school", "Read a book and watched a film", "Met a friend"],
+        "answer": 1,
+        "explanation": "午後は本を読んで、日本の映画を見た。"
+      }
+    },
+    {
+      "id": "email",
+      "title": "{先生|せんせい}へのメール",
+      "titleEN": "An email to a teacher",
+      "genre": "Email",
+      "topic": "School life",
+      "level": 5,
+      "lines": [
+        {"jp": "{山田|やまだ}{先生|せんせい}", "en": "Professor Yamada,"},
+        {"jp": "いつもお{世話|せわ}になっております。{一年|いちねん}のキムです。", "en": "Thank you, as always, for your guidance. This is Kim, first year."},
+        {"jp": "{熱|ねつ}があるので、{明日|あした}は{学校|がっこう}を{休|やす}みます。", "en": "I have a fever, so I'll be absent from school tomorrow."},
+        {"jp": "{申|もう}し{訳|わけ}ありません。", "en": "I'm very sorry."},
+        {"jp": "よろしくお{願|ねが}いします。", "en": "Thank you for your understanding."}
+      ],
+      "notes": [
+        {"lens": "Register", "text": "Formal emails open with a set phrase (いつもお世話になっております) and close with よろしくお願いします. Leaving them out sounds abrupt rather than efficient."},
+        {"lens": "Intercultural", "text": "Apologizing for an absence — even with a good reason — maintains the relationship. It isn't an admission of fault."},
+        {"lens": "Discourse", "text": "The structure is fixed: name → greeting → who you are → reason → apology → closing. Learn the frame once and you can write many emails."}
+      ],
+      "question": {
+        "prompt": "Why will Kim miss school tomorrow?",
+        "options": ["A fever", "A part-time job", "The rain"],
+        "answer": 0,
+        "explanation": "熱があるので: 'because I have a fever'."
+      }
+    }
+  ],
+  "confusions": [
+    {"glyphs": ["人", "入"], "tip": "人 (person): the left stroke sits on top. 入 (enter): the right stroke sits on top, like an arrow pointing in."},
+    {"glyphs": ["大", "犬", "太", "天"], "tip": "大 is big. A dot at the top right makes 犬 (dog); a dot at the bottom makes 太 (thick); a line on top makes 天 (sky)."},
+    {"glyphs": ["日", "目", "白", "田"], "tip": "日 has one inner line, 目 (eye) has two, 白 (white) adds a tick on top, and 田 (field) is split into four."},
+    {"glyphs": ["土", "士"], "tip": "土 (earth): the bottom line is longer — the ground is wide. 士 (samurai): the top line is longer."},
+    {"glyphs": ["右", "左"], "tip": "Both start with a hand (ナ). 右 has a mouth 口; 左 has a tool 工. Their stroke order differs too: 右 starts with the slanted stroke, 左 with the horizontal one."},
+    {"glyphs": ["木", "本", "休", "体"], "tip": "木 is a tree. 本 adds a line at the root. 休 is a person resting against a 木; 体 (body) has 本 instead."},
+    {"glyphs": ["十", "千", "干"], "tip": "十 is ten. 千 (thousand) adds a slanted stroke on top; 干 (dry) has a flat line on top instead."},
+    {"glyphs": ["見", "貝"], "tip": "見 (see) ends in walking legs 儿; 貝 (shellfish) ends in two short strokes like little feet."},
+    {"glyphs": ["話", "語", "読"], "tip": "All three start with 言 (words). The right side tells them apart: 舌 tongue → 話 talk, 吾 → 語 language, 売 → 読 read."},
+    {"glyphs": ["学", "字"], "tip": "学 (study) has three short marks on top; 字 (character) has a plain roof 宀."},
+    {"glyphs": ["小", "少"], "tip": "小 (small) is three strokes; 少 (few) adds a long sweeping stroke at the bottom."}
+  ]
+}
