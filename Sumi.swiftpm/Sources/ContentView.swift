@@ -1894,7 +1894,7 @@ struct StudyItem: Identifiable, Hashable {
     enum Kind: Hashable {
         /// A graded card.
         case card
-        /// An ungraded sentence that puts a just-remembered kanji in context.
+        /// An ungraded sentence that puts a kanji just seen in context.
         case context
     }
 
@@ -1914,6 +1914,9 @@ struct SessionLaunch: Identifiable, Hashable {
     var mode: SessionMode
     var items: [StudyItem]
     var lessonGlyphs: [String] = []
+    /// Kanji with an example sentence; reviews weave in a context page
+    /// after every seventh card for one of them.
+    var contextGlyphs: Set<String> = []
 }
 
 struct SessionResult {
@@ -1924,12 +1927,8 @@ struct SessionResult {
     var started = Date()
 }
 
-/// The last thing that moved the feed — it decides which way the next card
-/// enters.
-enum Move: Equatable {
-    case knew, again, later, back, next
-}
-
+/// The study feed. Cards are pages: the current one, the one below it (next)
+/// and the one above it (the previous card, which "back" restores).
 final class SessionModel: ObservableObject {
     let mode: SessionMode
     @Published private(set) var queue: [StudyItem]
@@ -1938,11 +1937,9 @@ final class SessionModel: ObservableObject {
     @Published private(set) var result = SessionResult()
     @Published private(set) var canUndo = false
     @Published private(set) var combo = 0
-    @Published private(set) var lastMove: Move = .next
 
     private var failed = Set<String>()
     private var history: [Snapshot] = []
-    private var correctSinceContext = 0
 
     private struct Snapshot {
         var save: SaveFile
@@ -1952,42 +1949,35 @@ final class SessionModel: ObservableObject {
         var result: SessionResult
         var failed: Set<String>
         var combo: Int
-        var correctSinceContext: Int
     }
 
-    init(mode: SessionMode, items: [StudyItem]) {
+    init(mode: SessionMode, items: [StudyItem], contextGlyphs: Set<String> = []) {
         self.mode = mode
-        self.queue = SessionModel.interleave(items)
+        var ordered = SessionModel.interleave(items)
+        if mode == .review && !contextGlyphs.isEmpty {
+            ordered = SessionModel.weaveContext(into: ordered, glyphs: contextGlyphs)
+        }
+        self.queue = ordered
         self.total = items.count
     }
 
     var current: StudyItem? { queue.first }
     var upcoming: StudyItem? { queue.count > 1 ? queue[1] : nil }
+    /// The card "back" would restore — the one on screen before the last answer.
+    var previousItem: StudyItem? { history.last?.queue.first }
     var isFinished: Bool { queue.isEmpty }
-    var remaining: Int { queue.count }
     var progress: Double { total == 0 ? 1 : Double(completed) / Double(total) }
-    var canDefer: Bool { queue.filter { $0.kind == .card }.count > 1 }
 
     private static func key(_ item: StudyItem) -> String { item.glyph + "#" + item.facet.rawValue }
 
-    private func snapshot(_ store: Store) -> Snapshot {
-        Snapshot(save: store.data, queue: queue, completed: completed, total: total, result: result,
-                 failed: failed, combo: combo, correctSinceContext: correctSinceContext)
-    }
-
-    private func remember(_ store: Store) {
-        history.append(snapshot(store))
-        if history.count > 40 { history.removeFirst() }
-        canUndo = true
-    }
-
     /// Records an answer. A miss goes back into the feed a few cards later,
-    /// so it's retrieved again while the correction is fresh. Every seventh
-    /// first-try success in a review is followed by a sentence card that
-    /// shows the kanji at work.
+    /// so it's retrieved again while the correction is fresh.
     func commit(_ rating: Rating, ms: Int, miss: MissReason?, store: Store) {
         guard let item = queue.first, item.kind == .card else { return }
-        remember(store)
+        history.append(Snapshot(save: store.data, queue: queue, completed: completed, total: total,
+                                result: result, failed: failed, combo: combo))
+        if history.count > 40 { history.removeFirst() }
+        canUndo = true
         if mode != .practice {
             store.record(rating, glyph: item.glyph, facet: item.facet, ms: ms, miss: miss)
         }
@@ -2002,47 +1992,25 @@ final class SessionModel: ObservableObject {
             let position = min(next.count, Int.random(in: 3...6))
             next.insert(StudyItem(glyph: item.glyph, facet: item.facet, wordIndex: item.wordIndex), at: position)
             combo = 0
-            lastMove = .again
         } else {
             if !failed.contains(key) {
                 r.firstTry += 1
                 combo += 1
                 r.bestCombo = max(r.bestCombo, combo)
-                correctSinceContext += 1
             }
             completed += 1
-            lastMove = .knew
-            let hasSentence = !(store.library.byGlyph[item.glyph]?.sentence.isEmpty ?? true)
-            if mode == .review && correctSinceContext >= 7 && hasSentence && !next.isEmpty {
-                next.insert(StudyItem(glyph: item.glyph, facet: item.facet, wordIndex: item.wordIndex, kind: .context), at: 0)
-                correctSinceContext = 0
-            }
         }
         result = r
         queue = next
         if store.data.bestCombo < r.bestCombo { store.data.bestCombo = r.bestCombo }
     }
 
-    /// Sends the current card to the end of the session without grading it.
-    @discardableResult
-    func later(store: Store) -> Bool {
-        guard canDefer, let item = queue.first else { return false }
-        remember(store)
-        var next = queue
-        next.removeFirst()
-        next.append(item)
-        queue = next
-        lastMove = .later
-        return true
-    }
-
-    /// Moves past an ungraded context card.
+    /// Moves past an ungraded context page.
     func dismissContext() {
         guard let item = queue.first, item.kind == .context else { return }
         var next = queue
         next.removeFirst()
         queue = next
-        lastMove = .next
     }
 
     /// Brings back the previous card exactly as it was before it was answered.
@@ -2056,9 +2024,7 @@ final class SessionModel: ObservableObject {
         result = last.result
         failed = last.failed
         combo = last.combo
-        correctSinceContext = last.correctSinceContext
         canUndo = !history.isEmpty
-        lastMove = .back
         return true
     }
 
@@ -2085,6 +2051,22 @@ final class SessionModel: ObservableObject {
                 out.append(pool.remove(at: index))
             } else {
                 out.append(pool.removeFirst())
+            }
+        }
+        return out
+    }
+
+    /// After every seventh card, an ungraded sentence page for the kanji just
+    /// seen — variety for attention, context for meaning.
+    static func weaveContext(into items: [StudyItem], glyphs: Set<String>) -> [StudyItem] {
+        var out: [StudyItem] = []
+        var sinceLast = 0
+        for (index, item) in items.enumerated() {
+            out.append(item)
+            sinceLast += 1
+            if sinceLast >= 7 && glyphs.contains(item.glyph) && index < items.count - 1 {
+                out.append(StudyItem(glyph: item.glyph, facet: item.facet, wordIndex: item.wordIndex, kind: .context))
+                sinceLast = 0
             }
         }
         return out
@@ -2341,7 +2323,9 @@ extension Store {
 
     func reviewLaunch() -> SessionLaunch? {
         let items = reviewItems(limit: isBacklogged ? Store.catchUpBatch : nil)
-        return items.isEmpty ? nil : SessionLaunch(mode: .review, items: items)
+        guard !items.isEmpty else { return nil }
+        let withSentences = Set(library.kanji.filter { !$0.sentence.isEmpty }.map(\.glyph))
+        return SessionLaunch(mode: .review, items: items, contextGlyphs: withSentences)
     }
 
     func lessonLaunch(extra: Bool) -> SessionLaunch? {
@@ -3567,10 +3551,10 @@ struct AboutView: View {
 
     private let gestures: [Point] = [
         Point(title: "Tap", text: "Reveal the answer"),
-        Point(title: "Swipe right", text: "Knew it"),
-        Point(title: "Swipe left", text: "Again"),
-        Point(title: "Swipe up", text: "Later in this session"),
+        Point(title: "Swipe up", text: "Next card (counts as known)"),
         Point(title: "Swipe down", text: "Back to the previous card"),
+        Point(title: "Swipe left", text: "Mark as forgotten"),
+        Point(title: "Swipe right", text: "Clear the mark"),
         Point(title: "Double-tap", text: "Save the kanji"),
         Point(title: "Hold", text: "Play the stroke order")
     ]
@@ -4064,13 +4048,14 @@ struct StudyCover: View {
 
     init(launch: SessionLaunch) {
         self.launch = launch
-        _model = StateObject(wrappedValue: SessionModel(mode: launch.mode, items: launch.items))
+        _model = StateObject(wrappedValue: SessionModel(mode: launch.mode, items: launch.items,
+                                                        contextGlyphs: launch.contextGlyphs))
         _teaching = State(initialValue: !launch.lessonGlyphs.isEmpty)
     }
 
     var body: some View {
         ZStack {
-            (teaching ? Palette.paper : Palette.canvas)
+            Palette.paper
                 .ignoresSafeArea()
             if teaching {
                 LessonStories(glyphs: launch.lessonGlyphs, page: $page,
@@ -4080,7 +4065,7 @@ struct StudyCover: View {
                 RecapView(model: model, previousBest: previousBest, onDone: close)
                     .transition(.opacity)
             } else {
-                ReviewFeed(model: model, onClose: close)
+                ReelsFeed(model: model, onClose: close)
                     .transition(.opacity)
             }
         }
@@ -4203,51 +4188,66 @@ struct LessonStories: View {
     }
 }
 
-// MARK: Review feed
+// MARK: Review feed (reels)
 
-struct ReviewFeed: View {
+/// Reviews as a vertical feed of full-screen pages, the way Reels works:
+/// drag up and the next card rises from below under your finger; drag down
+/// and the previous card comes back from above. The neighbouring pages are
+/// real renderings, so a swipe always shows exactly what's coming.
+struct ReelsFeed: View {
+    @EnvironmentObject var store: Store
     @ObservedObject var model: SessionModel
     let onClose: () -> Void
-
-    private var insertion: AnyTransition {
-        model.lastMove == .back
-            ? .move(edge: .top)
-            : .scale(scale: 0.94, anchor: .center).combined(with: .opacity)
-    }
+    @State private var dragY: CGFloat = 0
 
     var body: some View {
-        VStack(spacing: Space.s) {
-            HStack(spacing: Space.s) {
-                Button(action: onClose) {
-                    Image(systemName: "xmark")
-                        .font(.body.weight(.semibold))
-                        .foregroundStyle(Palette.ink2)
-                        .frame(width: Metrics.minTap, height: Metrics.minTap)
-                        .contentShape(Rectangle())
-                }
-                .accessibilityLabel("Close")
-                .keyboardShortcut(.cancelAction)
-                ProgressView(value: model.progress)
-                    .tint(Palette.accent)
-                    .accessibilityLabel("\(model.completed) of \(model.total) done")
-                ComboBadge(combo: model.combo)
-                    .frame(minWidth: 56, alignment: .trailing)
-            }
-            .padding(.trailing, Space.s)
+        GeometryReader { geo in
+            pages(size: geo.size)
+        }
+        .overlay(alignment: .top) {
+            topBar
+        }
+    }
 
-            ZStack {
-                if let item = model.current {
-                    FeedCard(model: model, item: item)
-                        .id(item.id)
-                        .transition(.asymmetric(insertion: insertion, removal: .identity))
-                }
+    private func pages(size: CGSize) -> some View {
+        ZStack {
+            if let previous = model.previousItem {
+                ReelPage(model: model, item: previous, live: false, dragY: .constant(0), pageSize: size)
+                    .offset(y: dragY - size.height)
+            }
+            if let next = model.upcoming {
+                ReelPage(model: model, item: next, live: false, dragY: .constant(0), pageSize: size)
+                    .offset(y: dragY + size.height)
+            }
+            if let item = model.current {
+                ReelPage(model: model, item: item, live: true, dragY: $dragY, pageSize: size)
+                    .id(item.id)
+                    .offset(y: dragY)
             }
         }
-        .padding(.horizontal, Space.m)
-        .padding(.bottom, Space.s)
-        .frame(maxWidth: 640)
-        .frame(maxWidth: .infinity)
-        .animation(.spring(response: 0.36, dampingFraction: 0.86), value: model.current?.id)
+        .frame(width: size.width, height: size.height)
+        .clipped()
+    }
+
+    private var topBar: some View {
+        HStack(spacing: Space.s) {
+            Button(action: onClose) {
+                Image(systemName: "xmark")
+                    .font(.body.weight(.semibold))
+                    .foregroundStyle(Palette.ink2)
+                    .frame(width: Metrics.minTap, height: Metrics.minTap)
+                    .contentShape(Rectangle())
+            }
+            .accessibilityLabel("Close")
+            .keyboardShortcut(.cancelAction)
+            ProgressView(value: model.progress)
+                .tint(Palette.accent)
+                .accessibilityLabel("\(model.completed) of \(model.total) done")
+            ComboBadge(combo: model.combo)
+                .frame(minWidth: 56, alignment: .trailing)
+        }
+        .padding(.leading, Space.xs)
+        .padding(.trailing, Space.m)
     }
 }
 
@@ -4274,96 +4274,38 @@ struct ComboBadge: View {
     }
 }
 
-/// Turns a card face toward or away from the viewer. Each face is visible
-/// only for its half of the turn; with Reduce Motion the turn becomes a fade.
-struct FlipFace: ViewModifier, Animatable {
-    var angle: Double
-    let isBack: Bool
-    let flat: Bool
-
-    var animatableData: Double {
-        get { angle }
-        set { angle = newValue }
-    }
-
-    func body(content: Content) -> some View {
-        let showing = isBack ? angle >= 90 : angle < 90
-        let turn = flat ? 0 : (isBack ? angle - 180 : angle)
-        return content
-            .opacity(showing ? 1 : 0)
-            .rotation3DEffect(.degrees(turn), axis: (x: 0, y: 1, z: 0), perspective: 0.5)
-            .allowsHitTesting(showing)
-    }
-}
-
-/// The next card, waiting underneath the current one.
-struct CardPreview: View {
-    @EnvironmentObject var store: Store
-    let item: StudyItem
-    let heroSize: CGFloat
-
-    var body: some View {
-        ZStack {
-            RoundedRectangle(cornerRadius: 28, style: .continuous)
-                .fill(Palette.card)
-            if let kanji = store.library.byGlyph[item.glyph] {
-                Group {
-                    if item.kind == .context {
-                        Caption(text: "In context")
-                    } else {
-                        switch item.facet {
-                        case .meaning:
-                            Text(kanji.glyph)
-                                .font(.jpFixed(heroSize, face: store.data.settings.face))
-                        case .reading:
-                            Text(previewWord(kanji))
-                                .font(.jpFixed(min(heroSize * 0.55, 76), face: store.data.settings.face))
-                                .lineLimit(1)
-                                .minimumScaleFactor(0.4)
-                        case .writing:
-                            Text(kanji.meaningList.capitalizedFirst)
-                                .font(.title.weight(.semibold))
-                        }
-                    }
-                }
-                .padding(Space.l)
-            }
-        }
-        .accessibilityHidden(true)
-    }
-
-    private func previewWord(_ kanji: Kanji) -> String {
-        guard !kanji.words.isEmpty else { return kanji.glyph }
-        return kanji.words[item.wordIndex % kanji.words.count].word
-    }
-}
-
-/// One card in the feed.
+/// One full-screen page of the feed.
 ///
-///   tap          reveal (then: play the reading)
-///   swipe →      knew it            swipe ←   again
-///   swipe ↑      later              swipe ↓   back to the previous card
+///   tap          reveal (then: hear it)
+///   swipe ↑      next — counts as "knew it" unless marked Forgot
+///   swipe ↓      back to the previous card, its answer undone
+///   swipe ←      mark Forgot        swipe →   clear the mark
 ///   double-tap   save               hold      play the stroke order
 ///
-/// Every gesture also has a button, a keyboard key (Space, ← → ↑ ↓,
-/// Return, S) and a VoiceOver action.
-struct FeedCard: View {
+/// The right-hand rail (Forgot, Save, Listen, Strokes) and the caption
+/// ("Swipe up for next") are tappable too; hardware keys and VoiceOver
+/// actions cover every gesture.
+struct ReelPage: View {
     @EnvironmentObject var store: Store
     @ObservedObject var model: SessionModel
     let item: StudyItem
+    let live: Bool
+    @Binding var dragY: CGFloat
+    let pageSize: CGSize
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    @State private var flipAngle: Double = 0
-    @State private var offset: CGSize = .zero
+    @State private var revealed = false
+    @State private var marked = false
+    @State private var dragX: CGFloat = 0
     @State private var axis: Axis? = nil
-    @State private var armed: Move? = nil
+    @State private var armed = false
     @State private var leaving = false
     @State private var holding = false
     @State private var autoStrokes = false
     @State private var burst = false
+    @State private var bounce = false
     @State private var shownAt = Date()
     @State private var answerMs = 0
-    @State private var cardSize: CGSize = CGSize(width: 360, height: 560)
     @State private var showDraw = false
     @State private var typed = ""
     @State private var verdict: Bool? = nil
@@ -4373,152 +4315,120 @@ struct FeedCard: View {
     @State private var shakes: CGFloat = 0
     @FocusState var fieldFocused: Bool
 
-    private static let threshold: CGFloat = 110
+    private static let threshold: CGFloat = 90
+    private static let flingThreshold: CGFloat = 280
 
     private var settings: AppSettings { store.data.settings }
     private var kanji: Kanji? { store.library.byGlyph[item.glyph] }
-    private var flipped: Bool { flipAngle >= 90 }
     private var isContext: Bool { item.kind == .context }
     private var typing: Bool { item.facet == .reading && settings.typeReadings && !isContext }
-    private var heroSize: CGFloat { min(cardSize.width * 0.48, 210) }
+    private var hero: CGFloat { min(pageSize.width * 0.5, 220) }
+    private var card: Card? { store.card(item.glyph, item.facet) }
+    private var canAdvance: Bool { isContext || !typing || verdict != nil }
 
     private var word: Word? {
         guard let k = kanji, !k.words.isEmpty else { return nil }
         return k.words[item.wordIndex % k.words.count]
     }
 
-    private var card: Card? { store.card(item.glyph, item.facet) }
-
     /// The memory hook appears only when it can help: new, relearning or
-    /// repeatedly forgotten cards, or right after a typed miss.
+    /// repeatedly forgotten cards, or once marked forgotten.
     private var needsSupport: Bool {
-        if verdict == false { return true }
+        if marked { return true }
         guard let c = card else { return true }
         return c.phase != .review || c.leech
     }
 
     var body: some View {
         if let k = kanji, item.facet != .reading || word != nil || isContext {
-            VStack(spacing: Space.m) {
-                GeometryReader { geo in
-                    ZStack {
-                        if let next = model.upcoming {
-                            CardPreview(item: next, heroSize: heroSize)
-                                .scaleEffect(0.94 + 0.06 * dragProgress)
-                                .offset(y: 16 * (1 - dragProgress))
-                                .opacity(0.55 + 0.45 * dragProgress)
-                        }
-                        cardBody(k)
-                    }
-                    .frame(width: geo.size.width, height: geo.size.height)
-                    .onAppear { cardSize = geo.size }
-                    .onChange(of: geo.size) { _, newSize in cardSize = newSize }
-                }
-                footer(k)
-                    .actionColumn()
+            if live {
+                livePage(k)
+            } else {
+                pageContent(k)
+                    .allowsHitTesting(false)
+                    .accessibilityHidden(true)
             }
+        } else {
+            Color.clear.onAppear {
+                if live { model.skipCurrent() }
+            }
+        }
+    }
+
+    // MARK: Layout
+
+    private func livePage(_ k: Kanji) -> some View {
+        withGestures(pageContent(k), k)
             .background(hiddenShortcuts(k))
             .onAppear(perform: appear)
             .sheet(isPresented: $showDraw) {
                 DrawSheet(kanji: k) { rating in
-                    if flipAngle < 90 { flipAngle = 180 }
-                    perform(rating == .again ? .again : .knew)
+                    setMarked(rating == .again, k)
+                    advance(k)
                 }
                 .environmentObject(store)
             }
-        } else {
-            Color.clear.onAppear { model.skipCurrent() }
-        }
     }
 
-    // MARK: Card
-
-    /// Built in small steps — faces, motion, gestures, accessibility — so
-    /// each piece type-checks quickly on its own.
-    private func cardBody(_ k: Kanji) -> some View {
-        let moving = cardFaces(k)
-            .offset(offset)
-            .rotationEffect(.degrees(cardTilt), anchor: .bottom)
-        return withAccessibility(withGestures(moving, k), k)
-    }
-
-    private var cardTilt: Double {
-        axis == .horizontal ? Double(offset.width / 24) : 0
-    }
-
-    private var revealHint: String {
-        flipped || isContext ? "" : "Reveals the answer"
-    }
-
-    private func saveActionName(_ k: Kanji) -> String {
-        store.isSaved(k.glyph) ? "Remove from saved" : "Save"
-    }
-
-    @ViewBuilder
-    private func cardFaces(_ k: Kanji) -> some View {
-        ZStack {
-            RoundedRectangle(cornerRadius: 28, style: .continuous)
-                .fill(Palette.card)
-                .shadow(color: Color.black.opacity(0.08), radius: 18, x: 0, y: 6)
-            if isContext {
-                contextFace(k)
-            } else {
-                front(k)
-                    .modifier(FlipFace(angle: flipAngle, isBack: false, flat: reduceMotion))
-                back(k)
-                    .modifier(FlipFace(angle: flipAngle, isBack: true, flat: reduceMotion))
+    private func pageContent(_ k: Kanji) -> some View {
+        ZStack(alignment: .bottom) {
+            Palette.paper
+            if marked {
+                forgotWash
             }
-            swipeLabel
+            centerColumn(k)
+            bottomBar(k)
+        }
+        .overlay {
             if burst {
                 SaveBurst(saved: store.isSaved(k.glyph))
             }
         }
+        .frame(width: pageSize.width, height: pageSize.height)
+        .offset(x: dragX)
     }
 
-    private func withGestures<Content: View>(_ content: Content, _ k: Kanji) -> some View {
-        content
-            .gesture(dragGesture)
-            .onTapGesture(count: 2) { toggleSave(k) }
-            .onTapGesture { tap(k) }
-            .onLongPressGesture(minimumDuration: 0.35, maximumDistance: 12, perform: {
-                startHold(k)
-            }, onPressingChanged: { pressing in
-                if !pressing { holding = false }
-            })
+    private var forgotWash: some View {
+        LinearGradient(colors: [Palette.shu.opacity(0), Palette.shu.opacity(0.12)],
+                       startPoint: .top, endPoint: .bottom)
+            .allowsHitTesting(false)
     }
 
-    /// VoiceOver and Switch Control get every gesture as a named action.
-    private func withAccessibility<Content: View>(_ content: Content, _ k: Kanji) -> some View {
-        content
-            .accessibilityElement(children: .combine)
-            .accessibilityAddTraits(.isButton)
-            .accessibilityHint(Text(revealHint))
-            .accessibilityAction { tap(k) }
-            .accessibilityActions {
-                accessibilityButtons(k)
-            }
-    }
-
-    @ViewBuilder
-    private func accessibilityButtons(_ k: Kanji) -> some View {
-        Button("Knew it") { perform(.knew) }
-        Button("Again") { perform(.again) }
-        Button("Later") { perform(.later) }
-        Button("Back to previous card") { perform(.back) }
-        Button(saveActionName(k)) { toggleSave(k) }
-        Button("Play stroke order") { playStrokesOnce(k) }
-    }
-
-    @ViewBuilder
-    private func front(_ k: Kanji) -> some View {
+    private func centerColumn(_ k: Kanji) -> some View {
         VStack(spacing: Space.l) {
-            Spacer(minLength: 0)
-            switch item.facet {
-            case .meaning:
-                StrokeGlyph(kanji: k, size: heroSize, playing: holding, loops: true)
-            case .reading:
-                if let w = word {
-                    jpText(w.word, highlight: k.glyph, size: min(heroSize * 0.55, 76), face: settings.face)
+            Spacer(minLength: 72)
+            if isContext {
+                contextContent(k)
+            } else {
+                prompt(k)
+                if revealed {
+                    answer(k)
+                        .transition(.opacity.combined(with: .offset(y: 12)))
+                }
+            }
+            Spacer(minLength: 150)
+        }
+        .padding(.horizontal, Space.xl)
+        .frame(maxWidth: Metrics.readableWidth)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(.isButton)
+        .accessibilityHint(Text(revealHint))
+        .accessibilityAction { if live { tap(k) } }
+        .accessibilityActions {
+            if live { accessibilityButtons(k) }
+        }
+    }
+
+    @ViewBuilder
+    private func prompt(_ k: Kanji) -> some View {
+        switch item.facet {
+        case .meaning:
+            StrokeGlyph(kanji: k, size: revealed ? hero * 0.72 : hero, playing: holding || autoStrokes, loops: holding)
+        case .reading:
+            if let w = word {
+                VStack(spacing: Space.xs) {
+                    jpText(w.word, highlight: k.glyph, size: min(hero * 0.55, 80), face: settings.face)
                         .lineLimit(1)
                         .minimumScaleFactor(0.4)
                     Text(w.meaning)
@@ -4526,155 +4436,100 @@ struct FeedCard: View {
                         .foregroundStyle(Palette.ink2)
                         .multilineTextAlignment(.center)
                 }
-            case .writing:
+            }
+        case .writing:
+            if revealed {
+                StrokeGlyph(kanji: k, size: hero * 0.8, playing: holding || autoStrokes, loops: holding)
+            } else {
+                writingPrompt(k)
+            }
+        }
+    }
+
+    private func writingPrompt(_ k: Kanji) -> some View {
+        VStack(spacing: Space.s) {
+            Text(k.meaningList.capitalizedFirst)
+                .font(.title.weight(.semibold))
+                .multilineTextAlignment(.center)
+            Text(readingLine(k))
+                .font(.jp(18, relativeTo: .title3))
+                .foregroundStyle(Palette.ink2)
+                .multilineTextAlignment(.center)
+            Button {
+                showDraw = true
+            } label: {
+                Label("Draw it", systemImage: "pencil.tip")
+            }
+            .buttonStyle(.bordered)
+            .tint(Palette.ink)
+            .padding(.top, Space.s)
+        }
+    }
+
+    @ViewBuilder
+    private func answer(_ k: Kanji) -> some View {
+        VStack(spacing: Space.s) {
+            switch item.facet {
+            case .meaning, .writing:
                 Text(k.meaningList.capitalizedFirst)
-                    .font(.title.weight(.semibold))
+                    .font(.title2.weight(.semibold))
                     .multilineTextAlignment(.center)
                 Text(readingLine(k))
-                    .font(.jp(18, relativeTo: .title3))
+                    .font(.jp(17, relativeTo: .body))
                     .foregroundStyle(Palette.ink2)
                     .multilineTextAlignment(.center)
-            }
-            Caption(text: frontCaption)
-            Spacer(minLength: 0)
-            if item.facet == .writing {
-                Button {
-                    showDraw = true
-                } label: {
-                    Label("Draw it", systemImage: "pencil.tip")
+            case .reading:
+                if let w = word {
+                    readingAnswer(w)
                 }
-                .buttonStyle(.bordered)
-                .tint(Palette.ink)
             }
-            if !typing {
-                Text("Tap to reveal")
-                    .font(.footnote)
+            if needsSupport {
+                MixedText(hookText(k), style: .callout)
+                    .foregroundStyle(Palette.ink2)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.top, Space.xs)
+            }
+            if card?.leech ?? false {
+                lookAlikes(k)
+            }
+        }
+    }
+
+    private func readingAnswer(_ w: Word) -> some View {
+        VStack(spacing: Space.xxs) {
+            Text(w.readings.joined(separator: " / "))
+                .font(.jp(32, relativeTo: .title))
+                .foregroundStyle(readingColor)
+            if verdict == false && !typed.isEmpty {
+                Text(typed)
+                    .font(.jp(17, relativeTo: .body))
+                    .strikethrough()
+                    .foregroundStyle(Palette.shu)
+                    .accessibilityLabel("You typed \(typed)")
+            }
+        }
+    }
+
+    private var readingColor: Color {
+        if marked { return Palette.shu }
+        if verdict == true { return Palette.matcha }
+        return Palette.ink
+    }
+
+    private func lookAlikes(_ k: Kanji) -> some View {
+        VStack(spacing: Space.xs) {
+            ForEach(store.library.confusions(for: k.glyph)) { confusion in
+                MixedText(confusion.tip, style: .footnote)
                     .foregroundStyle(Palette.ink3)
-            }
-        }
-        .padding(.horizontal, Space.l)
-        .padding(.bottom, Space.l)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-    }
-
-    private var frontCaption: String {
-        switch item.facet {
-        case .meaning: return "Meaning"
-        case .reading: return typing ? "Type the reading" : "Say the reading"
-        case .writing: return "Write it — in the air or on paper"
-        }
-    }
-
-    @ViewBuilder
-    private func back(_ k: Kanji) -> some View {
-        ZStack(alignment: .bottomTrailing) {
-            VStack(spacing: Space.m) {
-                Spacer(minLength: 0)
-                switch item.facet {
-                case .meaning, .writing:
-                    StrokeGlyph(kanji: k, size: heroSize * 0.7, playing: holding || autoStrokes, loops: holding)
-                    Text(k.meaningList.capitalizedFirst)
-                        .font(.title2.weight(.semibold))
-                        .multilineTextAlignment(.center)
-                    Text(readingLine(k))
-                        .font(.jp(17, relativeTo: .body))
-                        .foregroundStyle(Palette.ink2)
-                        .multilineTextAlignment(.center)
-                case .reading:
-                    if let w = word {
-                        jpText(w.word, highlight: k.glyph, size: min(heroSize * 0.42, 56), face: settings.face)
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.4)
-                        Text(w.readings.joined(separator: " / "))
-                            .font(.jp(30, relativeTo: .title))
-                            .foregroundStyle(verdict == true ? Palette.matcha : Palette.ink)
-                        if verdict == false && !typed.isEmpty {
-                            Text(typed)
-                                .font(.jp(17, relativeTo: .body))
-                                .strikethrough()
-                                .foregroundStyle(Palette.shu)
-                                .accessibilityLabel("You typed \(typed)")
-                        }
-                        Text(w.meaning)
-                            .font(.subheadline)
-                            .foregroundStyle(Palette.ink2)
-                            .multilineTextAlignment(.center)
-                    }
-                }
-                if needsSupport {
-                    MixedText(hookText(k), style: .callout)
-                        .foregroundStyle(Palette.ink2)
-                        .multilineTextAlignment(.center)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .padding(.top, Space.xs)
-                }
-                if card?.leech ?? false {
-                    ForEach(store.library.confusions(for: k.glyph)) { confusion in
-                        MixedText(confusion.tip, style: .footnote)
-                            .foregroundStyle(Palette.ink3)
-                            .multilineTextAlignment(.center)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                }
-                Spacer(minLength: 0)
-                coachLine(k)
-            }
-            .padding(.horizontal, Space.xxl)
-            .padding(.bottom, Space.l)
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-
-            rail(k)
-                .padding(Space.xs)
-        }
-    }
-
-    /// First-run teaching: the swipe vocabulary until it's been used three
-    /// times, then the hold/double-tap tip once.
-    @ViewBuilder
-    private func coachLine(_ k: Kanji) -> some View {
-        if settings.coachSwipes < 3 && !typing {
-            HStack(spacing: Space.l) {
-                Label("Again", systemImage: "arrow.left")
-                Label("Knew it", systemImage: "arrow.right")
-                    .labelStyle(TrailingIconLabelStyle())
-            }
-            .font(.footnote.weight(.medium))
-            .foregroundStyle(Palette.ink3)
-            .accessibilityHidden(true)
-        } else if !settings.coachTips && !k.strokePaths.isEmpty {
-            Text("Hold for stroke order · double-tap to save")
-                .font(.footnote)
-                .foregroundStyle(Palette.ink3)
-                .accessibilityHidden(true)
-        }
-    }
-
-    private func rail(_ k: Kanji) -> some View {
-        VStack(spacing: 0) {
-            railButton(store.isSaved(k.glyph) ? "bookmark.fill" : "bookmark",
-                       label: store.isSaved(k.glyph) ? "Remove from saved" : "Save") { toggleSave(k) }
-            railButton("speaker.wave.2", label: "Listen") { speak(k, deliberate: true) }
-            if !k.strokePaths.isEmpty {
-                railButton("play.circle", label: "Stroke order") { playStrokesOnce(k) }
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
     }
 
-    private func railButton(_ symbol: String, label: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Image(systemName: symbol)
-                .font(.title3)
-                .foregroundStyle(symbol == "bookmark.fill" ? Palette.accent : Palette.ink2)
-                .frame(width: Metrics.minTap, height: Metrics.minTap)
-                .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(label)
-    }
-
-    private func contextFace(_ k: Kanji) -> some View {
+    private func contextContent(_ k: Kanji) -> some View {
         VStack(spacing: Space.l) {
-            Spacer(minLength: 0)
             Caption(text: "In context")
             RubyText(markup: k.sentence, size: 22, highlight: k.glyph)
             Text(k.translation)
@@ -4682,315 +4537,105 @@ struct FeedCard: View {
                 .foregroundStyle(Palette.ink2)
                 .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
-            Spacer(minLength: 0)
-            Text("Tap to listen · swipe up to continue")
-                .font(.footnote)
-                .foregroundStyle(Palette.ink3)
-        }
-        .padding(.horizontal, Space.xl)
-        .padding(.bottom, Space.l)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-    }
-
-    // MARK: Swipe feedback
-
-    private var dragDirection: Move? {
-        guard let axis = axis else { return nil }
-        return direction(for: offset, axis: axis)
-    }
-
-    private var dragProgress: CGFloat {
-        guard let axis = axis else { return 0 }
-        let distance = axis == .horizontal ? abs(offset.width) : abs(offset.height)
-        return min(distance / FeedCard.threshold, 1)
-    }
-
-    @ViewBuilder
-    private var swipeLabel: some View {
-        if let move = dragDirection, dragProgress > 0.15 {
-            let allowed = isAllowed(move)
-            VStack {
-                Label(allowed ? title(for: move) : "Not available",
-                      systemImage: allowed ? symbol(for: move) : "nosign")
-                    .font(.headline)
-                    .foregroundStyle(allowed ? tint(for: move) : Palette.ink3)
-                    .padding(.horizontal, Space.m)
-                    .padding(.vertical, Space.xs)
-                    .background((allowed ? tint(for: move) : Palette.ink3).opacity(0.14), in: Capsule())
-                    .scaleEffect(armed == move ? 1.08 : 1)
-                Spacer()
-            }
-            .padding(.top, Space.xl)
-            .opacity(Double(dragProgress))
-            .allowsHitTesting(false)
-            .accessibilityHidden(true)
         }
     }
 
-    private func title(for move: Move) -> String {
-        switch move {
-        case .knew: return "Knew it"
-        case .again: return "Again"
-        case .later: return "Later"
-        case .back: return "Back"
-        case .next: return "Next"
-        }
-    }
+    // MARK: Bottom bar
 
-    private func symbol(for move: Move) -> String {
-        switch move {
-        case .knew: return "checkmark"
-        case .again: return "arrow.counterclockwise"
-        case .later: return "arrow.up"
-        case .back: return "arrow.down"
-        case .next: return "arrow.up"
-        }
-    }
-
-    private func tint(for move: Move) -> Color {
-        switch move {
-        case .knew: return Palette.matcha
-        case .again: return Palette.shu
-        default: return Palette.ink2
-        }
-    }
-
-    // MARK: Gestures
-
-    private var dragGesture: some Gesture {
-        DragGesture(minimumDistance: 14)
-            .onChanged { value in
-                guard !leaving, !holding else { return }
-                let t = value.translation
-                if axis == nil {
-                    axis = abs(t.width) > abs(t.height) ? .horizontal : .vertical
-                }
-                guard let lockedAxis = axis else { return }
-                let allowed = direction(for: t, axis: lockedAxis).map { isAllowed($0) } ?? true
-                let damp: CGFloat = allowed ? 1 : 0.25
-                if lockedAxis == .horizontal {
-                    offset = CGSize(width: t.width * damp, height: t.height * 0.12)
-                } else {
-                    offset = CGSize(width: t.width * 0.12, height: t.height * damp)
-                }
-                let candidate = committed(offset, axis: lockedAxis, threshold: FeedCard.threshold)
-                if candidate != armed {
-                    if candidate != nil && settings.haptics { Haptics.tick() }
-                    armed = candidate
-                }
-            }
-            .onEnded { value in
-                guard !leaving else { return }
-                let currentAxis = axis ?? (abs(value.translation.width) > abs(value.translation.height) ? .horizontal : .vertical)
-                let fling = committed(value.predictedEndTranslation, axis: currentAxis, threshold: 320)
-                let move = armed ?? fling
-                armed = nil
-                if let move = move, isAllowed(move) {
-                    perform(move)
-                } else {
-                    if move != nil && settings.haptics { Haptics.rigid() }
-                    withAnimation(.spring(response: 0.35, dampingFraction: 0.75)) { offset = .zero }
-                    axis = nil
-                }
-            }
-    }
-
-    private func direction(for t: CGSize, axis: Axis) -> Move? {
-        if axis == .horizontal {
-            if t.width == 0 { return nil }
-            if isContext { return .next }
-            return t.width > 0 ? .knew : .again
-        }
-        if t.height == 0 { return nil }
-        if t.height > 0 { return .back }
-        return isContext ? .next : .later
-    }
-
-    private func committed(_ t: CGSize, axis: Axis, threshold: CGFloat) -> Move? {
-        let distance = axis == .horizontal ? abs(t.width) : abs(t.height)
-        guard distance >= threshold else { return nil }
-        guard let move = direction(for: t, axis: axis), isAllowed(move) else { return nil }
-        return move
-    }
-
-    private func isAllowed(_ move: Move) -> Bool {
-        switch move {
-        case .knew: return !isContext && (!typing || verdict != nil)
-        case .again: return !isContext
-        case .later: return !isContext && model.canDefer
-        case .back: return model.canUndo
-        case .next: return isContext
-        }
-    }
-
-    // MARK: Actions
-
-    private func appear() {
-        shownAt = Date()
-        if typing {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { fieldFocused = true }
-        }
-    }
-
-    private func tap(_ k: Kanji) {
-        guard !leaving else { return }
-        if isContext {
-            Speaker.shared.say(Ruby.spoken(k.sentence))
-        } else if !flipped {
-            if typing {
-                fieldFocused = true
-            } else {
-                flip(k)
-            }
-        } else {
-            speak(k, deliberate: true)
-        }
-    }
-
-    private func flip(_ k: Kanji) {
-        guard !flipped else { return }
-        answerMs = Int(Date().timeIntervalSince(shownAt) * 1000)
-        let animation: Animation = reduceMotion
-            ? .easeInOut(duration: 0.2)
-            : .spring(response: 0.45, dampingFraction: 0.82)
-        withAnimation(animation) { flipAngle = 180 }
-        if settings.haptics { Haptics.tap() }
-        if item.facet == .writing { playStrokesOnce(k) }
-        if settings.autoSpeak { speak(k, deliberate: false) }
-    }
-
-    private func speak(_ k: Kanji, deliberate: Bool) {
-        if let reading = word?.primaryReading ?? k.words.first?.primaryReading {
-            Speaker.shared.say(reading, deliberate: deliberate)
-        }
-    }
-
-    private func toggleSave(_ k: Kanji) {
-        guard !leaving else { return }
-        store.toggleSaved(k.glyph)
-        if settings.haptics { Haptics.medium() }
-        if !settings.coachTips { store.data.settings.coachTips = true }
-        burst = true
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.75) {
-            withAnimation(.easeOut(duration: 0.2)) { burst = false }
-        }
-    }
-
-    private func startHold(_ k: Kanji) {
-        guard !leaving, !isContext else { return }
-        let glyphVisible = item.facet == .meaning || flipped
-        guard glyphVisible, !k.strokePaths.isEmpty else {
-            if settings.haptics { Haptics.rigid() }
-            return
-        }
-        holding = true
-        if settings.haptics { Haptics.tick() }
-        if !settings.coachTips { store.data.settings.coachTips = true }
-    }
-
-    private func playStrokesOnce(_ k: Kanji) {
-        guard !k.strokePaths.isEmpty else { return }
-        autoStrokes = true
-        DispatchQueue.main.asyncAfter(deadline: .now() + StrokeOrderView.duration(for: k.strokePaths.count)) {
-            autoStrokes = false
-        }
-    }
-
-    /// Animates the card off screen in the direction of the move, then
-    /// tells the session — so the motion always matches the meaning.
-    private func perform(_ move: Move) {
-        guard !leaving, isAllowed(move) else { return }
-        leaving = true
-        fieldFocused = false
-        let w = cardSize.width * 1.6
-        let h = cardSize.height * 1.3
-        var target = CGSize.zero
-        switch move {
-        case .knew:
-            target = CGSize(width: w, height: offset.height + 60)
-        case .again:
-            target = CGSize(width: -w, height: offset.height + 60)
-        case .later, .next:
-            target = CGSize(width: offset.width, height: -h)
-        case .back:
-            target = CGSize(width: offset.width, height: h)
-        }
-        if axis == nil { axis = (move == .knew || move == .again) ? .horizontal : .vertical }
-        if (move == .knew || move == .again) && !flipped {
-            flipAngle = 180
-        }
-        if settings.haptics {
-            switch move {
-            case .knew: Haptics.soft()
-            case .again: Haptics.rigid()
-            default: Haptics.tap()
-            }
-        }
-        withAnimation(.easeIn(duration: 0.22)) {
-            offset = target
-        } completion: {
-            finish(move)
-        }
-    }
-
-    private func finish(_ move: Move) {
-        switch move {
-        case .knew:
-            grade(.good)
-        case .again:
-            grade(.again)
-        case .later:
-            model.later(store: store)
-        case .back:
-            model.undo(store: store)
-        case .next:
-            model.dismissContext()
-        }
-    }
-
-    private func grade(_ rating: Rating) {
-        let ms = answerMs > 0 ? answerMs : Int(Date().timeIntervalSince(shownAt) * 1000)
-        var miss: MissReason? = nil
-        if rating == .again {
-            switch item.facet {
-            case .meaning: miss = .meaning
-            case .reading: miss = inferredMiss ?? .reading
-            case .writing: miss = nil
-            }
-        }
-        if settings.coachSwipes < 3 { store.data.settings.coachSwipes += 1 }
-        model.commit(rating, ms: ms, miss: miss, store: store)
-        if rating != .again && [5, 10, 20, 50, 100].contains(model.combo) && settings.haptics {
-            Haptics.success()
-        }
-    }
-
-    // MARK: Footer
-
-    @ViewBuilder
-    private func footer(_ k: Kanji) -> some View {
-        Group {
-            if isContext {
-                ActionButton(title: "Continue") { perform(.next) }
-            } else if typing && verdict == nil {
+    private func bottomBar(_ k: Kanji) -> some View {
+        VStack(spacing: Space.m) {
+            if typing && verdict == nil {
                 typedField(k)
-            } else if !flipped {
-                Color.clear
-            } else if typing {
-                HStack(spacing: Space.s) {
-                    if verdict == false {
-                        ActionButton(title: "I mistyped", kind: .secondary) { perform(.knew) }
+            }
+            HStack(alignment: .bottom, spacing: Space.m) {
+                caption(k)
+                Spacer(minLength: Space.s)
+                rail(k)
+            }
+        }
+        .padding(.horizontal, Space.l)
+        .padding(.bottom, Space.m)
+    }
+
+    private var revealHint: String {
+        revealed || isContext ? "" : "Reveals the answer"
+    }
+
+    private var facetLabel: String {
+        if isContext { return "In context" }
+        switch item.facet {
+        case .meaning: return "Meaning"
+        case .reading: return typing ? "Type the reading" : "Say the reading"
+        case .writing: return "Write it"
+        }
+    }
+
+    private var hintText: String {
+        if isContext { return "Swipe up to continue" }
+        if typing && verdict == nil { return "Then press return" }
+        if !revealed { return "Tap to reveal" }
+        if marked { return "Marked forgot · swipe up" }
+        return "Swipe up for next"
+    }
+
+    private func caption(_ k: Kanji) -> some View {
+        VStack(alignment: .leading, spacing: Space.xxs) {
+            Caption(text: facetLabel)
+            Button {
+                primaryAction(k)
+            } label: {
+                HStack(spacing: Space.xxs) {
+                    Text(hintText)
+                    if revealed || isContext {
+                        Image(systemName: "chevron.up")
+                            .offset(y: bounce ? -3 : 0)
                     }
-                    ActionButton(title: "Continue") { perform(verdict == true ? .knew : .again) }
                 }
-            } else {
-                HStack(spacing: Space.s) {
-                    ActionButton(title: "Again", kind: .secondary) { perform(.again) }
-                    ActionButton(title: "Knew it") { perform(.knew) }
+                .font(.subheadline.weight(.medium))
+                .foregroundStyle(Palette.ink2)
+                .frame(minHeight: Metrics.minTap, alignment: .leading)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .disabled(typing && verdict == nil)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func rail(_ k: Kanji) -> some View {
+        VStack(spacing: Space.s) {
+            if !isContext {
+                railItem(marked ? "arrow.counterclockwise.circle.fill" : "arrow.counterclockwise.circle",
+                         title: "Forgot", active: marked, tint: Palette.shu) { setMarked(!marked, k) }
+                railItem(store.isSaved(k.glyph) ? "bookmark.fill" : "bookmark",
+                         title: store.isSaved(k.glyph) ? "Saved" : "Save",
+                         active: store.isSaved(k.glyph), tint: Palette.accent) { toggleSave(k) }
+            }
+            railItem("speaker.wave.2", title: "Listen", active: false, tint: Palette.ink) { listen(k) }
+            if !isContext && !k.strokePaths.isEmpty {
+                railItem("scribble", title: "Strokes", active: autoStrokes || holding, tint: Palette.accent) {
+                    playStrokesOnce(k)
                 }
             }
         }
-        .frame(height: Metrics.buttonHeight + (hint == nil ? 0 : 28))
+    }
+
+    private func railItem(_ symbol: String, title: String, active: Bool, tint: Color,
+                          action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            VStack(spacing: 2) {
+                Image(systemName: symbol)
+                    .font(.title2)
+                Text(title)
+                    .font(.caption2.weight(.medium))
+            }
+            .foregroundStyle(active ? tint : Palette.ink2)
+            .frame(minWidth: Metrics.minTap, minHeight: Metrics.minTap)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(title)
+        .accessibilityAddTraits(active ? .isSelected : [])
     }
 
     private func typedField(_ k: Kanji) -> some View {
@@ -5026,27 +4671,267 @@ struct FeedCard: View {
             }
             .padding(.horizontal, Space.xxs)
             .frame(height: Metrics.buttonHeight)
-            .background(Palette.card, in: Capsule())
+            .background(Palette.surface, in: Capsule())
             .modifier(Shake(animatableData: shakes))
+        }
+        .actionColumn()
+    }
+
+    // MARK: Gestures
+
+    private func withGestures<Content: View>(_ content: Content, _ k: Kanji) -> some View {
+        content
+            .contentShape(Rectangle())
+            .gesture(pageDrag(k))
+            .onTapGesture(count: 2) { toggleSave(k) }
+            .onTapGesture { tap(k) }
+            .onLongPressGesture(minimumDuration: 0.35, maximumDistance: 12, perform: {
+                startHold(k)
+            }, onPressingChanged: { pressing in
+                if !pressing { holding = false }
+            })
+    }
+
+    private func pageDrag(_ k: Kanji) -> some Gesture {
+        DragGesture(minimumDistance: 12)
+            .onChanged { value in
+                dragChanged(value.translation, k)
+            }
+            .onEnded { value in
+                dragEnded(value.translation, predicted: value.predictedEndTranslation, k)
+            }
+    }
+
+    private func dragChanged(_ t: CGSize, _ k: Kanji) {
+        guard !leaving, !holding else { return }
+        if axis == nil {
+            axis = abs(t.height) >= abs(t.width) ? .vertical : .horizontal
+        }
+        if axis == .vertical {
+            let up = t.height < 0
+            let allowed = up ? canAdvance : model.canUndo
+            dragY = allowed ? t.height : t.height * 0.25
+            if up && allowed && !revealed && !isContext && t.height < -24 {
+                reveal(k)
+            }
+            updateArmed(allowed && abs(t.height) > ReelPage.threshold)
+        } else {
+            dragX = t.width * 0.4
+            updateArmed(!isContext && abs(t.width) > 70)
         }
     }
 
-    /// Hidden keys for hardware keyboards: Space reveals, Return or → knows,
-    /// ← again, ↑ later, ↓ back, S saves.
+    private func updateArmed(_ value: Bool) {
+        guard value != armed else { return }
+        if value && settings.haptics { Haptics.tick() }
+        armed = value
+    }
+
+    private func dragEnded(_ t: CGSize, predicted: CGSize, _ k: Kanji) {
+        guard !leaving else { return }
+        let locked = axis ?? .vertical
+        axis = nil
+        let wasArmed = armed
+        armed = false
+        if locked == .vertical {
+            let goesUp = t.height < -ReelPage.threshold || predicted.height < -ReelPage.flingThreshold
+            let goesDown = t.height > ReelPage.threshold || predicted.height > ReelPage.flingThreshold
+            if goesUp && canAdvance {
+                advance(k)
+            } else if goesDown && model.canUndo {
+                goBack()
+            } else {
+                if (goesUp || goesDown) && settings.haptics { Haptics.rigid() }
+                withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) { dragY = 0 }
+            }
+        } else {
+            if wasArmed && !isContext { setMarked(t.width < 0, k) }
+            withAnimation(.spring(response: 0.35, dampingFraction: 0.75)) { dragX = 0 }
+        }
+    }
+
+    // MARK: Actions
+
+    private func appear() {
+        guard live else { return }
+        shownAt = Date()
+        if typing {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { fieldFocused = true }
+        }
+        if !reduceMotion && settings.coachSwipes < 3 {
+            withAnimation(.easeInOut(duration: 0.6).repeatForever(autoreverses: true)) { bounce = true }
+        }
+    }
+
+    private func primaryAction(_ k: Kanji) {
+        if !revealed && !isContext {
+            if typing { fieldFocused = true } else { reveal(k) }
+        } else {
+            advance(k)
+        }
+    }
+
+    private func tap(_ k: Kanji) {
+        guard !leaving else { return }
+        if isContext {
+            listen(k)
+        } else if !revealed {
+            if typing { fieldFocused = true } else { reveal(k) }
+        } else {
+            listen(k)
+        }
+    }
+
+    private func reveal(_ k: Kanji) {
+        guard !revealed, !isContext else { return }
+        answerMs = Int(Date().timeIntervalSince(shownAt) * 1000)
+        let animation: Animation = reduceMotion
+            ? .easeOut(duration: 0.15)
+            : .spring(response: 0.4, dampingFraction: 0.85)
+        withAnimation(animation) { revealed = true }
+        if settings.haptics { Haptics.tap() }
+        if item.facet == .writing { playStrokesOnce(k) }
+        if settings.autoSpeak { speak(k, deliberate: false) }
+    }
+
+    private func listen(_ k: Kanji) {
+        if isContext {
+            Speaker.shared.say(Ruby.spoken(k.sentence))
+        } else {
+            speak(k, deliberate: true)
+        }
+    }
+
+    private func speak(_ k: Kanji, deliberate: Bool) {
+        if let reading = word?.primaryReading ?? k.words.first?.primaryReading {
+            Speaker.shared.say(reading, deliberate: deliberate)
+        }
+    }
+
+    /// Marking Forgot (swipe ←, the rail, or ← key) also reveals the answer;
+    /// clearing it (swipe →) is how a typed slip counts as known.
+    private func setMarked(_ forgot: Bool, _ k: Kanji) {
+        guard !isContext, !leaving else { return }
+        if forgot && !revealed { reveal(k) }
+        guard forgot != marked else { return }
+        withAnimation(.easeOut(duration: 0.2)) { marked = forgot }
+        if settings.haptics {
+            if forgot { Haptics.rigid() } else { Haptics.tap() }
+        }
+    }
+
+    private func toggleSave(_ k: Kanji) {
+        guard !leaving, !isContext else { return }
+        store.toggleSaved(k.glyph)
+        if settings.haptics { Haptics.medium() }
+        if !settings.coachTips { store.data.settings.coachTips = true }
+        burst = true
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.75) {
+            withAnimation(.easeOut(duration: 0.2)) { burst = false }
+        }
+    }
+
+    private func startHold(_ k: Kanji) {
+        guard !leaving, !isContext else { return }
+        let glyphVisible = item.facet == .meaning || revealed
+        guard glyphVisible, !k.strokePaths.isEmpty else {
+            if settings.haptics { Haptics.rigid() }
+            return
+        }
+        holding = true
+        if settings.haptics { Haptics.tick() }
+        if !settings.coachTips { store.data.settings.coachTips = true }
+    }
+
+    private func playStrokesOnce(_ k: Kanji) {
+        guard !k.strokePaths.isEmpty else { return }
+        if item.facet == .reading && !revealed { reveal(k) }
+        autoStrokes = true
+        DispatchQueue.main.asyncAfter(deadline: .now() + StrokeOrderView.duration(for: k.strokePaths.count)) {
+            autoStrokes = false
+        }
+    }
+
+    /// Slides this page up and the next one in, then records the answer.
+    /// The feed is reset without animation in the same transaction, so the
+    /// page that slid in simply becomes the live page.
+    private func advance(_ k: Kanji) {
+        guard !leaving, canAdvance else { return }
+        leaving = true
+        fieldFocused = false
+        if settings.haptics {
+            if marked { Haptics.rigid() } else { Haptics.soft() }
+        }
+        let height = pageSize.height
+        withAnimation(.easeOut(duration: 0.24)) {
+            dragY = -height
+        } completion: {
+            var transaction = Transaction()
+            transaction.disablesAnimations = true
+            withTransaction(transaction) {
+                dragY = 0
+                if isContext {
+                    model.dismissContext()
+                } else {
+                    grade(marked ? .again : .good)
+                }
+            }
+        }
+    }
+
+    private func goBack() {
+        guard !leaving, model.canUndo else { return }
+        leaving = true
+        fieldFocused = false
+        if settings.haptics { Haptics.tap() }
+        let height = pageSize.height
+        withAnimation(.easeOut(duration: 0.24)) {
+            dragY = height
+        } completion: {
+            var transaction = Transaction()
+            transaction.disablesAnimations = true
+            withTransaction(transaction) {
+                dragY = 0
+                model.undo(store: store)
+            }
+        }
+    }
+
+    private func grade(_ rating: Rating) {
+        let ms = answerMs > 0 ? answerMs : Int(Date().timeIntervalSince(shownAt) * 1000)
+        var miss: MissReason? = nil
+        if rating == .again {
+            switch item.facet {
+            case .meaning: miss = .meaning
+            case .reading: miss = inferredMiss ?? .reading
+            case .writing: miss = nil
+            }
+        }
+        if settings.coachSwipes < 3 { store.data.settings.coachSwipes += 1 }
+        model.commit(rating, ms: ms, miss: miss, store: store)
+        if rating != .again && [5, 10, 20, 50, 100].contains(model.combo) && settings.haptics {
+            Haptics.success()
+        }
+    }
+
+    // MARK: Keyboard and VoiceOver
+
+    /// Hidden keys for hardware keyboards: Space reveals then moves on,
+    /// Return or ↑ next, ↓ previous, ← forgot, → clear, S save.
     private func hiddenShortcuts(_ k: Kanji) -> some View {
         ZStack {
-            Button("") { keyboardReveal(k) }
+            Button("") { primaryAction(k) }
                 .keyboardShortcut(.space, modifiers: [])
-            Button("") { keyboardKnew(k) }
+            Button("") { primaryAction(k) }
                 .keyboardShortcut(.return, modifiers: [])
-            Button("") { keyboardKnew(k) }
-                .keyboardShortcut(.rightArrow, modifiers: [])
-            Button("") { if flipped { perform(.again) } }
-                .keyboardShortcut(.leftArrow, modifiers: [])
-            Button("") { perform(isContext ? .next : .later) }
+            Button("") { primaryAction(k) }
                 .keyboardShortcut(.upArrow, modifiers: [])
-            Button("") { perform(.back) }
+            Button("") { goBack() }
                 .keyboardShortcut(.downArrow, modifiers: [])
+            Button("") { setMarked(true, k) }
+                .keyboardShortcut(.leftArrow, modifiers: [])
+            Button("") { setMarked(false, k) }
+                .keyboardShortcut(.rightArrow, modifiers: [])
             Button("") { toggleSave(k) }
                 .keyboardShortcut("s", modifiers: [])
         }
@@ -5055,24 +4940,13 @@ struct FeedCard: View {
         .disabled(typing && verdict == nil)
     }
 
-    private func keyboardReveal(_ k: Kanji) {
-        if isContext {
-            perform(.next)
-        } else if !flipped {
-            flip(k)
-        }
-    }
-
-    private func keyboardKnew(_ k: Kanji) {
-        if isContext {
-            perform(.next)
-        } else if !flipped {
-            flip(k)
-        } else if typing {
-            perform(verdict == true ? .knew : .again)
-        } else {
-            perform(.knew)
-        }
+    @ViewBuilder
+    private func accessibilityButtons(_ k: Kanji) -> some View {
+        Button("Next") { advance(k) }
+        Button(marked ? "Clear forgot" : "Forgot") { setMarked(!marked, k) }
+        Button("Previous card") { goBack() }
+        Button(store.isSaved(k.glyph) ? "Remove from saved" : "Save") { toggleSave(k) }
+        Button("Play stroke order") { playStrokesOnce(k) }
     }
 
     // MARK: Typed readings
@@ -5103,7 +4977,8 @@ struct FeedCard: View {
         fieldFocused = false
         hint = nil
         verdict = correct
-        flip(k)
+        reveal(k)
+        withAnimation(.easeOut(duration: 0.2)) { marked = !correct }
         if settings.haptics {
             if correct { Haptics.success() } else { Haptics.error() }
         }
@@ -5138,15 +5013,6 @@ struct FeedCard: View {
     private func hookText(_ k: Kanji) -> String {
         let own = store.note(for: k.glyph)
         return own.isEmpty ? k.mnemonic : own
-    }
-}
-
-struct TrailingIconLabelStyle: LabelStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        HStack(spacing: Space.xxs) {
-            configuration.title
-            configuration.icon
-        }
     }
 }
 

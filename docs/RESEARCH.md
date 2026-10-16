@@ -20,17 +20,23 @@ means the same thing:
 
 | Action | Gesture | Prior meaning people carry |
 |---|---|---|
-| Reveal | Tap | Flashcards flip on tap; HIG: tap activates |
-| Knew it / Again | Swipe → / ← | Tinder and flashcard apps: right = yes/know, left = no/still learning |
-| Later / Back | Swipe ↑ / ↓ | Reels, TikTok, Shorts: up = next, down = previous |
+| Reveal | Tap | Tap to play; HIG: tap activates |
+| Next (counts as known) | Swipe ↑ | Reels, TikTok, Shorts: up = next |
+| Previous (undo) | Swipe ↓ | Reels, TikTok, Shorts: down = previous |
+| Mark / clear Forgot | Swipe ← / → | Flashcard apps: left = still learning |
 | Save | Double-tap | Liking or saving a post |
 | Stroke order | Touch and hold | Live Photos play while pressed; HIG: hold reveals more |
 
-Horizontal = judgment, vertical = navigation. Keeping the two axes apart
-means a swipe's meaning is predictable from its direction alone. Swipe left
-deliberately means "again" rather than "save for later", because the
-left-is-no convention is too strong to fight; "save for later" became
-double-tap, where people already expect saving.
+*Revision 3.1:* the feed now pages vertically like Reels — every card is a
+full-screen page and the next one physically rises from below as you drag,
+so swipe up is the one gesture that drives a session. Because most reviews
+at a 90% target are successes, "swipe up" counts as known by default, and a
+miss is marked first (swipe ←, the rail's Forgot, or the ← key) — the
+common case takes one gesture, the rarer case two. Swiping up on a hidden
+answer reveals it as the card moves, so a confirmation is never blind.
+Vertical swiping is standard scrolling (HIG), not a custom gesture; the
+rail and the tappable caption still give it visible alternatives.
+Double-tap stays "save", where people already expect saving.
 
 **Apple's gesture guidance applied** (HIG, Gestures):
 - *"Give people more than one way to interact"* — every gesture has a

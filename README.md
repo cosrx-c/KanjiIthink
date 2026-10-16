@@ -12,23 +12,27 @@ settings.*
 offers one thing to do; everything else happens out of sight. Study moves
 the way people already move through short-video feeds.
 
-**Reviews: a card feed (the Reels model)**
+**Reviews: a vertical feed, like Reels**
+
+Each card fills the screen. Drag up and the next card rises from below
+under your finger; drag down and the previous one comes back from above.
 
 | Gesture | Action | Borrowed from |
 |---|---|---|
-| Tap | Reveal the answer (tap again: hear it) | Flashcards; tap to play |
-| Swipe → | Knew it | Tinder, flashcard apps |
-| Swipe ← | Again | Tinder, flashcard apps |
-| Swipe ↑ | Later — back of this session, ungraded | Next in a feed |
-| Swipe ↓ | Back — the previous card, answer undone | Previous in a feed |
+| Tap | Reveal the answer (tap again: hear it) | Tap to play |
+| Swipe ↑ | Next card — counts as "knew it" unless marked Forgot | Next reel |
+| Swipe ↓ | Previous card, its answer undone | Previous reel |
+| Swipe ← / → | Mark / clear Forgot | Flashcard apps: left = still learning |
 | Double-tap | Save the kanji | Liking/saving a post |
 | Hold | Play the stroke order (release to stop) | Pressing a Live Photo |
 
-While you drag, the card tilts and a label ("Knew it", "Again", "Later",
-"Back") fades in; a tick of haptics marks the point where letting go
-commits. Gestures that aren't available rubber-band back and say so. Every
-gesture also has a visible button or rail icon, a keyboard key (Space,
-← → ↑ ↓, Return, S, Esc) and a VoiceOver action.
+Swiping up on a hidden answer reveals it as the card moves, so you always
+see what you're confirming. A Reels-style rail on the right — **Forgot**,
+**Save**, **Listen**, **Strokes** — and a tappable "Swipe up for next"
+caption give every gesture a visible alternative; hardware keys (Space,
+Return, ↑ ↓ ← →, S, Esc) and VoiceOver actions cover them too. A tick of
+haptics marks the point where letting go commits; swipes that aren't
+available rubber-band back.
 
 **Lessons: Stories.** Segmented bars on top, swipe between new kanji, and
 each kanji draws itself stroke by stroke as its page opens.
