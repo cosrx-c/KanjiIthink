@@ -4433,11 +4433,30 @@ struct FeedCard: View {
 
     // MARK: Card
 
+    /// Built in small steps — faces, motion, gestures, accessibility — so
+    /// each piece type-checks quickly on its own.
     private func cardBody(_ k: Kanji) -> some View {
-        let saveActionName: String = store.isSaved(k.glyph) ? "Remove from saved" : "Save"
-        let tilt: Double = axis == .horizontal ? Double(offset.width / 24) : 0
-        let revealHint: String = flipped || isContext ? "" : "Reveals the answer"
-        return ZStack {
+        let moving = cardFaces(k)
+            .offset(offset)
+            .rotationEffect(.degrees(cardTilt), anchor: .bottom)
+        return withAccessibility(withGestures(moving, k), k)
+    }
+
+    private var cardTilt: Double {
+        axis == .horizontal ? Double(offset.width / 24) : 0
+    }
+
+    private var revealHint: String {
+        flipped || isContext ? "" : "Reveals the answer"
+    }
+
+    private func saveActionName(_ k: Kanji) -> String {
+        store.isSaved(k.glyph) ? "Remove from saved" : "Save"
+    }
+
+    @ViewBuilder
+    private func cardFaces(_ k: Kanji) -> some View {
+        ZStack {
             RoundedRectangle(cornerRadius: 28, style: .continuous)
                 .fill(Palette.card)
                 .shadow(color: Color.black.opacity(0.08), radius: 18, x: 0, y: 6)
@@ -4454,26 +4473,40 @@ struct FeedCard: View {
                 SaveBurst(saved: store.isSaved(k.glyph))
             }
         }
-        .offset(offset)
-        .rotationEffect(.degrees(tilt), anchor: .bottom)
-        .gesture(dragGesture)
-        .onTapGesture(count: 2) { toggleSave(k) }
-        .onTapGesture { tap(k) }
-        .onLongPressGesture(minimumDuration: 0.35, maximumDistance: 12, perform: {
-            startHold(k)
-        }, onPressingChanged: { pressing in
-            if !pressing { holding = false }
-        })
-        .accessibilityElement(children: .combine)
-        .accessibilityAddTraits(.isButton)
-        .accessibilityHint(revealHint)
-        .accessibilityAction { tap(k) }
-        .accessibilityAction(named: "Knew it") { perform(.knew) }
-        .accessibilityAction(named: "Again") { perform(.again) }
-        .accessibilityAction(named: "Later") { perform(.later) }
-        .accessibilityAction(named: "Back to previous card") { perform(.back) }
-        .accessibilityAction(named: saveActionName) { toggleSave(k) }
-        .accessibilityAction(named: "Play stroke order") { playStrokesOnce(k) }
+    }
+
+    private func withGestures<Content: View>(_ content: Content, _ k: Kanji) -> some View {
+        content
+            .gesture(dragGesture)
+            .onTapGesture(count: 2) { toggleSave(k) }
+            .onTapGesture { tap(k) }
+            .onLongPressGesture(minimumDuration: 0.35, maximumDistance: 12, perform: {
+                startHold(k)
+            }, onPressingChanged: { pressing in
+                if !pressing { holding = false }
+            })
+    }
+
+    /// VoiceOver and Switch Control get every gesture as a named action.
+    private func withAccessibility<Content: View>(_ content: Content, _ k: Kanji) -> some View {
+        content
+            .accessibilityElement(children: .combine)
+            .accessibilityAddTraits(.isButton)
+            .accessibilityHint(Text(revealHint))
+            .accessibilityAction { tap(k) }
+            .accessibilityActions {
+                accessibilityButtons(k)
+            }
+    }
+
+    @ViewBuilder
+    private func accessibilityButtons(_ k: Kanji) -> some View {
+        Button("Knew it") { perform(.knew) }
+        Button("Again") { perform(.again) }
+        Button("Later") { perform(.later) }
+        Button("Back to previous card") { perform(.back) }
+        Button(saveActionName(k)) { toggleSave(k) }
+        Button("Play stroke order") { playStrokesOnce(k) }
     }
 
     @ViewBuilder
