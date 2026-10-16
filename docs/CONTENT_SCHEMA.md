@@ -78,6 +78,7 @@ embedded in `Sumi.swiftpm/Sources/ContentView.swift`. Anything else can be added
 | `sentence` | no | Furigana markup (below). Must contain the glyph inside an annotated word. |
 | `translation` | no | English for `sentence`. |
 | `usage` | no | Where you meet it in real life: signs, register, culture. |
+| `strokePaths` | no | Stroke-order paths in stroke order: SVG path strings in KanjiVG's 109 × 109 box. Powers hold-to-play stroke order. The count must equal `strokes`. Fill it with `python tools/add_strokes.py` (downloads from KanjiVG; CC BY-SA 3.0, see `content/KANJIVG-NOTICE.md`). Without it, hold shows the still glyph. |
 
 Kanji without `words` still get meaning and writing reviews but no reading
 review.

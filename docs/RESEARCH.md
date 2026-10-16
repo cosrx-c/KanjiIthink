@@ -8,6 +8,88 @@ questions that only testing with real learners can answer.
 
 ---
 
+## 0a. Revision 3 — a feed people already know how to use
+
+Revision 2 made the app quiet; revision 3 makes it move. The aim: keep the
+minimal surface, but let study feel as effortless as scrolling a short-video
+feed, without importing the parts of those apps that harm learning.
+
+**Borrowed mental models.** People arrive already fluent in a handful of
+gesture vocabularies. Each study action is mapped to the one that already
+means the same thing:
+
+| Action | Gesture | Prior meaning people carry |
+|---|---|---|
+| Reveal | Tap | Flashcards flip on tap; HIG: tap activates |
+| Knew it / Again | Swipe → / ← | Tinder and flashcard apps: right = yes/know, left = no/still learning |
+| Later / Back | Swipe ↑ / ↓ | Reels, TikTok, Shorts: up = next, down = previous |
+| Save | Double-tap | Liking or saving a post |
+| Stroke order | Touch and hold | Live Photos play while pressed; HIG: hold reveals more |
+
+Horizontal = judgment, vertical = navigation. Keeping the two axes apart
+means a swipe's meaning is predictable from its direction alone. Swipe left
+deliberately means "again" rather than "save for later", because the
+left-is-no convention is too strong to fight; "save for later" became
+double-tap, where people already expect saving.
+
+**Apple's gesture guidance applied** (HIG, Gestures):
+- *"Give people more than one way to interact"* — every gesture has a
+  visible button or rail icon, a keyboard key and a VoiceOver action.
+- *"Provide feedback that helps them predict its results"* — the card tilts,
+  a labelled pill fades in, and a haptic tick marks the commit point.
+- *"Indicate when a gesture isn't available"* — unavailable swipes
+  rubber-band and show "Not available" with a firmer haptic.
+- *"Make custom gestures easy to learn"* — the swipe vocabulary is printed
+  on the card until it's been used three times; the hold/double-tap tip
+  shows until one of them is used.
+- *"Avoid conflicting with gestures that access system UI"* — study runs
+  full-screen, so card swipes never collide with edge-swipe-back; the Home
+  indicator fades, as in other immersive media.
+
+**Gamification, chosen against evidence.** Sailer & Homner's 2020
+meta-analysis finds gamification helps learning on average (cognitive
+g ≈ 0.49; motivational g ≈ 0.36 and behavioral g ≈ 0.25, both less
+stable). The mechanics that help are feedback and visible competence; the
+ones learners resent are loss-framed (streak anxiety, hearts). So:
+
+| Kept | Why |
+|---|---|
+| Combo badge (first-try run), quiet reset | Immediate competence feedback; nothing is lost on a miss |
+| Milestone haptics (5, 10, 20…) | Small, unpredictable-feeling reward tied to real recall |
+| Recap: best run, personal best | Peak-end: sessions close on a high point |
+| Saved collection | Ownership and curation, as with saved posts |
+| Ink-density library | Progress you can see without a chart |
+
+| Rejected | Why |
+|---|---|
+| Daily streaks, streak freezes | Loss aversion becomes anxiety and "streak-saving" instead of learning |
+| Hearts / lives | Punishes the errors that drive learning |
+| Leaderboards, XP | Shifts attention from recall to points; social comparison |
+| Infinite feed | Spacing needs sessions to end; the feed always ends with a stamp |
+
+**Learning integrity inside the feed.**
+- Reading cards default to saying the reading in your head, then checking by
+  ear. Covert retrieval can benefit retention much as overt retrieval does
+  for simple items (Smith, Roediger & Karpicke 2013), with weaker effects in
+  some later studies, so *Type readings* keeps objective, auto-graded typing
+  for anyone who wants it.
+- Writing cards ask for writing in the air or on paper. Air-writing (空書) is
+  common among Japanese readers and linked to a small recall advantage; the
+  pad stays one tap away in a sheet, so drawing never fights the feed's
+  swipes.
+- Grading before revealing is allowed for speed, but the answer is shown as
+  the card leaves, and swipe ↓ brings it straight back.
+- Every seventh first-try success adds an ungraded sentence card: variety
+  for attention, context for meaning.
+
+**iOS technologies used.** SwiftUI gestures (drag, tap, double-tap, long
+press), 3D card flip via `rotation3DEffect` with a Reduce Motion fade,
+`Canvas` + `TimelineView` stroke-order animation from KanjiVG SVG paths,
+UIKit haptics, PencilKit drawing, `AVSpeechSynthesizer` (respecting the
+Ring/Silent switch for automatic audio), local notifications with accurate
+badge counts, keyboard shortcuts for iPad keyboards, and VoiceOver custom
+actions.
+
 ## 0. Revision 2 — munkens mat (minimal redesign)
 
 The first build exposed too much: four tabs, cards on every screen,
@@ -328,3 +410,8 @@ motivation and habit questions (Hall; Marsh).
 - Apple Human Interface Guidelines — Typography, Color, Layout, Accessibility. https://developer.apple.com/design/human-interface-guidelines
 - Krashen (1985) *The Input Hypothesis*; Schmidt (1990) noticing; Sharwood Smith (1993) input enhancement; Swain (1985) output; Paivio (1971) dual coding; Rohrer & Taylor (2007) interleaving; Roediger & Karpicke (2006) testing effect; Neustupný & Jernudd (1987) language management; Coyle, Hood & Marsh (2010) CLIL; Deci & Ryan, self-determination theory; Bar & Neta (2006) preference for curved objects.
 - UX books: Cooper et al., *About Face*; Krug, *Don't Make Me Think* and *Rocket Surgery Made Easy*; Norman, *The Design of Everyday Things*; Johnson, *Designing with the Mind in Mind*; Weinschenk, *100 Things Every Designer Needs to Know About People*; Schwartz, *The Paradox of Choice*; Colborne, *Simple and Usable*; Tidwell, Brewer & Valencia, *Designing Interfaces*; Evans, *Bottlenecks*; Gothelf & Seiden, *Lean UX*; Hall, *Just Enough Research*; Marsh, *User Research*; Travis & Hodgson, *Think Like a UX Researcher*; Buley, *The UX Team of One*; Rosenberg, *UX Magic*; Kelley & Kelley, *Creative Confidence*.
+- Sailer & Homner (2020). The gamification of learning: a meta-analysis. *Educational Psychology Review* 32, 77–112. https://link.springer.com/article/10.1007/s10648-019-09498-w
+- Smith, Roediger & Karpicke (2013). Covert retrieval practice benefits retention as much as overt retrieval practice. *Journal of Experimental Psychology: Learning, Memory, and Cognition* 39(6).
+- Apple Human Interface Guidelines — Gestures. https://developer.apple.com/design/human-interface-guidelines/gestures
+- Apple Human Interface Guidelines — Designing for iPhone Duo. https://developer.apple.com/design/human-interface-guidelines/designing-for-iphone-duo
+- KanjiVG stroke order data (CC BY-SA 3.0). https://kanjivg.tagaini.net

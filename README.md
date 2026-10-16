@@ -1,4 +1,4 @@
-# Sumi 墨 — kanji, one quiet step at a time
+# Sumi 墨 — kanji, one card at a time
 
 A native SwiftUI kanji trainer for iPhone and iPad, from JLPT N5 to N1 and
 beyond. Built in Swift Playgrounds and synced through GitHub.
@@ -6,20 +6,47 @@ beyond. Built in Swift Playgrounds and synced through GitHub.
 *"Sumi" (墨, ink) is a working name — rename it in Swift Playgrounds' app
 settings.*
 
-## Design: munkens mat
+## Design: munkens mat, moving like a feed
 
 *Munkens mat* — the monk's meal — serves only what nourishes. Every screen
-offers one thing to do; everything else happens out of sight.
+offers one thing to do; everything else happens out of sight. Study moves
+the way people already move through short-video feeds.
 
-**What you see**
+**Reviews: a card feed (the Reels model)**
+
+| Gesture | Action | Borrowed from |
+|---|---|---|
+| Tap | Reveal the answer (tap again: hear it) | Flashcards; tap to play |
+| Swipe → | Knew it | Tinder, flashcard apps |
+| Swipe ← | Again | Tinder, flashcard apps |
+| Swipe ↑ | Later — back of this session, ungraded | Next in a feed |
+| Swipe ↓ | Back — the previous card, answer undone | Previous in a feed |
+| Double-tap | Save the kanji | Liking/saving a post |
+| Hold | Play the stroke order (release to stop) | Pressing a Live Photo |
+
+While you drag, the card tilts and a label ("Knew it", "Again", "Later",
+"Back") fades in; a tick of haptics marks the point where letting go
+commits. Gestures that aren't available rubber-band back and say so. Every
+gesture also has a visible button or rail icon, a keyboard key (Space,
+← → ↑ ↓, Return, S, Esc) and a VoiceOver action.
+
+**Lessons: Stories.** Segmented bars on top, swipe between new kanji, and
+each kanji draws itself stroke by stroke as its page opens.
+
+**Light gamification, no anxiety.** A combo badge (×3, ×4…) counts
+first-try answers and quietly resets on a miss; milestones get a haptic, the
+recap notes your best run, and a hanko stamp closes each session. Saved
+kanji form a collection you can practice. There are no streaks to lose, no
+hearts, no leaderboards.
+
+**Screens**
 
 | Screen | Contents |
 |---|---|
-| **Home** | One number (reviews waiting) or one glyph (the next new kanji), and one button. When you're done: "Done", when the next review is, and at most two quiet links (read a text, learn more today). |
-| **Study** | The prompt in the middle, the answer controls at the bottom, a thin progress line, Back and Undo. Nothing else. |
-| **Library** | Kanji grouped by level. Each glyph's ink deepens as you learn it — faint when new, full black once known. A second tab lists the reading texts. Search takes kanji, English, kana or romaji. |
-| **Kanji page** | The glyph, its meaning and readings, a memory hook (or your own), words and a sentence — tap any of them to hear it. |
-| **Settings** | Daily pace, writing practice, furigana, typeface, speech, a daily reminder, import/export, privacy. |
+| **Home** | One number (reviews waiting) or one glyph (the next new kanji), and one button. When you're done: when the next review is, plus quiet links (read a text, practice saved, learn more). |
+| **Library** | Kanji, Saved and Texts. Each glyph's ink deepens as you learn it — faint when new, full black once known. Search takes kanji, English, kana or romaji. |
+| **Kanji page** | The glyph (hold for stroke order, double-tap to save), meaning, readings, a memory hook (or your own), words and a sentence — tap any to hear it. |
+| **Settings** | Daily pace, writing, type readings, furigana, typeface, audio, a daily reminder, import/export, privacy. |
 
 **What happens behind it**
 
@@ -27,17 +54,25 @@ offers one thing to do; everything else happens out of sight.
 - **Pacing:** reviews always come before new kanji; after a long break,
   reviews arrive 50 at a time, most-at-risk first, and new lessons pause.
 - **Order:** parts are taught before the kanji that contain them.
-- **Three skills per kanji:** meaning, reading (typed in kana or romaji,
-  inside a real word) and writing (unlocks once recognition is stable).
-- **Mistakes are noticed for you:** near misses (small っ, long vowels,
-  ゛ marks, a valid reading the word doesn't use) get a hint and a free retry;
-  the type of slip is logged silently; the memory hook and look-alike tips
-  appear only for new, relearning or repeatedly forgotten cards.
+- **Three skills per kanji:** meaning; reading inside a real word (said in
+  your head and checked by ear, or typed in kana/romaji with *Type
+  readings*); and writing — in the air, on paper or on the pad — which
+  unlocks once recognition is stable and ends with the stroke order.
+- **Context cards:** every seventh first-try success is followed by an
+  ungraded sentence that shows the kanji at work.
+- **Mistakes are noticed for you:** typed near misses (small っ, long
+  vowels, ゛ marks, a valid reading the word doesn't use) get a hint and a
+  free retry; the type of slip is logged silently; the memory hook and
+  look-alike tips appear only for new, relearning or repeatedly forgotten
+  cards.
 - **Adaptive furigana** shows readings only above kanji you haven't learned.
+- **Audio** plays automatically on reveal but respects the Ring/Silent
+  switch; tapping a speaker plays even in silent mode.
 - **Reminders** (opt-in, offered once after your first session) state the
   exact number of reviews waiting and keep the app badge accurate.
-- **Hidden power:** ⌘Z undo, Space to reveal, Return for Remembered/Continue,
-  1 for Forgot; "I mistyped" override; practice any kanji from its page.
+
+Stroke order data comes from [KanjiVG](https://kanjivg.tagaini.net)
+(CC BY-SA 3.0) — see [content/KANJIVG-NOTICE.md](content/KANJIVG-NOTICE.md).
 
 The research behind every decision is in [docs/RESEARCH.md](docs/RESEARCH.md).
 
@@ -118,9 +153,13 @@ The starter pack covers 59 N5 + 5 N4 kanji and 5 passages so the whole app
 can be exercised. To add more, write a JSON pack (schema and examples in
 [docs/CONTENT_SCHEMA.md](docs/CONTENT_SCHEMA.md)) and either:
 
-- import it in the app: **Settings → Content & data → Import** — no rebuild;
-  or
-- add it to `content/core-n5.json`, then validate and re-embed:
+- import it in the app: **Settings → Import** — no rebuild; or
+- add it to `content/core-n5.json`, fetch stroke order for any new kanji,
+  then validate and re-embed:
+
+  ```bash
+  python tools/add_strokes.py
+  ```
 
   ```bash
   python tools/validate_content.py content/core-n5.json

@@ -66,6 +66,12 @@ for k in data["kanji"]:
         for alt in word["reading"].split("/"):
             if not alt or not all(is_hira(c) for c in alt):
                 errors.append(f"{w}: word reading malformed {word['reading']!r}")
+    paths = k.get("strokePaths", [])
+    if paths and len(paths) != k["strokes"]:
+        errors.append(f"{w}: {len(paths)} stroke paths but strokes = {k['strokes']}")
+    for d in paths:
+        if not d.lstrip().startswith(("M", "m")):
+            errors.append(f"{w}: stroke path must start with a moveto: {d[:20]}")
     check_markup(k["sentence"], w, must_contain=g)
     if not k["translation"]:
         errors.append(f"{w}: no translation")
