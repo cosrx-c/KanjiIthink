@@ -1,17 +1,22 @@
 //
 //  ContentView.swift
-//  Sumi — a kanji trainer from JLPT N5 to N1 and beyond.
+//  Sumi — kanji, one quiet step at a time.
 //
-//  Everything the app needs lives in this one file so it syncs cleanly
-//  through Swift Playgrounds and GitHub:
+//  Design principle: munkens mat, the monk's meal — serve only what
+//  nourishes. Every screen offers one thing to do. Scheduling, pacing,
+//  catch-up after a break, error analysis, writing unlocks and reminders
+//  all happen behind it, out of sight.
 //
-//    1. Design system      color, type, spacing and shared controls
+//  Everything lives in this file so it syncs cleanly through Swift
+//  Playgrounds and GitHub:
+//
+//    1. Design system      tokens and the few shared controls
 //    2. Content model      kanji, words, passages, look-alikes (JSON-backed)
 //    3. Language helpers   furigana markup, kana and romaji conversion
 //    4. Memory model       FSRS-6 scheduler and the study-day clock
 //    5. Store              persistence, progress, statistics, import/export
-//    6. Sessions           lesson and review queues, undo, wrap-up
-//    7. Screens            Today, Kanji, Read, Progress, Settings, onboarding
+//    6. Sessions           lesson and review queues, undo
+//    7. Screens            Home, Study, Library, Settings, onboarding
 //    8. Built-in content   the starter pack as embedded JSON
 //
 //  The research behind each decision is in docs/RESEARCH.md at the root
@@ -19,16 +24,15 @@
 //
 
 import SwiftUI
-import Charts
 import PencilKit
 import AVFoundation
 import UniformTypeIdentifiers
+import UserNotifications
 import UIKit
 
 // MARK: - 1. Design system
 
-/// Spacing on a 4-pt grid. Most layout uses the 8-pt steps; 4 and 12 are
-/// reserved for tightly related items (label + value, icon + text).
+/// Spacing on a 4-pt grid.
 enum Space {
     static let xxs: CGFloat = 4
     static let xs: CGFloat = 8
@@ -47,11 +51,14 @@ enum Radius {
 }
 
 enum Metrics {
-    /// Keeps line length comfortable on iPad (roughly 35–40 Japanese
-    /// characters or 70 Latin characters per line).
-    static let readableWidth: CGFloat = 680
+    /// Comfortable line length for reading (about 35 Japanese characters).
+    static let readableWidth: CGFloat = 600
+    /// Wider column for grids on iPad and the inner display of iPhone Duo.
+    static let gridWidth: CGFloat = 900
+    /// Primary actions stay thumb-sized instead of stretching across iPad.
+    static let actionWidth: CGFloat = 420
     static let minTap: CGFloat = 44
-    static let buttonHeight: CGFloat = 52
+    static let buttonHeight: CGFloat = 50
 }
 
 extension UIColor {
@@ -77,25 +84,25 @@ extension Color {
     }
 }
 
-/// A restrained palette drawn from traditional Japanese colors. One accent
-/// (藍 indigo) carries every primary action; the other hues only ever encode
-/// meaning (correct, wrong, memory stage), never decoration. All text pairs
-/// meet WCAG AA (4.5:1) against their backgrounds.
+/// System colors carry the interface, so it adapts to Dark Mode, Increase
+/// Contrast and the platform's materials for free. One accent (藍 indigo)
+/// marks the single primary action; the remaining hues only ever mean
+/// something (correct, wrong, a hint).
 enum Palette {
-    static let paper = Color.dynamic(0xF7F5F0, 0x121211)          // 和紙 washi
-    static let surface = Color.dynamic(0xFFFFFF, 0x1D1C1A)
-    static let sunken = Color.dynamic(0xEFECE5, 0x2A2826)
-    static let hairline = Color.dynamic(0xE2DED5, 0x37342F, highLight: 0xA9A397, highDark: 0x6A655C)
-    static let ink = Color.dynamic(0x1B1A18, 0xF3F1EC)            // 墨 sumi
-    static let ink2 = Color.dynamic(0x5C5850, 0xABA69C, highLight: 0x3A3732, highDark: 0xD6D1C7)
-    static let ink3 = Color.dynamic(0x857F75, 0x7E796F, highLight: 0x5C5850, highDark: 0xABA69C)
+    static let paper = Color(uiColor: .systemBackground)
+    static let surface = Color(uiColor: .secondarySystemBackground)
+    static let sunken = Color(uiColor: .tertiarySystemFill)
+    static let hairline = Color(uiColor: .separator)
+    static let ink = Color.primary
+    static let ink2 = Color.secondary
+    static let ink3 = Color(uiColor: .tertiaryLabel)
     static let accent = Color.dynamic(0x2D4F9E, 0x93ABEB, highLight: 0x1E3A7A, highDark: 0xB4C6F5)
     static let onAccent = Color.dynamic(0xFFFFFF, 0x0D1530)
-    static let shu = Color.dynamic(0xC2412D, 0xF08A74, highLight: 0x9C2E1D, highDark: 0xF6A897)      // 朱 vermilion
-    static let matcha = Color.dynamic(0x3F7A3A, 0x94C98A, highLight: 0x2C5E28, highDark: 0xB5DDAD)   // 抹茶
-    static let kohaku = Color.dynamic(0x9A6A0B, 0xE5B65A, highLight: 0x7A5208, highDark: 0xF0CC85)   // 琥珀 amber
-    static let asagi = Color.dynamic(0x2A7F8F, 0x7CC4D1, highLight: 0x1B6170, highDark: 0xA6DAE3)    // 浅葱
-    static let murasaki = Color.dynamic(0x6B4E9B, 0xB79BE0, highLight: 0x523780, highDark: 0xCDB8EE) // 紫
+    static let shu = Color.dynamic(0xC2412D, 0xF08A74, highLight: 0x9C2E1D, highDark: 0xF6A897)
+    static let matcha = Color.dynamic(0x3F7A3A, 0x94C98A, highLight: 0x2C5E28, highDark: 0xB5DDAD)
+    static let kohaku = Color.dynamic(0x9A6A0B, 0xE5B65A, highLight: 0x7A5208, highDark: 0xF0CC85)
+    static let asagi = Color.dynamic(0x2A7F8F, 0x7CC4D1, highLight: 0x1B6170, highDark: 0xA6DAE3)
+    static let murasaki = Color.dynamic(0x6B4E9B, 0xB79BE0, highLight: 0x523780, highDark: 0xCDB8EE)
 }
 
 /// Japanese typefaces bundled with iOS. Kanji are always set in Hiragino so
@@ -111,14 +118,6 @@ enum JPFace: String, Codable, CaseIterable, Identifiable {
         case .gothic: return "Gothic"
         case .mincho: return "Mincho"
         case .rounded: return "Rounded"
-        }
-    }
-
-    var detail: String {
-        switch self {
-        case .gothic: return "Clean strokes, like signs and screens."
-        case .mincho: return "Brush-like serif, like books and newspapers."
-        case .rounded: return "Soft ends, like packaging and picture books."
         }
     }
 
@@ -142,155 +141,73 @@ extension Font {
     static func jpFixed(_ size: CGFloat, bold: Bool = false, face: JPFace = .gothic) -> Font {
         .custom(face.fontName(bold: bold), fixedSize: size)
     }
-
-    /// Rounded numerals for counts and statistics.
-    static let stat = Font.system(.largeTitle, design: .rounded, weight: .semibold)
-    static let statSmall = Font.system(.title2, design: .rounded, weight: .semibold)
-}
-
-// MARK: Shared controls
-
-struct PrimaryButtonStyle: ButtonStyle {
-    var tint: Color = Palette.accent
-    var foreground: Color = Palette.onAccent
-    @Environment(\.isEnabled) private var isEnabled
-
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .font(.headline)
-            .foregroundStyle(foreground)
-            .multilineTextAlignment(.center)
-            .padding(.horizontal, Space.m)
-            .frame(maxWidth: .infinity, minHeight: Metrics.buttonHeight)
-            .background(tint.opacity(isEnabled ? 1 : 0.35),
-                        in: RoundedRectangle(cornerRadius: Radius.control, style: .continuous))
-            .contentShape(RoundedRectangle(cornerRadius: Radius.control, style: .continuous))
-            .scaleEffect(configuration.isPressed ? 0.98 : 1)
-            .opacity(configuration.isPressed ? 0.88 : 1)
-            .animation(.spring(response: 0.25, dampingFraction: 0.8), value: configuration.isPressed)
-    }
-}
-
-struct SecondaryButtonStyle: ButtonStyle {
-    var tint: Color = Palette.accent
-    @Environment(\.isEnabled) private var isEnabled
-
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .font(.headline)
-            .foregroundStyle(tint.opacity(isEnabled ? 1 : 0.4))
-            .multilineTextAlignment(.center)
-            .padding(.horizontal, Space.m)
-            .frame(maxWidth: .infinity, minHeight: Metrics.buttonHeight)
-            .background(Palette.sunken, in: RoundedRectangle(cornerRadius: Radius.control, style: .continuous))
-            .contentShape(RoundedRectangle(cornerRadius: Radius.control, style: .continuous))
-            .scaleEffect(configuration.isPressed ? 0.98 : 1)
-            .animation(.spring(response: 0.25, dampingFraction: 0.8), value: configuration.isPressed)
-    }
-}
-
-/// Answer-grade buttons: tinted, with the hue reinforcing (never replacing)
-/// the label.
-struct GradeButtonStyle: ButtonStyle {
-    var tint: Color
-    var filled = false
-
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .foregroundStyle(filled ? Palette.onAccent : tint)
-            .frame(maxWidth: .infinity, minHeight: Metrics.buttonHeight + 8)
-            .background(filled ? tint : tint.opacity(0.13),
-                        in: RoundedRectangle(cornerRadius: Radius.control, style: .continuous))
-            .contentShape(RoundedRectangle(cornerRadius: Radius.control, style: .continuous))
-            .scaleEffect(configuration.isPressed ? 0.97 : 1)
-            .animation(.spring(response: 0.22, dampingFraction: 0.75), value: configuration.isPressed)
-    }
-}
-
-struct SurfaceCard: ViewModifier {
-    var padding: CGFloat = Space.l
-
-    func body(content: Content) -> some View {
-        content
-            .padding(padding)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Palette.surface, in: RoundedRectangle(cornerRadius: Radius.card, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: Radius.card, style: .continuous)
-                    .strokeBorder(Palette.hairline, lineWidth: 1)
-            )
-    }
 }
 
 extension View {
-    func surfaceCard(padding: CGFloat = Space.l) -> some View {
-        modifier(SurfaceCard(padding: padding))
-    }
-
-    /// Centers content in a readable column on wide screens.
+    /// Centers content in a comfortable reading column on wide screens.
     func readableColumn() -> some View {
         frame(maxWidth: Metrics.readableWidth).frame(maxWidth: .infinity)
     }
+
+    /// Caps an action area at thumb size and centers it.
+    func actionColumn() -> some View {
+        frame(maxWidth: Metrics.actionWidth).frame(maxWidth: .infinity)
+    }
 }
 
-/// Small caps label that introduces a section. Uppercase + tracking makes it
-/// scannable without competing with the content it labels.
-struct Eyebrow: View {
+/// The app's only button. System bordered styles keep Apple's materials and
+/// shapes (including Liquid Glass on newer systems); the primary kind is
+/// filled with the accent, the secondary kind is a neutral tint.
+struct ActionButton: View {
+    enum Kind {
+        case primary, secondary
+    }
+
+    let title: String
+    var kind: Kind = .primary
+    let action: () -> Void
+
+    var body: some View {
+        switch kind {
+        case .primary:
+            Button(action: action) {
+                label.foregroundStyle(Palette.onAccent)
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(Palette.accent)
+            .controlSize(.large)
+        case .secondary:
+            Button(action: action) {
+                label
+            }
+            .buttonStyle(.bordered)
+            .tint(Color.primary)
+            .controlSize(.large)
+        }
+    }
+
+    private var label: some View {
+        Text(title)
+            .font(.headline)
+            .lineLimit(1)
+            .minimumScaleFactor(0.8)
+            .frame(maxWidth: .infinity)
+    }
+}
+
+/// A small caps caption that names a task without competing with it.
+struct Caption: View {
     let text: String
-    var color: Color = Palette.ink2
 
     var body: some View {
         Text(text.uppercased())
-            .font(.caption.weight(.semibold))
-            .tracking(0.8)
-            .foregroundStyle(color)
-            .accessibilityAddTraits(.isHeader)
+            .font(.caption.weight(.medium))
+            .tracking(1.2)
+            .foregroundStyle(Palette.ink3)
     }
 }
 
-struct Meter: View {
-    var value: Double
-    var tint: Color = Palette.accent
-    var height: CGFloat = 6
-    var showsTrack = true
-
-    var body: some View {
-        GeometryReader { geo in
-            let clamped = min(max(value, 0), 1)
-            ZStack(alignment: .leading) {
-                Capsule().fill(showsTrack ? Palette.sunken : Color.clear)
-                if clamped > 0 {
-                    Capsule().fill(tint)
-                        .frame(width: max(height, geo.size.width * clamped))
-                }
-            }
-        }
-        .frame(height: height)
-        .animation(.easeOut(duration: 0.35), value: value)
-        .accessibilityElement()
-        .accessibilityValue("\(Int((min(max(value, 0), 1) * 100).rounded())) percent")
-    }
-}
-
-struct Chip: View {
-    let text: String
-    var tint: Color = Palette.ink2
-    var symbol: String? = nil
-
-    var body: some View {
-        HStack(spacing: Space.xxs) {
-            if let symbol = symbol {
-                Image(systemName: symbol).imageScale(.small)
-            }
-            Text(text)
-        }
-        .font(.caption.weight(.semibold))
-        .foregroundStyle(tint)
-        .padding(.horizontal, Space.xs)
-        .padding(.vertical, Space.xxs)
-        .background(tint.opacity(0.12), in: Capsule())
-    }
-}
+// MARK: Shared pieces
 
 /// The 田-shaped guide found on Japanese practice paper (練習用紙).
 struct PracticeGrid: View {
@@ -1344,9 +1261,9 @@ enum FuriganaMode: String, Codable, CaseIterable, Identifiable {
 
     var title: String {
         switch self {
-        case .adaptive: return "Adaptive"
+        case .adaptive: return "New kanji only"
         case .always: return "Always"
-        case .off: return "Off"
+        case .off: return "Never"
         }
     }
 
@@ -1363,20 +1280,22 @@ struct AppSettings: Codable, Equatable {
     var newPerDay = 10
     var batchSize = 5
     var retention = 0.9
-    var detailedGrading = false
     var writing = true
-    var askWhy = true
     var autoSpeak = false
     var haptics = true
     var furigana: FuriganaMode = .adaptive
     var face: JPFace = .gothic
     var dayStartHour = 4
+    var reminder = false
+    var reminderHour = 19
+    var reminderMinute = 0
+    var askedReminder = false
 
     init() {}
 
     enum CodingKeys: String, CodingKey {
-        case newPerDay, batchSize, retention, detailedGrading, writing, askWhy
-        case autoSpeak, haptics, furigana, face, dayStartHour
+        case newPerDay, batchSize, retention, writing, autoSpeak, haptics, furigana, face, dayStartHour
+        case reminder, reminderHour, reminderMinute, askedReminder
     }
 
     /// Missing keys fall back to defaults, so adding a setting in a future
@@ -1387,14 +1306,16 @@ struct AppSettings: Codable, Equatable {
         newPerDay = (try? c.decode(Int.self, forKey: .newPerDay)) ?? d.newPerDay
         batchSize = (try? c.decode(Int.self, forKey: .batchSize)) ?? d.batchSize
         retention = (try? c.decode(Double.self, forKey: .retention)) ?? d.retention
-        detailedGrading = (try? c.decode(Bool.self, forKey: .detailedGrading)) ?? d.detailedGrading
         writing = (try? c.decode(Bool.self, forKey: .writing)) ?? d.writing
-        askWhy = (try? c.decode(Bool.self, forKey: .askWhy)) ?? d.askWhy
         autoSpeak = (try? c.decode(Bool.self, forKey: .autoSpeak)) ?? d.autoSpeak
         haptics = (try? c.decode(Bool.self, forKey: .haptics)) ?? d.haptics
         furigana = (try? c.decode(FuriganaMode.self, forKey: .furigana)) ?? d.furigana
         face = (try? c.decode(JPFace.self, forKey: .face)) ?? d.face
         dayStartHour = (try? c.decode(Int.self, forKey: .dayStartHour)) ?? d.dayStartHour
+        reminder = (try? c.decode(Bool.self, forKey: .reminder)) ?? d.reminder
+        reminderHour = (try? c.decode(Int.self, forKey: .reminderHour)) ?? d.reminderHour
+        reminderMinute = (try? c.decode(Int.self, forKey: .reminderMinute)) ?? d.reminderMinute
+        askedReminder = (try? c.decode(Bool.self, forKey: .askedReminder)) ?? d.askedReminder
     }
 }
 
@@ -1958,7 +1879,7 @@ enum SessionMode {
     case review, lesson, practice
 }
 
-struct SessionLaunch: Identifiable {
+struct SessionLaunch: Identifiable, Hashable {
     let id = UUID()
     var mode: SessionMode
     var items: [StudyItem]
@@ -2084,718 +2005,7 @@ final class SessionModel: ObservableObject {
     }
 }
 
-struct SessionContainer: View {
-    @EnvironmentObject var store: Store
-    @Environment(\.dismiss) private var dismiss
-    @StateObject private var model: SessionModel
-    @State private var teaching: Bool
-    let launch: SessionLaunch
-
-    init(launch: SessionLaunch) {
-        self.launch = launch
-        _model = StateObject(wrappedValue: SessionModel(mode: launch.mode, items: launch.items))
-        _teaching = State(initialValue: !launch.lessonGlyphs.isEmpty)
-    }
-
-    var body: some View {
-        ZStack {
-            Palette.paper.ignoresSafeArea()
-            if teaching {
-                LessonTeachView(glyphs: launch.lessonGlyphs, model: model) {
-                    if model.isFinished {
-                        dismiss()
-                    } else {
-                        withAnimation(.easeInOut(duration: 0.25)) { teaching = false }
-                    }
-                }
-                .transition(.opacity)
-            } else if model.isFinished {
-                SessionSummaryView(model: model)
-                    .transition(.opacity)
-            } else {
-                SessionView(model: model)
-                    .transition(.opacity)
-            }
-        }
-        .animation(.easeInOut(duration: 0.25), value: model.isFinished)
-    }
-}
-
-// MARK: Lesson
-
-struct LessonTeachView: View {
-    @EnvironmentObject var store: Store
-    @Environment(\.dismiss) private var dismiss
-    let glyphs: [String]
-    @ObservedObject var model: SessionModel
-    let onFinish: () -> Void
-    @State private var index = 0
-    @State private var markedKnown: Set<String> = []
-
-    private var isLast: Bool { index >= glyphs.count - 1 }
-
-    var body: some View {
-        VStack(spacing: 0) {
-            header
-            TabView(selection: $index) {
-                ForEach(Array(glyphs.enumerated()), id: \.offset) { offset, glyph in
-                    ScrollView {
-                        LessonPage(glyph: glyph, isMarkedKnown: markedKnown.contains(glyph)) {
-                            markKnown(glyph)
-                        }
-                        .padding(.horizontal, Space.l)
-                        .padding(.vertical, Space.m)
-                        .readableColumn()
-                    }
-                    .tag(offset)
-                }
-            }
-            .tabViewStyle(.page(indexDisplayMode: .never))
-            footer
-        }
-    }
-
-    private var header: some View {
-        HStack(spacing: Space.s) {
-            Button { dismiss() } label: {
-                Image(systemName: "xmark")
-                    .font(.body.weight(.semibold))
-                    .foregroundStyle(Palette.ink2)
-                    .frame(width: Metrics.minTap, height: Metrics.minTap)
-                    .contentShape(Rectangle())
-            }
-            .accessibilityLabel("Close lesson")
-            .keyboardShortcut(.cancelAction)
-            Meter(value: Double(index + 1) / Double(max(glyphs.count, 1)))
-            Text("\(index + 1) of \(glyphs.count)")
-                .font(.footnote.monospacedDigit())
-                .foregroundStyle(Palette.ink2)
-                .padding(.trailing, Space.xs)
-        }
-        .padding(.horizontal, Space.xs)
-        .padding(.top, Space.xs)
-        .readableColumn()
-    }
-
-    private var footer: some View {
-        HStack(spacing: Space.s) {
-            if index > 0 {
-                Button("Back") { withAnimation { index -= 1 } }
-                    .buttonStyle(SecondaryButtonStyle())
-                    .frame(maxWidth: 140)
-            }
-            Button(isLast ? "Start the quiz" : "Next") { advance() }
-                .buttonStyle(PrimaryButtonStyle())
-                .keyboardShortcut(.defaultAction)
-        }
-        .padding(.horizontal, Space.l)
-        .padding(.vertical, Space.s)
-        .readableColumn()
-        .background(Palette.paper)
-    }
-
-    private func advance() {
-        if isLast {
-            onFinish()
-        } else {
-            withAnimation { index += 1 }
-        }
-    }
-
-    private func markKnown(_ glyph: String) {
-        store.markKnown([glyph])
-        markedKnown.insert(glyph)
-        model.remove(glyph: glyph)
-        if !isLast { withAnimation { index += 1 } }
-    }
-}
-
-struct LessonPage: View {
-    @EnvironmentObject var store: Store
-    let glyph: String
-    let isMarkedKnown: Bool
-    let onKnown: () -> Void
-
-    var body: some View {
-        if let kanji = store.library.byGlyph[glyph] {
-            VStack(alignment: .leading, spacing: Space.l) {
-                KanjiHero(kanji: kanji)
-                KanjiSections(kanji: kanji)
-                TraceCard(kanji: kanji)
-                if isMarkedKnown {
-                    Label("Marked as known — it'll be checked in a later review.", systemImage: "checkmark.circle.fill")
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(Palette.matcha)
-                        .frame(maxWidth: .infinity)
-                } else {
-                    Button(action: onKnown) {
-                        Text("I already know this one")
-                    }
-                    .buttonStyle(SecondaryButtonStyle(tint: Palette.ink2))
-                }
-            }
-        }
-    }
-}
-
-/// One guided tracing pass. Producing the strokes once adds a motor memory
-/// trace on top of the visual one.
-struct TraceCard: View {
-    @EnvironmentObject var store: Store
-    let kanji: Kanji
-    @State private var clearToken = 0
-    @State private var hasInk = false
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: Space.s) {
-            HStack {
-                Eyebrow(text: "Trace it once")
-                Spacer()
-                Button("Clear") { clearToken += 1 }
-                    .font(.subheadline.weight(.semibold))
-                    .disabled(!hasInk)
-            }
-            WritingPad(clearToken: clearToken, hasInk: $hasInk, guide: kanji.glyph,
-                       guideOpacity: 0.16, face: store.data.settings.face)
-                .aspectRatio(1, contentMode: .fit)
-                .frame(maxWidth: 260)
-                .frame(maxWidth: .infinity)
-            Text("\(kanji.strokes) \(kanji.strokes == 1 ? "stroke" : "strokes"). Writing it — even once — gives memory a second route to the shape.")
-                .font(.caption)
-                .foregroundStyle(Palette.ink2)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-        .surfaceCard()
-    }
-}
-
-// MARK: Review
-
-struct SessionView: View {
-    @EnvironmentObject var store: Store
-    @Environment(\.dismiss) private var dismiss
-    @ObservedObject var model: SessionModel
-
-    var body: some View {
-        VStack(spacing: 0) {
-            topBar
-            if let item = model.current {
-                QuestionView(model: model, item: item)
-                    .id(item.id)
-                    .transition(.asymmetric(insertion: .move(edge: .trailing).combined(with: .opacity),
-                                            removal: .opacity))
-            }
-        }
-        .animation(.easeInOut(duration: 0.22), value: model.current?.id)
-    }
-
-    private var topBar: some View {
-        HStack(spacing: Space.xxs) {
-            Button {
-                store.saveNow()
-                dismiss()
-            } label: {
-                Image(systemName: "xmark")
-                    .font(.body.weight(.semibold))
-                    .foregroundStyle(Palette.ink2)
-                    .frame(width: Metrics.minTap, height: Metrics.minTap)
-                    .contentShape(Rectangle())
-            }
-            .accessibilityLabel("End session. Progress is saved.")
-            .keyboardShortcut(.cancelAction)
-
-            VStack(spacing: Space.xxs) {
-                Meter(value: model.progress)
-                Text(model.isWrappingUp ? "Wrapping up · \(model.remaining) left" : "\(model.completed) of \(model.total)")
-                    .font(.caption.monospacedDigit())
-                    .foregroundStyle(Palette.ink2)
-            }
-            .padding(.horizontal, Space.xs)
-
-            Button {
-                model.undo(store: store)
-            } label: {
-                Image(systemName: "arrow.uturn.backward")
-                    .font(.body.weight(.semibold))
-                    .foregroundStyle(model.canUndo ? Palette.accent : Palette.ink3)
-                    .frame(width: Metrics.minTap, height: Metrics.minTap)
-                    .contentShape(Rectangle())
-            }
-            .disabled(!model.canUndo)
-            .accessibilityLabel("Undo last answer")
-            .keyboardShortcut("z", modifiers: .command)
-
-            Menu {
-                Button {
-                    model.wrapUp()
-                } label: {
-                    Label("Wrap up — finish what's started", systemImage: "flag.checkered")
-                }
-                .disabled(model.isWrappingUp)
-            } label: {
-                Image(systemName: "ellipsis.circle")
-                    .font(.body.weight(.semibold))
-                    .foregroundStyle(Palette.ink2)
-                    .frame(width: Metrics.minTap, height: Metrics.minTap)
-                    .contentShape(Rectangle())
-            }
-            .accessibilityLabel("More options")
-        }
-        .padding(.horizontal, Space.xs)
-        .padding(.top, Space.xs)
-        .readableColumn()
-    }
-}
-
-struct QuestionView: View {
-    @EnvironmentObject var store: Store
-    @ObservedObject var model: SessionModel
-    let item: StudyItem
-
-    @State private var revealed = false
-    @State private var typed = ""
-    @State private var verdict: Bool? = nil
-    @State private var hint: String? = nil
-    @State private var usedHint = false
-    @State private var miss: MissReason? = nil
-    @State private var shakes: CGFloat = 0
-    @State private var shownAt = Date()
-    @State private var answerMs = 0
-    @State private var clearToken = 0
-    @State private var hasInk = false
-    @FocusState var fieldFocused: Bool
-    @ScaledMetric(relativeTo: .largeTitle) private var heroSize: CGFloat = 120
-
-    private var settings: AppSettings { store.data.settings }
-    private var kanji: Kanji? { store.library.byGlyph[item.glyph] }
-    private var hero: CGFloat { min(heroSize, 180) }
-
-    private var word: Word? {
-        guard let k = kanji, !k.words.isEmpty else { return nil }
-        return k.words[item.wordIndex % k.words.count]
-    }
-
-    private var previewCard: Card {
-        store.card(item.glyph, item.facet) ?? Card(glyph: item.glyph, facet: item.facet, due: Date())
-    }
-
-    var body: some View {
-        if let k = kanji, item.facet != .reading || word != nil {
-            VStack(spacing: 0) {
-                ScrollView {
-                    VStack(spacing: Space.l) {
-                        facetTag
-                        prompt(k)
-                        if revealed {
-                            answerCard(k)
-                                .transition(.opacity.combined(with: .move(edge: .bottom)))
-                        }
-                    }
-                    .padding(.horizontal, Space.l)
-                    .padding(.top, Space.m)
-                    .padding(.bottom, Space.xl)
-                    .readableColumn()
-                }
-                .scrollDismissesKeyboard(.interactively)
-
-                controls(k)
-                    .padding(.horizontal, Space.l)
-                    .padding(.vertical, Space.s)
-                    .readableColumn()
-                    .background(Palette.paper)
-            }
-            .onAppear(perform: appear)
-        } else {
-            Color.clear.onAppear { model.skipCurrent() }
-        }
-    }
-
-    // MARK: Prompt
-
-    private var facetTag: some View {
-        HStack(spacing: Space.xs) {
-            Image(systemName: item.facet.symbol)
-            Text(model.mode == .practice ? "\(item.facet.title) · practice" : item.facet.title)
-        }
-        .font(.footnote.weight(.semibold))
-        .foregroundStyle(Palette.ink2)
-        .padding(.horizontal, Space.s)
-        .padding(.vertical, Space.xs)
-        .background(Palette.sunken, in: Capsule())
-        .accessibilityElement(children: .combine)
-    }
-
-    @ViewBuilder
-    private func prompt(_ k: Kanji) -> some View {
-        switch item.facet {
-        case .meaning:
-            VStack(spacing: Space.s) {
-                Text(k.glyph)
-                    .font(.jpFixed(hero, face: settings.face))
-                    .foregroundStyle(Palette.ink)
-                    .frame(minHeight: hero * 1.2)
-                    .accessibilityLabel("Kanji \(k.glyph)")
-                Text(item.facet.question)
-                    .font(.callout)
-                    .foregroundStyle(Palette.ink2)
-            }
-        case .reading:
-            if let w = word {
-                VStack(spacing: Space.s) {
-                    jpText(w.word, highlight: k.glyph, size: min(hero * 0.55, 72), face: settings.face)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.4)
-                        .frame(minHeight: hero * 0.9)
-                    Text(w.meaning)
-                        .font(.callout)
-                        .foregroundStyle(Palette.ink2)
-                        .multilineTextAlignment(.center)
-                    Text(item.facet.question)
-                        .font(.footnote)
-                        .foregroundStyle(Palette.ink3)
-                }
-            }
-        case .writing:
-            VStack(spacing: Space.m) {
-                VStack(spacing: Space.xxs) {
-                    Text(k.meaningList.capitalizedFirst)
-                        .font(.title2.weight(.semibold))
-                        .foregroundStyle(Palette.ink)
-                        .multilineTextAlignment(.center)
-                    if let w = k.words.first {
-                        MixedText("as in \(w.word.replacingOccurrences(of: k.glyph, with: "〇"))（\(w.primaryReading)）", style: .callout)
-                            .foregroundStyle(Palette.ink2)
-                    }
-                }
-                WritingPad(clearToken: clearToken, hasInk: $hasInk, guide: revealed ? k.glyph : nil,
-                           guideOpacity: 0.28, face: settings.face)
-                    .aspectRatio(1, contentMode: .fit)
-                    .frame(maxWidth: 320)
-                Text(revealed ? "Compare your strokes with the shape underneath." : item.facet.question)
-                    .font(.footnote)
-                    .foregroundStyle(Palette.ink3)
-            }
-        }
-    }
-
-    // MARK: Answer
-
-    @ViewBuilder
-    private func answerCard(_ k: Kanji) -> some View {
-        VStack(alignment: .leading, spacing: Space.m) {
-            if item.facet == .reading, let w = word {
-                readingVerdict(w, k)
-                Divider().overlay(Palette.hairline)
-            }
-            HStack(alignment: .center, spacing: Space.s) {
-                if item.facet != .meaning {
-                    Text(k.glyph)
-                        .font(.jp(40, face: settings.face, relativeTo: .largeTitle))
-                        .foregroundStyle(Palette.ink)
-                }
-                VStack(alignment: .leading, spacing: Space.xxs) {
-                    Text(k.meaningList.capitalizedFirst)
-                        .font(.title3.weight(.semibold))
-                        .foregroundStyle(Palette.ink)
-                        .fixedSize(horizontal: false, vertical: true)
-                    Text(readingSummary(k))
-                        .font(.jp(15, relativeTo: .subheadline))
-                        .foregroundStyle(Palette.ink2)
-                }
-                Spacer(minLength: Space.xs)
-                if let w = word {
-                    SpeakButton(text: w.primaryReading, label: "Play \(w.word)")
-                }
-            }
-            MixedText(hook(k), style: .callout)
-                .foregroundStyle(Palette.ink2)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-        .surfaceCard()
-    }
-
-    private func readingVerdict(_ w: Word, _ k: Kanji) -> some View {
-        let correct = verdict == true
-        return VStack(alignment: .leading, spacing: Space.xs) {
-            Label(correct ? "Correct" : "Not quite", systemImage: correct ? "checkmark.circle.fill" : "xmark.circle.fill")
-                .font(.headline)
-                .foregroundStyle(correct ? Palette.matcha : Palette.shu)
-            HStack(alignment: .firstTextBaseline, spacing: Space.s) {
-                jpText(w.word, highlight: k.glyph, size: 26, face: settings.face)
-                Text(w.readings.joined(separator: " / "))
-                    .font(.jp(22, relativeTo: .title3))
-                    .foregroundStyle(Palette.ink)
-            }
-            if !correct && !typed.isEmpty {
-                MixedText("You typed \(typed)", style: .subheadline)
-                    .foregroundStyle(Palette.ink2)
-            }
-        }
-    }
-
-    private func hook(_ k: Kanji) -> String {
-        let own = store.note(for: k.glyph)
-        return own.isEmpty ? k.mnemonic : "Your hook: \(own)"
-    }
-
-    private func readingSummary(_ k: Kanji) -> String {
-        let kun = k.kun.map { $0.replacingOccurrences(of: ".", with: "").replacingOccurrences(of: "-", with: "") }
-        let parts = [k.on.joined(separator: "・"), kun.joined(separator: "・")].filter { !$0.isEmpty }
-        return parts.joined(separator: "　")
-    }
-
-    // MARK: Controls
-
-    @ViewBuilder
-    private func controls(_ k: Kanji) -> some View {
-        switch item.facet {
-        case .meaning:
-            if revealed {
-                gradeBar
-            } else {
-                Button("Show answer") { reveal() }
-                    .buttonStyle(PrimaryButtonStyle())
-                    .keyboardShortcut(.space, modifiers: [])
-            }
-        case .reading:
-            readingControls(k)
-        case .writing:
-            if revealed {
-                gradeBar
-            } else {
-                HStack(spacing: Space.s) {
-                    Button("Clear") { clearToken += 1 }
-                        .buttonStyle(SecondaryButtonStyle())
-                        .frame(maxWidth: 140)
-                        .disabled(!hasInk)
-                    Button(hasInk ? "Check" : "Show answer") { reveal() }
-                        .buttonStyle(PrimaryButtonStyle())
-                        .keyboardShortcut(.space, modifiers: [])
-                }
-            }
-        }
-    }
-
-    private var gradeBar: some View {
-        let ratings: [Rating] = settings.detailedGrading ? Rating.allCases : [.again, .good]
-        return HStack(spacing: Space.xs) {
-            ForEach(ratings) { rating in
-                gradeButton(rating)
-            }
-        }
-    }
-
-    private func gradeButton(_ rating: Rating) -> some View {
-        let interval: String? = model.mode == .practice
-            ? nil
-            : store.scheduler.previewLabel(rating, for: previewCard, now: Date())
-        return Button {
-            grade(rating)
-        } label: {
-            VStack(spacing: 2) {
-                Text(settings.detailedGrading ? rating.title : rating.simpleTitle)
-                    .font(.headline)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.8)
-                if let interval = interval {
-                    Text(interval)
-                        .font(.caption.monospacedDigit())
-                        .opacity(0.85)
-                }
-            }
-            .padding(.horizontal, Space.xxs)
-        }
-        .buttonStyle(GradeButtonStyle(tint: rating.tint, filled: rating == .good))
-        .keyboardShortcut(shortcut(for: rating), modifiers: [])
-        .accessibilityHint(interval.map { "Next review in \($0)" } ?? "")
-    }
-
-    private func shortcut(for rating: Rating) -> KeyEquivalent {
-        switch rating {
-        case .again: return "1"
-        case .hard: return "2"
-        case .good: return .return
-        case .easy: return "4"
-        }
-    }
-
-    @ViewBuilder
-    private func readingControls(_ k: Kanji) -> some View {
-        VStack(spacing: Space.s) {
-            if verdict == nil {
-                if let hint = hint {
-                    HStack(alignment: .firstTextBaseline, spacing: Space.xs) {
-                        Image(systemName: "lightbulb.fill")
-                        MixedText(hint, style: .subheadline)
-                    }
-                    .foregroundStyle(Palette.kohaku)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .transition(.opacity)
-                }
-                answerField(k)
-                Button("Check") { check(k) }
-                    .buttonStyle(PrimaryButtonStyle())
-                    .disabled(typed.trimmingCharacters(in: .whitespaces).isEmpty)
-            } else if verdict == true {
-                if settings.detailedGrading && model.mode != .practice {
-                    HStack(spacing: Space.xs) {
-                        ForEach([Rating.hard, .good, .easy]) { rating in
-                            gradeButton(rating)
-                        }
-                    }
-                } else {
-                    Button("Continue") { grade(.good) }
-                        .buttonStyle(PrimaryButtonStyle(tint: Palette.matcha))
-                        .keyboardShortcut(.defaultAction)
-                }
-            } else {
-                if settings.askWhy && model.mode != .practice {
-                    missChips
-                }
-                HStack(spacing: Space.s) {
-                    Button("I mistyped") { grade(.good) }
-                        .buttonStyle(SecondaryButtonStyle(tint: Palette.ink2))
-                        .accessibilityHint("Counts this answer as correct")
-                    Button("Continue") { grade(.again) }
-                        .buttonStyle(PrimaryButtonStyle())
-                        .keyboardShortcut(.defaultAction)
-                }
-            }
-        }
-    }
-
-    private func answerField(_ k: Kanji) -> some View {
-        TextField("Type the reading — romaji or kana", text: $typed)
-            .font(.jp(22, relativeTo: .title3))
-            .multilineTextAlignment(.center)
-            .textInputAutocapitalization(.never)
-            .autocorrectionDisabled()
-            .submitLabel(.done)
-            .focused($fieldFocused)
-            .onSubmit { check(k) }
-            .onChange(of: typed) { _, newValue in
-                let converted = Romaji.toHiragana(newValue)
-                if converted != newValue { typed = converted }
-            }
-            .padding(.horizontal, Space.m)
-            .frame(minHeight: Metrics.buttonHeight)
-            .background(Palette.surface, in: RoundedRectangle(cornerRadius: Radius.control, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: Radius.control, style: .continuous)
-                    .strokeBorder(fieldFocused ? Palette.accent : Palette.hairline, lineWidth: fieldFocused ? 2 : 1)
-            )
-            .modifier(Shake(animatableData: shakes))
-            .accessibilityLabel("Reading in kana")
-    }
-
-    private var missChips: some View {
-        VStack(alignment: .leading, spacing: Space.xs) {
-            Text("What tripped you up? Optional — it shapes your tips.")
-                .font(.footnote)
-                .foregroundStyle(Palette.ink2)
-            FlowLayout(spacing: Space.xs, lineSpacing: Space.xs) {
-                ForEach(MissReason.allCases) { reason in
-                    let selected = miss == reason
-                    Button {
-                        miss = selected ? nil : reason
-                        if settings.haptics { Haptics.tap() }
-                    } label: {
-                        Label(reason.title, systemImage: reason.symbol)
-                            .font(.subheadline.weight(.medium))
-                            .padding(.horizontal, Space.s)
-                            .frame(minHeight: Metrics.minTap)
-                            .foregroundStyle(selected ? Palette.onAccent : Palette.ink)
-                            .background(selected ? Palette.accent : Palette.sunken, in: Capsule())
-                            .contentShape(Capsule())
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel(reason.longTitle)
-                    .accessibilityAddTraits(selected ? .isSelected : [])
-                }
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-    }
-
-    // MARK: Actions
-
-    private func appear() {
-        shownAt = Date()
-        if item.facet == .reading {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { fieldFocused = true }
-        }
-    }
-
-    private func reveal() {
-        answerMs = Int(Date().timeIntervalSince(shownAt) * 1000)
-        withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) { revealed = true }
-        if settings.haptics { Haptics.tap() }
-        if settings.autoSpeak, let w = word { Speaker.shared.say(w.primaryReading) }
-    }
-
-    private func check(_ k: Kanji) {
-        guard verdict == nil, let w = word else { return }
-        let answer = Kana.normalize(Romaji.toHiragana(typed, final: true))
-        guard !answer.isEmpty else { return }
-        typed = answer
-        let targets = w.readings.map { Kana.normalize($0) }
-        if targets.contains(answer) {
-            finish(correct: true, word: w)
-            return
-        }
-        if !usedHint, let message = nearMissHint(answer, targets: targets, kanji: k) {
-            usedHint = true
-            withAnimation(.easeOut(duration: 0.2)) { hint = message }
-            typed = ""
-            withAnimation(.default) { shakes += 1 }
-            if settings.haptics { Haptics.tap() }
-            return
-        }
-        finish(correct: false, word: w)
-    }
-
-    private func finish(correct: Bool, word w: Word) {
-        answerMs = Int(Date().timeIntervalSince(shownAt) * 1000)
-        fieldFocused = false
-        withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
-            verdict = correct
-            revealed = true
-        }
-        if settings.haptics {
-            if correct { Haptics.success() } else { Haptics.error() }
-        }
-        if settings.autoSpeak { Speaker.shared.say(w.primaryReading) }
-    }
-
-    /// One free retry for answers that are almost right, with a pointer to
-    /// exactly what to notice. Small っ, long vowels and voicing marks are
-    /// the most common kana slips for learners.
-    private func nearMissHint(_ answer: String, targets: [String], kanji k: Kanji) -> String? {
-        for target in targets {
-            if answer.replacingOccurrences(of: "っ", with: "") == target.replacingOccurrences(of: "っ", with: "") {
-                return "So close — check for a small っ."
-            }
-            if Kana.collapseLongVowels(answer) == Kana.collapseLongVowels(target) {
-                return "Almost — listen for a long vowel."
-            }
-            if Kana.stripVoicing(answer) == Kana.stripVoicing(target) {
-                return "Nearly — check the ゛ voicing marks."
-            }
-        }
-        let readings = k.on + k.kun
-        let candidates = readings.map { Kana.normalize($0) } + readings.map { Kana.normalize(splitKun($0).stem) }
-        if candidates.contains(answer) {
-            return "That's a reading of \(k.glyph), but not the one this word uses."
-        }
-        return nil
-    }
-
-    private func grade(_ rating: Rating) {
-        let ms = answerMs > 0 ? answerMs : Int(Date().timeIntervalSince(shownAt) * 1000)
-        if settings.haptics && item.facet != .reading { Haptics.tap() }
-        model.commit(rating, ms: ms, miss: rating == .again ? miss : nil, store: store)
-    }
-}
+// MARK: Writing surface
 
 /// A square writing surface over 田-grid paper. After an answer is revealed
 /// the model shape fades in beneath your strokes for direct comparison.
@@ -2873,130 +2083,7 @@ struct InkCanvas: UIViewRepresentable {
     }
 }
 
-struct SessionSummaryView: View {
-    @EnvironmentObject var store: Store
-    @Environment(\.dismiss) private var dismiss
-    @ObservedObject var model: SessionModel
-
-    private var accuracy: Double {
-        model.total == 0 ? 1 : Double(model.result.firstTry) / Double(max(model.total, 1))
-    }
-
-    private var title: String {
-        switch model.mode {
-        case .lesson: return "Lesson complete"
-        case .review: return "Reviews done"
-        case .practice: return "Practice done"
-        }
-    }
-
-    /// The end of a session colors memory of the whole session (peak–end
-    /// rule), so the message is honest but always points forward.
-    private var message: String {
-        if model.mode == .practice { return "Practice never changes your schedule — it's just for you." }
-        if model.mode == .lesson { return "These kanji now join your reviews. The first check comes in a few hours, while they're still fresh." }
-        if accuracy >= 0.9 { return "Sharp work. Your memory is holding up beautifully." }
-        if accuracy >= 0.7 { return "Solid session. What you missed comes back soon, while the correction is fresh." }
-        return "A tough set — normal when reviews land right at the edge of forgetting. Effortful recall now builds stronger memories later."
-    }
-
-    var body: some View {
-        ScrollView {
-            VStack(spacing: Space.xl) {
-                Hanko(glyph: model.mode == .lesson ? "学" : "済")
-                    .padding(.top, Space.xxxl)
-                VStack(spacing: Space.xs) {
-                    Text(title)
-                        .font(.title.weight(.bold))
-                        .foregroundStyle(Palette.ink)
-                    Text(message)
-                        .font(.body)
-                        .foregroundStyle(Palette.ink2)
-                        .multilineTextAlignment(.center)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                statsRow
-                if !model.result.missed.isEmpty { missedCard }
-                if let next = store.nextDue, model.mode != .practice {
-                    HStack(spacing: Space.xs) {
-                        Image(systemName: "clock")
-                        Text("Next review \(next, format: .relative(presentation: .named))")
-                    }
-                    .font(.subheadline)
-                    .foregroundStyle(Palette.ink2)
-                }
-            }
-            .padding(.horizontal, Space.l)
-            .padding(.bottom, Space.xl)
-            .readableColumn()
-        }
-        .safeAreaInset(edge: .bottom) {
-            Button("Done") { dismiss() }
-                .buttonStyle(PrimaryButtonStyle())
-                .keyboardShortcut(.defaultAction)
-                .padding(.horizontal, Space.l)
-                .padding(.vertical, Space.s)
-                .readableColumn()
-                .background(Palette.paper)
-        }
-    }
-
-    private var statsRow: some View {
-        HStack(spacing: Space.s) {
-            stat(value: "\(model.total)", label: model.mode == .lesson ? "Questions" : "Items")
-            stat(value: Format.percent(accuracy), label: "First try")
-            stat(value: Format.minutes(Date().timeIntervalSince(model.result.started)), label: "Time")
-        }
-    }
-
-    private func stat(value: String, label: String) -> some View {
-        VStack(spacing: Space.xxs) {
-            Text(value)
-                .font(.statSmall)
-                .foregroundStyle(Palette.ink)
-                .lineLimit(1)
-                .minimumScaleFactor(0.6)
-            Text(label)
-                .font(.caption)
-                .foregroundStyle(Palette.ink2)
-        }
-        .frame(maxWidth: .infinity)
-        .surfaceCard(padding: Space.m)
-        .accessibilityElement(children: .combine)
-    }
-
-    private var missedCard: some View {
-        VStack(alignment: .leading, spacing: Space.s) {
-            Eyebrow(text: "Worth another look")
-            FlowLayout(spacing: Space.xs, lineSpacing: Space.xs) {
-                ForEach(model.result.missed, id: \.self) { glyph in
-                    HStack(spacing: Space.xs) {
-                        Text(glyph)
-                            .font(.jp(22, face: store.data.settings.face, relativeTo: .title3))
-                            .foregroundStyle(Palette.ink)
-                        Text(store.library.byGlyph[glyph]?.primaryMeaning ?? "")
-                            .font(.subheadline)
-                            .foregroundStyle(Palette.ink2)
-                    }
-                    .padding(.horizontal, Space.s)
-                    .padding(.vertical, Space.xs)
-                    .background(Palette.sunken, in: RoundedRectangle(cornerRadius: Radius.chip, style: .continuous))
-                }
-            }
-            Text("They're already scheduled to come back soon.")
-                .font(.caption)
-                .foregroundStyle(Palette.ink2)
-        }
-        .surfaceCard()
-    }
-}
-
-// MARK: - 7. Screens
-// MARK: Shared kanji components
-
-struct KanjiRoute: Hashable {
-    let glyph: String
-}
+// MARK: Text helpers
 
 extension String {
     var capitalizedFirst: String { prefix(1).uppercased() + dropFirst() }
@@ -3130,827 +2217,1018 @@ struct RubyText: View {
     }
 }
 
-struct KanjiHero: View {
-    @EnvironmentObject var store: Store
-    let kanji: Kanji
-    @ScaledMetric(relativeTo: .largeTitle) private var glyphSize: CGFloat = 112
 
-    var body: some View {
-        let size = min(glyphSize, 168)
-        VStack(spacing: Space.m) {
-            ZStack {
-                PracticeGrid()
-                Text(kanji.glyph)
-                    .font(.jpFixed(size, face: store.data.settings.face))
-                    .foregroundStyle(Palette.ink)
-            }
-            .frame(width: size * 1.45, height: size * 1.45)
-            .background(Palette.surface, in: RoundedRectangle(cornerRadius: Radius.card, style: .continuous))
-            .accessibilityElement(children: .ignore)
-            .accessibilityLabel("Kanji \(kanji.glyph)")
+// MARK: - 7. Screens
 
-            VStack(spacing: Space.s) {
-                Text(kanji.meaningList.capitalizedFirst)
-                    .font(.title2.weight(.semibold))
-                    .foregroundStyle(Palette.ink)
-                    .multilineTextAlignment(.center)
-                FlowLayout(spacing: Space.xs, lineSpacing: Space.xs) {
-                    Chip(text: kanji.level.label, tint: Palette.accent)
-                    Chip(text: kanji.strokes == 1 ? "1 stroke" : "\(kanji.strokes) strokes")
-                    if let kind = kanji.kind {
-                        Chip(text: kind.title)
-                    }
-                    let stage = store.stage(of: kanji.glyph)
-                    if stage != .new {
-                        Chip(text: stage.title, tint: stage.tint)
-                    }
-                }
-            }
+enum Route: Hashable {
+    case study(SessionLaunch)
+    case library
+    case kanji(String)
+    case passage(String)
+}
+
+final class Router: ObservableObject {
+    @Published var path: [Route] = []
+}
+
+/// What the home screen offers right now. Decided entirely by the store:
+/// reviews first (they protect what's learned), then new kanji within the
+/// daily pace, otherwise rest.
+enum HomeState {
+    case review(count: Int)
+    case learn(batch: [Kanji])
+    case rest(next: Date?, canLearnMore: Bool, passage: Passage?)
+}
+
+extension Store {
+    var homeState: HomeState {
+        let due = dueCount
+        if due > 0 { return .review(count: due) }
+        let queue = lessonQueue
+        let left = min(lessonsLeftToday, queue.count)
+        if left > 0 {
+            return .learn(batch: Array(queue.prefix(min(data.settings.batchSize, left))))
         }
-        .frame(maxWidth: .infinity)
+        return .rest(next: nextDue, canLearnMore: !queue.isEmpty, passage: suggestedPassage)
+    }
+
+    func reviewLaunch() -> SessionLaunch? {
+        let items = reviewItems(limit: isBacklogged ? Store.catchUpBatch : nil)
+        return items.isEmpty ? nil : SessionLaunch(mode: .review, items: items)
+    }
+
+    func lessonLaunch(extra: Bool) -> SessionLaunch? {
+        let size = data.settings.batchSize
+        let count = extra ? size : min(size, lessonsLeftToday)
+        let batch = Array(lessonQueue.prefix(max(count, 1)))
+        guard !batch.isEmpty else { return nil }
+        return SessionLaunch(mode: .lesson, items: lessonItems(for: batch), lessonGlyphs: batch.map(\.glyph))
+    }
+
+    func practiceLaunch(_ glyphs: [String]) -> SessionLaunch? {
+        let items = practiceItems(for: glyphs)
+        return items.isEmpty ? nil : SessionLaunch(mode: .practice, items: items)
+    }
+
+    /// One line about how well a kanji is held in memory.
+    func memoryLine(for glyph: String) -> String? {
+        guard let c = self.card(glyph, .meaning) ?? self.card(glyph, .reading), let last = c.lastReview else { return nil }
+        let now = Date()
+        let recall = fsrs.retrievability(elapsedDays: now.timeIntervalSince(last) / 86_400, stability: c.stability)
+        let next = c.due <= now ? "Due now" : "Next review \(c.due.formatted(.relative(presentation: .named)))"
+        return "\(next) · \(Format.percent(recall)) recall"
     }
 }
 
-struct ReadingRow: View {
-    let label: String
-    let hint: String
-    let readings: [String]
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: Space.xs) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(label)
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(Palette.ink)
-                Text(hint)
-                    .font(.caption)
-                    .foregroundStyle(Palette.ink2)
-            }
-            FlowLayout(spacing: Space.xs, lineSpacing: Space.xs) {
-                ForEach(readings, id: \.self) { reading in
-                    let split = splitKun(reading)
-                    HStack(spacing: 0) {
-                        Text(split.stem).foregroundStyle(Palette.ink)
-                        if !split.okurigana.isEmpty {
-                            Text(split.okurigana).foregroundStyle(Palette.ink3)
-                        }
-                    }
-                    .font(.jp(18, relativeTo: .body))
-                    .padding(.horizontal, Space.s)
-                    .padding(.vertical, Space.xs)
-                    .background(Palette.sunken, in: RoundedRectangle(cornerRadius: Radius.chip, style: .continuous))
-                    .accessibilityLabel(reading.replacingOccurrences(of: ".", with: ""))
-                }
-            }
-        }
+/// "on・on　kun(okurigana)" — one quiet line of readings.
+func readingLine(_ kanji: Kanji) -> String {
+    let kun = kanji.kun.map { reading -> String in
+        let split = splitKun(reading.replacingOccurrences(of: "-", with: ""))
+        return split.okurigana.isEmpty ? split.stem : "\(split.stem)(\(split.okurigana))"
     }
+    return [kanji.on.joined(separator: "・"), kun.joined(separator: "・")]
+        .filter { !$0.isEmpty }
+        .joined(separator: "　")
 }
 
-struct WordRow: View {
-    @EnvironmentObject var store: Store
-    let word: Word
-    let highlight: String
+/// The app's root. It owns its store and router, so `WindowGroup {
+/// ContentView() }` is all an App needs.
+struct ContentView: View {
+    @StateObject private var store = Store()
+    @StateObject private var router = Router()
+    @Environment(\.scenePhase) private var scenePhase
+    @State private var showSettings = false
 
-    var body: some View {
-        HStack(alignment: .center, spacing: Space.s) {
-            VStack(alignment: .leading, spacing: 2) {
-                jpText(word.word, highlight: highlight, size: 22, face: store.data.settings.face, fixed: false)
-                Text(word.readings.joined(separator: " / "))
-                    .font(.jp(14, relativeTo: .subheadline))
-                    .foregroundStyle(Palette.ink2)
-            }
-            Spacer(minLength: Space.s)
-            Text(word.meaning)
-                .font(.subheadline)
-                .foregroundStyle(Palette.ink2)
-                .multilineTextAlignment(.trailing)
-                .fixedSize(horizontal: false, vertical: true)
-            SpeakButton(text: word.primaryReading, label: "Play \(word.word)")
-        }
-        .padding(.vertical, Space.xxs)
-    }
-}
-
-/// Everything about a kanji, top to bottom in the order a learner needs it:
-/// how it sounds, what it's made of, a hook to remember it, real words, a
-/// real sentence, where you'll meet it, and what not to confuse it with.
-struct KanjiSections: View {
-    @EnvironmentObject var store: Store
-    let kanji: Kanji
-    @State private var showTranslation = false
-    @State private var editingNote = false
-    @State private var noteDraft = ""
-    @FocusState var noteFocused: Bool
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: Space.l) {
-            if !kanji.on.isEmpty || !kanji.kun.isEmpty { readingsCard }
-            if !kanji.parts.isEmpty || kanji.kind != nil { partsCard }
-            hookCard
-            if !kanji.words.isEmpty { wordsCard }
-            if !kanji.sentence.isEmpty { sentenceCard }
-            if let usage = kanji.usage, !usage.isEmpty { usageCard(usage) }
-            let confusions = store.library.confusions(for: kanji.glyph)
-            if !confusions.isEmpty { lookAlikeCard(confusions) }
-        }
-    }
-
-    private var readingsCard: some View {
-        VStack(alignment: .leading, spacing: Space.m) {
-            Eyebrow(text: "Readings")
-            if !kanji.on.isEmpty {
-                ReadingRow(label: "On'yomi", hint: "From Chinese — mostly in compound words", readings: kanji.on)
-            }
-            if !kanji.kun.isEmpty {
-                ReadingRow(label: "Kun'yomi", hint: "Native Japanese — alone or with kana endings", readings: kanji.kun)
-            }
-        }
-        .surfaceCard()
-    }
-
-    private var partsCard: some View {
-        VStack(alignment: .leading, spacing: Space.s) {
-            Eyebrow(text: "Built from")
-            if !kanji.parts.isEmpty {
-                FlowLayout(spacing: Space.xs, lineSpacing: Space.xs) {
-                    ForEach(kanji.parts, id: \.self) { part in
-                        HStack(spacing: Space.xs) {
-                            Text(part.glyph)
-                                .font(.jp(22, face: store.data.settings.face, relativeTo: .title3))
-                                .foregroundStyle(Palette.ink)
-                            Text(part.meaning)
-                                .font(.subheadline)
-                                .foregroundStyle(Palette.ink2)
-                        }
-                        .padding(.horizontal, Space.s)
-                        .padding(.vertical, Space.xs)
-                        .background(Palette.sunken, in: RoundedRectangle(cornerRadius: Radius.chip, style: .continuous))
-                    }
-                }
-            }
-            if let kind = kanji.kind {
-                MixedText("\(kind.title) (\(kind.japanese)): \(kind.explanation)", style: .callout)
-                    .foregroundStyle(Palette.ink2)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            if let phonetic = kanji.phonetic {
-                HStack(alignment: .firstTextBaseline, spacing: Space.xs) {
-                    Image(systemName: "waveform")
-                    MixedText(phonetic, style: .callout, bold: true)
-                }
-                .foregroundStyle(Palette.accent)
-            }
-        }
-        .surfaceCard()
-    }
-
-    private var hookCard: some View {
-        VStack(alignment: .leading, spacing: Space.s) {
-            Eyebrow(text: "Memory hook")
-            MixedText(kanji.mnemonic, style: .body)
-                .foregroundStyle(Palette.ink)
-                .lineSpacing(4)
-                .fixedSize(horizontal: false, vertical: true)
-            Divider().overlay(Palette.hairline)
-            if editingNote {
-                TextField("A picture, story or link that makes it stick for you", text: $noteDraft, axis: .vertical)
-                    .lineLimit(2...6)
-                    .focused($noteFocused)
-                HStack {
-                    Button("Cancel") {
-                        editingNote = false
-                        noteFocused = false
-                    }
-                    .foregroundStyle(Palette.ink2)
-                    Spacer()
-                    Button("Save") {
-                        store.setNote(noteDraft, for: kanji.glyph)
-                        editingNote = false
-                        noteFocused = false
-                    }
-                    .fontWeight(.semibold)
-                }
-                .font(.subheadline)
-                .frame(minHeight: Metrics.minTap)
-            } else if !store.note(for: kanji.glyph).isEmpty {
-                VStack(alignment: .leading, spacing: Space.xxs) {
-                    Text("Your hook")
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(Palette.accent)
-                    MixedText(store.note(for: kanji.glyph), style: .body)
-                        .foregroundStyle(Palette.ink)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                Button("Edit your hook") { beginEditing() }
-                    .font(.subheadline.weight(.semibold))
-                    .frame(minHeight: Metrics.minTap)
-            } else {
-                Button { beginEditing() } label: {
-                    Label("Write your own hook", systemImage: "square.and.pencil")
-                }
-                .font(.subheadline.weight(.semibold))
-                .frame(minHeight: Metrics.minTap)
-                Text("Hooks you invent yourself are remembered better than ones you're given.")
-                    .font(.caption)
-                    .foregroundStyle(Palette.ink2)
-            }
-        }
-        .surfaceCard()
-    }
-
-    private func beginEditing() {
-        noteDraft = store.note(for: kanji.glyph)
-        editingNote = true
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { noteFocused = true }
-    }
-
-    private var wordsCard: some View {
-        VStack(alignment: .leading, spacing: Space.xs) {
-            Eyebrow(text: "Words")
-            ForEach(Array(kanji.words.enumerated()), id: \.element.id) { offset, word in
-                if offset > 0 { Divider().overlay(Palette.hairline) }
-                WordRow(word: word, highlight: kanji.glyph)
-            }
-        }
-        .surfaceCard()
-    }
-
-    private var sentenceCard: some View {
-        VStack(alignment: .leading, spacing: Space.s) {
-            HStack {
-                Eyebrow(text: "In context")
-                Spacer()
-                SpeakButton(text: Ruby.spoken(kanji.sentence), label: "Play sentence")
-            }
-            RubyText(markup: kanji.sentence, size: 20, highlight: kanji.glyph)
-            if showTranslation {
-                Text(kanji.translation)
-                    .font(.callout)
-                    .foregroundStyle(Palette.ink2)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .transition(.opacity)
-            } else {
-                Button("Show translation") {
-                    withAnimation(.easeOut(duration: 0.2)) { showTranslation = true }
-                }
-                .font(.subheadline.weight(.semibold))
-                .frame(minHeight: Metrics.minTap)
-            }
-        }
-        .surfaceCard()
-    }
-
-    private func usageCard(_ usage: String) -> some View {
-        VStack(alignment: .leading, spacing: Space.s) {
-            Eyebrow(text: "In real life")
-            MixedText(usage, style: .body)
-                .foregroundStyle(Palette.ink)
-                .lineSpacing(4)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-        .surfaceCard()
-    }
-
-    private func lookAlikeCard(_ items: [Confusion]) -> some View {
-        VStack(alignment: .leading, spacing: Space.m) {
-            Eyebrow(text: "Don't confuse with")
-            ForEach(items) { confusion in
-                VStack(alignment: .leading, spacing: Space.s) {
-                    HStack(spacing: Space.xs) {
-                        ForEach(confusion.glyphs, id: \.self) { glyph in
-                            Text(glyph)
-                                .font(.jp(28, face: store.data.settings.face, relativeTo: .title))
-                                .foregroundStyle(glyph == kanji.glyph ? Palette.accent : Palette.ink)
-                                .padding(Space.xs)
-                                .frame(minWidth: 52, minHeight: 52)
-                                .background(glyph == kanji.glyph ? Palette.accent.opacity(0.12) : Palette.sunken,
-                                            in: RoundedRectangle(cornerRadius: Radius.chip, style: .continuous))
-                        }
-                    }
-                    MixedText(confusion.tip, style: .callout)
-                        .foregroundStyle(Palette.ink2)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-            }
-        }
-        .surfaceCard()
-    }
-}
-
-struct KanjiTile: View {
-    @EnvironmentObject var store: Store
-    let kanji: Kanji
-    var selected: Bool? = nil
-
-    var body: some View {
-        let stage = store.stage(of: kanji.glyph)
-        let isSelected = selected == true
-        VStack(spacing: Space.xxs) {
-            Text(kanji.glyph)
-                .font(.jp(32, face: store.data.settings.face, relativeTo: .title))
-                .foregroundStyle(Palette.ink)
-                .frame(maxWidth: .infinity)
-                .padding(.top, Space.s)
-            Text(kanji.primaryMeaning)
-                .font(.caption2)
-                .foregroundStyle(Palette.ink2)
-                .lineLimit(1)
-                .minimumScaleFactor(0.75)
-                .padding(.horizontal, Space.xxs)
-            Capsule()
-                .fill(stage == .new || selected != nil ? Color.clear : stage.tint)
-                .frame(width: 18, height: 3)
-                .padding(.bottom, Space.xs)
-        }
-        .frame(maxWidth: .infinity)
-        .background(isSelected ? Palette.accent.opacity(0.14) : Palette.surface,
-                    in: RoundedRectangle(cornerRadius: Radius.control, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: Radius.control, style: .continuous)
-                .strokeBorder(isSelected ? Palette.accent : Palette.hairline, lineWidth: isSelected ? 2 : 1)
-        )
-        .overlay(alignment: .topTrailing) {
-            if isSelected {
-                Image(systemName: "checkmark.circle.fill")
-                    .foregroundStyle(Palette.accent)
-                    .padding(Space.xxs)
-            }
-        }
-        .contentShape(RoundedRectangle(cornerRadius: Radius.control, style: .continuous))
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(kanji.glyph), \(kanji.primaryMeaning)")
-        .accessibilityValue(selected == nil ? stage.title : (isSelected ? "Selected" : "Not selected"))
-    }
-}
-
-struct LevelPicker: View {
-    @Binding var selection: JLPTLevel?
-    var levels: [JLPTLevel] = JLPTLevel.allCases
-    var showsAll = true
-
-    var body: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: Space.xs) {
-                if showsAll { chip("All", value: nil) }
-                ForEach(levels) { level in
-                    chip(level.label, value: level)
-                }
-            }
-            .padding(.horizontal, Space.l)
-        }
-    }
-
-    private func chip(_ title: String, value: JLPTLevel?) -> some View {
-        let isOn = selection == value
-        return Button {
-            withAnimation(.easeOut(duration: 0.15)) { selection = value }
-        } label: {
-            Text(title)
-                .font(.subheadline.weight(.semibold))
-                .padding(.horizontal, Space.m)
-                .frame(minHeight: Metrics.minTap)
-                .foregroundStyle(isOn ? Palette.onAccent : Palette.ink)
-                .background(isOn ? Palette.accent : Palette.surface, in: Capsule())
-                .overlay(Capsule().strokeBorder(isOn ? Color.clear : Palette.hairline, lineWidth: 1))
-                .contentShape(Capsule())
-        }
-        .buttonStyle(.plain)
-        .accessibilityAddTraits(isOn ? .isSelected : [])
-    }
-}
-
-/// Lookup sheet for a tapped word while reading: its reading, the kanji in
-/// it, and a one-tap way to queue an unlearned kanji next — so reading
-/// feeds straight back into study.
-struct WordSheet: View {
-    @EnvironmentObject var store: Store
-    @Environment(\.dismiss) private var dismiss
-    let unit: RubyUnit
-
-    private var glyphs: [String] {
-        var seen: [String] = []
-        for ch in unit.base where ch.isKanji {
-            let g = String(ch)
-            if !seen.contains(g) { seen.append(g) }
-        }
-        return seen
+    private var needsOnboarding: Binding<Bool> {
+        Binding(get: { !store.data.onboarded }, set: { if !$0 { store.data.onboarded = true } })
     }
 
     var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: Space.m) {
-                    HStack(alignment: .center, spacing: Space.s) {
-                        VStack(alignment: .leading, spacing: Space.xxs) {
-                            Text(unit.base)
-                                .font(.jp(34, bold: true, face: store.data.settings.face, relativeTo: .largeTitle))
-                                .foregroundStyle(Palette.ink)
-                            if let reading = unit.reading {
-                                Text(reading)
-                                    .font(.jp(18, relativeTo: .title3))
-                                    .foregroundStyle(Palette.ink2)
-                            }
-                        }
-                        Spacer()
-                        SpeakButton(text: unit.reading ?? unit.base)
-                    }
-                    ForEach(glyphs, id: \.self) { glyph in
-                        row(glyph)
-                    }
+        NavigationStack(path: $router.path) {
+            HomeView(showSettings: $showSettings)
+                .navigationDestination(for: Route.self) { route in
+                    destination(route)
                 }
-                .padding(Space.l)
-            }
-            .background(Palette.paper.ignoresSafeArea())
-            .navigationTitle("Look up")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Done") { dismiss() }
-                }
-            }
-            .navigationDestination(for: KanjiRoute.self) { route in
-                ScrollView {
-                    KanjiDetailContent(glyph: route.glyph)
-                }
-                .background(Palette.paper.ignoresSafeArea())
+        }
+        .tint(Palette.accent)
+        .environmentObject(store)
+        .environmentObject(router)
+        .sheet(isPresented: $showSettings) {
+            SettingsView()
+                .environmentObject(store)
+                .environmentObject(router)
+        }
+        .fullScreenCover(isPresented: needsOnboarding) {
+            OnboardingView().environmentObject(store)
+        }
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active {
+                Reminders.sync(store)
+            } else if phase == .background {
+                store.saveNow()
+                Reminders.schedule(store)
             }
         }
     }
 
     @ViewBuilder
-    private func row(_ glyph: String) -> some View {
-        if let kanji = store.library.byGlyph[glyph] {
-            let stage = store.stage(of: glyph)
-            VStack(spacing: Space.s) {
-                NavigationLink(value: KanjiRoute(glyph: glyph)) {
-                    HStack(spacing: Space.m) {
-                        Text(glyph)
-                            .font(.jp(30, face: store.data.settings.face, relativeTo: .title))
-                            .foregroundStyle(Palette.ink)
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(kanji.meaningList.capitalizedFirst)
-                                .font(.body.weight(.semibold))
-                                .foregroundStyle(Palette.ink)
-                            Text(stage.title)
-                                .font(.caption.weight(.semibold))
-                                .foregroundStyle(stage.tint)
-                        }
-                        Spacer()
-                        Image(systemName: "chevron.right")
-                            .font(.footnote.weight(.semibold))
-                            .foregroundStyle(Palette.ink3)
-                    }
-                }
-                .buttonStyle(.plain)
-                if stage == .new {
-                    if store.data.priority.contains(glyph) {
-                        Label("Up next in your lessons", systemImage: "checkmark.circle.fill")
-                            .font(.subheadline.weight(.semibold))
-                            .foregroundStyle(Palette.matcha)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                    } else {
-                        Button {
-                            store.prioritize(glyph)
-                        } label: {
-                            Label("Learn this kanji next", systemImage: "plus.circle")
-                        }
-                        .buttonStyle(SecondaryButtonStyle())
-                    }
-                }
-            }
-            .surfaceCard(padding: Space.m)
-        } else {
-            HStack(spacing: Space.m) {
-                Text(glyph)
-                    .font(.jp(30, relativeTo: .title))
-                    .foregroundStyle(Palette.ink)
-                Text("Not in your library yet")
-                    .font(.callout)
-                    .foregroundStyle(Palette.ink2)
-            }
-            .surfaceCard(padding: Space.m)
+    private func destination(_ route: Route) -> some View {
+        switch route {
+        case .study(let launch):
+            StudyView(launch: launch)
+        case .library:
+            LibraryView()
+        case .kanji(let glyph):
+            KanjiView(glyph: glyph)
+        case .passage(let id):
+            PassageView(passageID: id)
         }
     }
 }
 
-// MARK: Today
+struct ContentView_Previews: PreviewProvider {
+    static var previews: some View {
+        ContentView()
+    }
+}
 
-/// The home screen answers one question — "what should I do now?" — with a
-/// single primary action. Reviews come first because they protect what's
-/// already learned; new lessons are offered once reviews are clear.
-struct TodayView: View {
+// MARK: Home
+
+/// One number or one glyph, one action. Nothing else competes for attention.
+struct HomeView: View {
     @EnvironmentObject var store: Store
-    @State private var showSettings = false
-    @State private var launch: SessionLaunch? = nil
+    @EnvironmentObject var router: Router
+    @Binding var showSettings: Bool
+    @ScaledMetric(relativeTo: .largeTitle) private var heroSize: CGFloat = 104
+
+    private var hero: CGFloat { min(heroSize, 160) }
 
     var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: Space.l) {
-                    Text(Date(), format: .dateTime.weekday(.wide).month(.wide).day())
-                        .font(.subheadline.weight(.medium))
-                        .foregroundStyle(Palette.ink2)
-                    if store.isBacklogged { backlogBanner }
-                    reviewCard
-                    lessonCard
-                    rhythmCard
-                    if let passage = store.suggestedPassage { readingCard(passage) }
-                    if !store.leeches.isEmpty { trickyCard }
+        TimelineView(.everyMinute) { _ in
+            let state = store.homeState
+            VStack(spacing: 0) {
+                Spacer(minLength: Space.xl)
+                centerpiece(state)
+                    .padding(.horizontal, Space.l)
+                Spacer(minLength: Space.xl)
+                actions(state)
+                    .padding(.horizontal, Space.l)
+                    .padding(.bottom, Space.l)
+                    .actionColumn()
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+        .toolbar {
+            ToolbarItemGroup(placement: .topBarTrailing) {
+                Button {
+                    router.path.append(.library)
+                } label: {
+                    Label("Library", systemImage: "square.grid.2x2")
                 }
-                .padding(.horizontal, Space.l)
-                .padding(.bottom, Space.xxl)
-                .readableColumn()
-            }
-            .background(Palette.paper.ignoresSafeArea())
-            .navigationTitle("Today")
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button {
-                        showSettings = true
-                    } label: {
-                        Image(systemName: "gearshape")
-                    }
-                    .accessibilityLabel("Settings")
+                Button {
+                    showSettings = true
+                } label: {
+                    Label("Settings", systemImage: "gearshape")
                 }
-            }
-            .navigationDestination(for: KanjiRoute.self) { KanjiDetailView(glyph: $0.glyph) }
-            .navigationDestination(for: Passage.self) { PassageView(passage: $0) }
-            .sheet(isPresented: $showSettings) {
-                SettingsView().environmentObject(store)
-            }
-            .fullScreenCover(item: $launch) { launch in
-                SessionContainer(launch: launch).environmentObject(store)
             }
         }
     }
 
-    private var backlogBanner: some View {
-        HStack(alignment: .top, spacing: Space.s) {
-            Image(systemName: "tray.full")
-                .font(.title3)
-                .foregroundStyle(Palette.kohaku)
-            VStack(alignment: .leading, spacing: Space.xxs) {
-                Text("Welcome back")
-                    .font(.headline)
-                    .foregroundStyle(Palette.ink)
-                Text("\(store.dueCount) reviews piled up — that's fine. Catch-up mode serves them \(Store.catchUpBatch) at a time, the ones you're most likely to have forgotten first. New lessons pause until you're back on track.")
-                    .font(.callout)
-                    .foregroundStyle(Palette.ink2)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-        }
-        .surfaceCard()
-    }
-
-    private var reviewCard: some View {
-        let due = store.dueCount
-        let batch = store.isBacklogged ? Store.catchUpBatch : due
-        return VStack(alignment: .leading, spacing: Space.m) {
-            Eyebrow(text: "Reviews")
-            if due > 0 {
-                VStack(alignment: .leading, spacing: Space.xxs) {
-                    HStack(alignment: .firstTextBaseline, spacing: Space.xs) {
-                        Text("\(due)")
-                            .font(.stat)
-                            .foregroundStyle(Palette.ink)
-                            .contentTransition(.numericText())
-                        Text(due == 1 ? "card ready" : "cards ready")
-                            .font(.title3)
-                            .foregroundStyle(Palette.ink2)
-                    }
-                    Text(Format.estimate(seconds: Double(batch) * 9))
-                        .font(.subheadline)
-                        .foregroundStyle(Palette.ink2)
-                }
-                Button(store.isBacklogged ? "Start catch-up · \(Store.catchUpBatch)" : "Start reviews") {
-                    startReviews()
-                }
-                .buttonStyle(PrimaryButtonStyle())
-            } else {
-                HStack(alignment: .center, spacing: Space.s) {
-                    Image(systemName: "checkmark.seal.fill")
-                        .font(.title)
-                        .foregroundStyle(Palette.matcha)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("All caught up")
-                            .font(.title3.weight(.semibold))
-                            .foregroundStyle(Palette.ink)
-                        if let next = store.nextDue {
-                            Text("Next review \(next, format: .relative(presentation: .named))")
-                                .font(.subheadline)
-                                .foregroundStyle(Palette.ink2)
-                        } else {
-                            Text("Learn your first kanji to start building reviews.")
-                                .font(.subheadline)
-                                .foregroundStyle(Palette.ink2)
-                        }
-                    }
-                }
-            }
-        }
-        .surfaceCard()
-    }
-
-    private var lessonCard: some View {
-        let settings = store.data.settings
-        let queue = store.lessonQueue
-        let left = store.lessonsLeftToday
-        let preview = Array(queue.prefix(settings.batchSize))
-        let lessonSize = min(settings.batchSize, left, queue.count)
-        let reviewsWaiting = store.dueCount > 0
-        return VStack(alignment: .leading, spacing: Space.m) {
-            HStack {
-                Eyebrow(text: "New kanji")
-                Spacer()
-                if settings.newPerDay > 0 {
-                    Text("\(store.today.learned) of \(settings.newPerDay) today")
-                        .font(.caption.monospacedDigit())
-                        .foregroundStyle(Palette.ink2)
-                }
-            }
-            if queue.isEmpty {
-                Text("You've started every kanji in your library. Import a content pack in Settings to keep going.")
-                    .font(.callout)
-                    .foregroundStyle(Palette.ink2)
-                    .fixedSize(horizontal: false, vertical: true)
-            } else {
-                FlowLayout(spacing: Space.xs, lineSpacing: Space.xs) {
-                    ForEach(preview) { kanji in
-                        Text(kanji.glyph)
-                            .font(.jp(26, face: settings.face, relativeTo: .title2))
-                            .foregroundStyle(Palette.ink)
-                            .padding(Space.xs)
-                            .frame(minWidth: 48, minHeight: 48)
-                            .background(Palette.sunken, in: RoundedRectangle(cornerRadius: Radius.chip, style: .continuous))
-                    }
-                }
-                .accessibilityElement(children: .ignore)
-                .accessibilityLabel("Up next: " + preview.map(\.glyph).joined(separator: ", "))
-
-                if store.isBacklogged {
-                    Text("Paused while you catch up — reviews protect what you've already learned.")
-                        .font(.callout)
-                        .foregroundStyle(Palette.ink2)
-                        .fixedSize(horizontal: false, vertical: true)
-                } else if settings.newPerDay == 0 {
-                    Text("New lessons are off. Set a daily pace in Settings to start again.")
-                        .font(.callout)
-                        .foregroundStyle(Palette.ink2)
-                } else if left == 0 {
-                    Text("Today's goal is done. Steady beats cramming — more tomorrow.")
-                        .font(.callout)
-                        .foregroundStyle(Palette.ink2)
-                    Button("Learn \(min(settings.batchSize, queue.count)) more anyway") { startLesson(extra: true) }
-                        .buttonStyle(SecondaryButtonStyle())
-                } else if reviewsWaiting {
-                    Button("Start lesson · \(lessonSize) kanji") { startLesson(extra: false) }
-                        .buttonStyle(SecondaryButtonStyle())
-                    Text("Tip: clear your reviews first — new kanji stick better on a settled base.")
-                        .font(.caption)
-                        .foregroundStyle(Palette.ink2)
-                } else {
-                    Button("Start lesson · \(lessonSize) kanji") { startLesson(extra: false) }
-                        .buttonStyle(PrimaryButtonStyle())
-                }
-            }
-        }
-        .surfaceCard()
-    }
-
-    private var rhythmCard: some View {
-        let days = store.weekRhythm
-        let symbols = Calendar.current.veryShortStandaloneWeekdaySymbols
-        let labels = Array(symbols.dropFirst()) + Array(symbols.prefix(1))
-        let studied = days.filter { $0 }.count
-        let shifted = Date().addingTimeInterval(-Double(store.data.settings.dayStartHour) * 3600)
-        let todayIndex = (Calendar.current.component(.weekday, from: shifted) + 5) % 7
-        return VStack(alignment: .leading, spacing: Space.m) {
-            HStack {
-                Eyebrow(text: "This week")
-                Spacer()
-                Text("\(studied) of 7 days")
-                    .font(.caption.monospacedDigit())
+    @ViewBuilder
+    private func centerpiece(_ state: HomeState) -> some View {
+        switch state {
+        case .review(let count):
+            VStack(spacing: Space.xs) {
+                Text("\(count)")
+                    .font(.system(size: hero, weight: .light))
+                    .monospacedDigit()
+                    .contentTransition(.numericText())
+                Text(count == 1 ? "review" : "reviews")
+                    .font(.title3)
                     .foregroundStyle(Palette.ink2)
             }
-            HStack(spacing: 0) {
-                ForEach(0..<7, id: \.self) { i in
-                    VStack(spacing: Space.xs) {
-                        Circle()
-                            .fill(days.indices.contains(i) && days[i] ? Palette.accent : Palette.sunken)
-                            .frame(width: 22, height: 22)
-                            .overlay(
-                                Circle()
-                                    .strokeBorder(i == todayIndex ? Palette.accent : Color.clear, lineWidth: 2)
-                                    .padding(-4)
-                            )
-                        Text(labels.indices.contains(i) ? labels[i] : "")
-                            .font(.caption2.weight(i == todayIndex ? .bold : .regular))
-                            .foregroundStyle(i == todayIndex ? Palette.ink : Palette.ink2)
-                    }
-                    .frame(maxWidth: .infinity)
-                }
+            .accessibilityElement(children: .combine)
+        case .learn(let batch):
+            VStack(spacing: Space.xs) {
+                Text(batch.first?.glyph ?? "")
+                    .font(.jpFixed(hero * 1.1, face: store.data.settings.face))
+                Text(batch.count == 1 ? "1 new kanji" : "\(batch.count) new kanji")
+                    .font(.title3)
+                    .foregroundStyle(Palette.ink2)
             }
             .accessibilityElement(children: .ignore)
-            .accessibilityLabel("Studied \(studied) of 7 days this week")
-            Text(studied >= 5
-                 ? "Lovely rhythm. Short, regular sessions are what make memories last."
-                 : "A few minutes on most days beats one long session a week.")
-                .font(.caption)
-                .foregroundStyle(Palette.ink2)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-        .surfaceCard()
-    }
-
-    private func readingCard(_ passage: Passage) -> some View {
-        let coverage = store.coverage(of: passage)
-        return NavigationLink(value: passage) {
-            VStack(alignment: .leading, spacing: Space.s) {
-                Eyebrow(text: "Read something real")
-                HStack(alignment: .center, spacing: Space.m) {
-                    VStack(alignment: .leading, spacing: Space.xxs) {
-                        Text(Ruby.plain(passage.title))
-                            .font(.jp(20, bold: true, relativeTo: .title3))
-                            .foregroundStyle(Palette.ink)
-                        Text("\(passage.titleEN) · \(passage.genre)")
-                            .font(.subheadline)
-                            .foregroundStyle(Palette.ink2)
+            .accessibilityLabel(batch.count == 1 ? "1 new kanji to learn" : "\(batch.count) new kanji to learn")
+        case .rest(let next, _, _):
+            VStack(spacing: Space.xs) {
+                Text("Done")
+                    .font(.system(size: hero * 0.6, weight: .light))
+                Group {
+                    if let next = next {
+                        Text("Next review \(next, format: .relative(presentation: .named))")
+                    } else {
+                        Text("Nothing left to learn — import more in Settings.")
                     }
-                    Spacer()
-                    Image(systemName: "chevron.right")
-                        .font(.footnote.weight(.semibold))
-                        .foregroundStyle(Palette.ink3)
                 }
-                Meter(value: coverage, tint: Palette.asagi)
-                Text("You know \(Format.percent(coverage)) of its kanji. The rest get furigana.")
-                    .font(.caption)
-                    .foregroundStyle(Palette.ink2)
+                .font(.title3)
+                .foregroundStyle(Palette.ink2)
+                .multilineTextAlignment(.center)
             }
-            .surfaceCard()
-            .contentShape(Rectangle())
+            .accessibilityElement(children: .combine)
         }
-        .buttonStyle(.plain)
     }
 
-    private var trickyCard: some View {
-        VStack(alignment: .leading, spacing: Space.s) {
-            Eyebrow(text: "Tricky kanji")
-            Text("These keep slipping away. Open one to compare look-alikes or write your own hook.")
-                .font(.callout)
-                .foregroundStyle(Palette.ink2)
-                .fixedSize(horizontal: false, vertical: true)
-            FlowLayout(spacing: Space.xs, lineSpacing: Space.xs) {
-                ForEach(store.leeches) { kanji in
-                    NavigationLink(value: KanjiRoute(glyph: kanji.glyph)) {
-                        Text(kanji.glyph)
-                            .font(.jp(24, face: store.data.settings.face, relativeTo: .title2))
-                            .foregroundStyle(Palette.shu)
-                            .padding(Space.xs)
-                            .frame(minWidth: 48, minHeight: 48)
-                            .background(Palette.shu.opacity(0.1), in: RoundedRectangle(cornerRadius: Radius.chip, style: .continuous))
+    @ViewBuilder
+    private func actions(_ state: HomeState) -> some View {
+        switch state {
+        case .review:
+            ActionButton(title: "Review") {
+                if let launch = store.reviewLaunch() { router.path.append(.study(launch)) }
+            }
+            .keyboardShortcut(.defaultAction)
+        case .learn:
+            ActionButton(title: "Learn") {
+                if let launch = store.lessonLaunch(extra: false) { router.path.append(.study(launch)) }
+            }
+            .keyboardShortcut(.defaultAction)
+        case .rest(_, let canLearnMore, let passage):
+            VStack(spacing: Space.s) {
+                if let passage = passage {
+                    Button {
+                        router.path.append(.passage(passage.id))
+                    } label: {
+                        Text("Read “\(Ruby.plain(passage.title))”")
+                            .font(.body)
                     }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("\(kanji.glyph), \(kanji.primaryMeaning)")
+                    .buttonStyle(.borderless)
+                }
+                if canLearnMore {
+                    Button {
+                        if let launch = store.lessonLaunch(extra: true) { router.path.append(.study(launch)) }
+                    } label: {
+                        Text("Learn more today")
+                            .font(.body)
+                    }
+                    .buttonStyle(.borderless)
                 }
             }
-            Button("Practice them now") {
-                launch = SessionLaunch(mode: .practice, items: store.practiceItems(for: store.leeches.map(\.glyph)))
-            }
-            .buttonStyle(SecondaryButtonStyle())
+            .frame(minHeight: Metrics.buttonHeight)
         }
-        .surfaceCard()
-    }
-
-    private func startReviews() {
-        let items = store.reviewItems(limit: store.isBacklogged ? Store.catchUpBatch : nil)
-        guard !items.isEmpty else { return }
-        launch = SessionLaunch(mode: .review, items: items)
-    }
-
-    private func startLesson(extra: Bool) {
-        let size = store.data.settings.batchSize
-        let count = extra ? size : min(size, store.lessonsLeftToday)
-        let batch = Array(store.lessonQueue.prefix(max(count, 1)))
-        guard !batch.isEmpty else { return }
-        launch = SessionLaunch(mode: .lesson, items: store.lessonItems(for: batch), lessonGlyphs: batch.map(\.glyph))
     }
 }
 
-// MARK: Kanji library
+// MARK: Study
+
+/// A study session: lesson pages (for new kanji), then questions, then a
+/// stamp. Pushed onto the navigation stack so Back always leaves — every
+/// answer is already saved.
+struct StudyView: View {
+    @EnvironmentObject var store: Store
+    @Environment(\.dismiss) private var dismiss
+    @StateObject private var model: SessionModel
+    @State private var teaching: Bool
+    @State private var page = 0
+    let launch: SessionLaunch
+
+    init(launch: SessionLaunch) {
+        self.launch = launch
+        _model = StateObject(wrappedValue: SessionModel(mode: launch.mode, items: launch.items))
+        _teaching = State(initialValue: !launch.lessonGlyphs.isEmpty)
+    }
+
+    private var progress: Double {
+        if teaching { return Double(page + 1) / Double(max(launch.lessonGlyphs.count, 1)) }
+        return model.progress
+    }
+
+    private var counter: String {
+        if teaching { return "\(page + 1) of \(launch.lessonGlyphs.count)" }
+        if model.isFinished { return "" }
+        return "\(model.completed) of \(model.total)"
+    }
+
+    var body: some View {
+        content
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar { studyToolbar }
+            .safeAreaInset(edge: .top, spacing: 0) {
+                if !model.isFinished {
+                    ProgressView(value: progress)
+                        .tint(Palette.accent)
+                        .padding(.horizontal, Space.l)
+                        .padding(.vertical, Space.xs)
+                        .readableColumn()
+                        .accessibilityLabel(counter)
+                }
+            }
+            .animation(.easeInOut(duration: 0.25), value: teaching)
+            .animation(.easeInOut(duration: 0.25), value: model.isFinished)
+    }
+
+    @ViewBuilder
+    private var content: some View {
+        if teaching {
+            LessonPager(glyphs: launch.lessonGlyphs, page: $page, onFinish: finishTeaching)
+        } else if model.isFinished {
+            SummaryView(model: model) { dismiss() }
+        } else if let item = model.current {
+            QuestionView(model: model, item: item)
+                .id(item.id)
+                .transition(.opacity)
+        }
+    }
+
+    @ToolbarContentBuilder
+    private var studyToolbar: some ToolbarContent {
+        ToolbarItem(placement: .principal) {
+            Text(counter)
+                .font(.subheadline.monospacedDigit())
+                .foregroundStyle(Palette.ink2)
+        }
+        if teaching {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button {
+                    markKnown()
+                } label: {
+                    Label("I know this", systemImage: "checkmark.circle")
+                }
+            }
+        } else if !model.isFinished {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button {
+                    model.undo(store: store)
+                } label: {
+                    Label("Undo", systemImage: "arrow.uturn.backward")
+                }
+                .disabled(!model.canUndo)
+                .keyboardShortcut("z", modifiers: .command)
+            }
+        }
+    }
+
+    /// Skips a kanji the learner already knows; it's verified later by a
+    /// spaced check instead of being taught.
+    private func markKnown() {
+        guard launch.lessonGlyphs.indices.contains(page) else { return }
+        let glyph = launch.lessonGlyphs[page]
+        store.markKnown([glyph])
+        model.remove(glyph: glyph)
+        if store.data.settings.haptics { Haptics.success() }
+        if page >= launch.lessonGlyphs.count - 1 {
+            finishTeaching()
+        } else {
+            withAnimation { page += 1 }
+        }
+    }
+
+    private func finishTeaching() {
+        if model.isFinished {
+            dismiss()
+        } else {
+            teaching = false
+        }
+    }
+}
+
+struct LessonPager: View {
+    let glyphs: [String]
+    @Binding var page: Int
+    let onFinish: () -> Void
+
+    private var isLast: Bool { page >= glyphs.count - 1 }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            TabView(selection: $page) {
+                ForEach(Array(glyphs.enumerated()), id: \.offset) { offset, glyph in
+                    ScrollView {
+                        KanjiArticle(glyph: glyph)
+                            .padding(.horizontal, Space.l)
+                            .padding(.vertical, Space.l)
+                            .readableColumn()
+                    }
+                    .tag(offset)
+                }
+            }
+            .tabViewStyle(.page(indexDisplayMode: .never))
+
+            ActionButton(title: isLast ? "Begin" : "Next") {
+                if isLast {
+                    onFinish()
+                } else {
+                    withAnimation { page += 1 }
+                }
+            }
+            .keyboardShortcut(.defaultAction)
+            .padding(.horizontal, Space.l)
+            .padding(.vertical, Space.m)
+            .actionColumn()
+        }
+    }
+}
+
+/// Everything about one kanji, set as plain typography: the glyph, what it
+/// means and how it sounds, a hook, real words and a real sentence. Words
+/// and the sentence speak when tapped.
+struct KanjiArticle: View {
+    @EnvironmentObject var store: Store
+    let glyph: String
+    var detailed = false
+    @State private var editingHook = false
+    @State private var hookDraft = ""
+    @FocusState var hookFocused: Bool
+    @ScaledMetric(relativeTo: .largeTitle) private var glyphSize: CGFloat = 128
+
+    var body: some View {
+        if let kanji = store.library.byGlyph[glyph] {
+            VStack(alignment: .leading, spacing: Space.xxl) {
+                header(kanji)
+                hook(kanji)
+                if !kanji.words.isEmpty { words(kanji) }
+                if !kanji.sentence.isEmpty { sentence(kanji) }
+                if detailed { notes(kanji) }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    private func header(_ kanji: Kanji) -> some View {
+        VStack(spacing: Space.s) {
+            Text(kanji.glyph)
+                .font(.jpFixed(min(glyphSize, 190), face: store.data.settings.face))
+                .accessibilityLabel("Kanji \(kanji.glyph)")
+            Text(kanji.meaningList.capitalizedFirst)
+                .font(.title2.weight(.semibold))
+                .multilineTextAlignment(.center)
+            Text(readingLine(kanji))
+                .font(.jp(17, relativeTo: .body))
+                .foregroundStyle(Palette.ink2)
+                .multilineTextAlignment(.center)
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    private func hook(_ kanji: Kanji) -> some View {
+        let own = store.note(for: kanji.glyph)
+        return VStack(alignment: .leading, spacing: Space.s) {
+            if !kanji.parts.isEmpty {
+                MixedText(kanji.parts.map { "\($0.glyph) \($0.meaning)" }.joined(separator: " + "), style: .subheadline)
+                    .foregroundStyle(Palette.ink2)
+            }
+            if editingHook {
+                TextField("A picture or story that makes it stick for you", text: $hookDraft, axis: .vertical)
+                    .lineLimit(2...6)
+                    .focused($hookFocused)
+                HStack {
+                    Button("Cancel") { editingHook = false }
+                        .foregroundStyle(Palette.ink2)
+                    Spacer()
+                    Button("Save") {
+                        store.setNote(hookDraft, for: kanji.glyph)
+                        editingHook = false
+                    }
+                    .fontWeight(.semibold)
+                }
+                .font(.subheadline)
+                .frame(minHeight: Metrics.minTap)
+            } else {
+                MixedText(own.isEmpty ? kanji.mnemonic : own, style: .body)
+                    .lineSpacing(4)
+                    .fixedSize(horizontal: false, vertical: true)
+                Button(own.isEmpty ? "Write your own" : "Edit your own") {
+                    hookDraft = own
+                    editingHook = true
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { hookFocused = true }
+                }
+                .font(.footnote)
+                .buttonStyle(.borderless)
+            }
+        }
+    }
+
+    private func words(_ kanji: Kanji) -> some View {
+        VStack(alignment: .leading, spacing: Space.m) {
+            ForEach(kanji.words) { word in
+                HStack(alignment: .firstTextBaseline, spacing: Space.m) {
+                    jpText(word.word, highlight: kanji.glyph, size: 20, face: store.data.settings.face, fixed: false)
+                        .fixedSize()
+                    Text(word.readings.joined(separator: " / "))
+                        .font(.jp(14, relativeTo: .subheadline))
+                        .foregroundStyle(Palette.ink2)
+                        .fixedSize()
+                    Spacer(minLength: Space.s)
+                    Text(word.meaning)
+                        .font(.subheadline)
+                        .foregroundStyle(Palette.ink2)
+                        .multilineTextAlignment(.trailing)
+                }
+                .contentShape(Rectangle())
+                .onTapGesture { Speaker.shared.say(word.primaryReading) }
+                .accessibilityElement(children: .combine)
+                .accessibilityAddTraits(.isButton)
+                .accessibilityHint("Plays the pronunciation")
+            }
+        }
+    }
+
+    private func sentence(_ kanji: Kanji) -> some View {
+        VStack(alignment: .leading, spacing: Space.xs) {
+            RubyText(markup: kanji.sentence, size: 19, highlight: kanji.glyph)
+                .contentShape(Rectangle())
+                .onTapGesture { Speaker.shared.say(Ruby.spoken(kanji.sentence)) }
+                .accessibilityAddTraits(.isButton)
+                .accessibilityHint("Plays the sentence")
+            Text(kanji.translation)
+                .font(.subheadline)
+                .foregroundStyle(Palette.ink2)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    @ViewBuilder
+    private func notes(_ kanji: Kanji) -> some View {
+        let confusions = store.library.confusions(for: kanji.glyph)
+        let usage = kanji.usage ?? ""
+        let memory = store.memoryLine(for: kanji.glyph)
+        if !usage.isEmpty || !confusions.isEmpty || memory != nil {
+            VStack(alignment: .leading, spacing: Space.m) {
+                if !usage.isEmpty {
+                    MixedText(usage, style: .subheadline)
+                        .foregroundStyle(Palette.ink2)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                ForEach(confusions) { confusion in
+                    MixedText(confusion.tip, style: .subheadline)
+                        .foregroundStyle(Palette.ink2)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                if let memory = memory {
+                    Text(memory)
+                        .font(.footnote)
+                        .foregroundStyle(Palette.ink3)
+                }
+            }
+        }
+    }
+}
+
+/// One question. The prompt sits in the middle of the screen; the only
+/// controls sit at the bottom, within reach of a thumb.
+struct QuestionView: View {
+    @EnvironmentObject var store: Store
+    @ObservedObject var model: SessionModel
+    let item: StudyItem
+
+    @State private var revealed = false
+    @State private var typed = ""
+    @State private var verdict: Bool? = nil
+    @State private var hint: String? = nil
+    @State private var usedHint = false
+    @State private var inferredMiss: MissReason? = nil
+    @State private var shakes: CGFloat = 0
+    @State private var shownAt = Date()
+    @State private var answerMs = 0
+    @State private var clearToken = 0
+    @State private var hasInk = false
+    @FocusState var fieldFocused: Bool
+    @ScaledMetric(relativeTo: .largeTitle) private var heroSize: CGFloat = 128
+
+    private var settings: AppSettings { store.data.settings }
+    private var hero: CGFloat { min(heroSize, 200) }
+    private var kanji: Kanji? { store.library.byGlyph[item.glyph] }
+
+    private var word: Word? {
+        guard let k = kanji, !k.words.isEmpty else { return nil }
+        return k.words[item.wordIndex % k.words.count]
+    }
+
+    /// The memory hook appears only when it can help: new, relearning or
+    /// repeatedly forgotten cards, or right after a miss.
+    private var needsSupport: Bool {
+        if verdict == false { return true }
+        guard let card = store.card(item.glyph, item.facet) else { return true }
+        return card.phase != .review || card.leech
+    }
+
+    private var isLeech: Bool { store.card(item.glyph, item.facet)?.leech ?? false }
+
+    var body: some View {
+        if let k = kanji, item.facet != .reading || word != nil {
+            VStack(spacing: 0) {
+                GeometryReader { geo in
+                    ScrollView {
+                        VStack(spacing: Space.xl) {
+                            prompt(k)
+                            if revealed {
+                                answer(k)
+                                    .transition(.opacity)
+                            }
+                        }
+                        .padding(.horizontal, Space.l)
+                        .padding(.vertical, Space.xl)
+                        .frame(maxWidth: .infinity, minHeight: geo.size.height)
+                        .readableColumn()
+                        .contentShape(Rectangle())
+                        .onTapGesture {
+                            if item.facet == .meaning && !revealed { reveal() }
+                        }
+                    }
+                    .scrollDismissesKeyboard(.interactively)
+                }
+                controls(k)
+                    .padding(.horizontal, Space.l)
+                    .padding(.vertical, Space.m)
+                    .actionColumn()
+            }
+            .onAppear(perform: appear)
+        } else {
+            Color.clear.onAppear { model.skipCurrent() }
+        }
+    }
+
+    // MARK: Prompt and answer
+
+    @ViewBuilder
+    private func prompt(_ k: Kanji) -> some View {
+        switch item.facet {
+        case .meaning:
+            VStack(spacing: Space.s) {
+                Text(k.glyph)
+                    .font(.jpFixed(hero, face: settings.face))
+                    .accessibilityLabel("Kanji \(k.glyph)")
+                Caption(text: "Meaning")
+                    .opacity(revealed ? 0 : 1)
+            }
+        case .reading:
+            if let w = word {
+                VStack(spacing: Space.s) {
+                    jpText(w.word, highlight: k.glyph, size: min(hero * 0.6, 84), face: settings.face)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.4)
+                    Text(w.meaning)
+                        .font(.body)
+                        .foregroundStyle(Palette.ink2)
+                        .multilineTextAlignment(.center)
+                    Caption(text: "Reading")
+                        .opacity(verdict == nil ? 1 : 0)
+                }
+            }
+        case .writing:
+            VStack(spacing: Space.m) {
+                Text(k.meaningList.capitalizedFirst)
+                    .font(.title2.weight(.semibold))
+                    .multilineTextAlignment(.center)
+                if let w = k.words.first {
+                    MixedText("\(w.word.replacingOccurrences(of: k.glyph, with: "〇"))（\(w.primaryReading)）", style: .body)
+                        .foregroundStyle(Palette.ink2)
+                }
+                WritingPad(clearToken: clearToken, hasInk: $hasInk, guide: revealed ? k.glyph : nil,
+                           guideOpacity: 0.3, face: settings.face)
+                    .aspectRatio(1, contentMode: .fit)
+                    .frame(maxWidth: 320)
+                Caption(text: "Write it")
+                    .opacity(revealed ? 0 : 1)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func answer(_ k: Kanji) -> some View {
+        VStack(spacing: Space.s) {
+            switch item.facet {
+            case .meaning:
+                Text(k.meaningList.capitalizedFirst)
+                    .font(.title2.weight(.semibold))
+                Text(readingLine(k))
+                    .font(.jp(16, relativeTo: .callout))
+                    .foregroundStyle(Palette.ink2)
+            case .reading:
+                if let w = word {
+                    readingResult(w)
+                }
+            case .writing:
+                Text(readingLine(k))
+                    .font(.jp(16, relativeTo: .callout))
+                    .foregroundStyle(Palette.ink2)
+            }
+            if needsSupport {
+                MixedText(hookText(k), style: .callout)
+                    .foregroundStyle(Palette.ink2)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.top, Space.xs)
+            }
+            if isLeech {
+                ForEach(store.library.confusions(for: k.glyph)) { confusion in
+                    MixedText(confusion.tip, style: .footnote)
+                        .foregroundStyle(Palette.ink3)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+        }
+        .multilineTextAlignment(.center)
+        .frame(maxWidth: .infinity)
+    }
+
+    private func readingResult(_ w: Word) -> some View {
+        VStack(spacing: Space.xxs) {
+            Text(w.readings.joined(separator: " / "))
+                .font(.jp(30, relativeTo: .title))
+                .foregroundStyle(verdict == true ? Palette.matcha : Palette.ink)
+            if verdict == false && !typed.isEmpty {
+                Text(typed)
+                    .font(.jp(17, relativeTo: .body))
+                    .strikethrough()
+                    .foregroundStyle(Palette.shu)
+                    .accessibilityLabel("You typed \(typed)")
+            }
+        }
+        .contentShape(Rectangle())
+        .onTapGesture { Speaker.shared.say(w.primaryReading) }
+    }
+
+    private func hookText(_ k: Kanji) -> String {
+        let own = store.note(for: k.glyph)
+        return own.isEmpty ? k.mnemonic : own
+    }
+
+    // MARK: Controls
+
+    @ViewBuilder
+    private func controls(_ k: Kanji) -> some View {
+        switch item.facet {
+        case .meaning:
+            if revealed {
+                gradeButtons
+            } else {
+                ActionButton(title: "Show") { reveal() }
+                    .keyboardShortcut(.space, modifiers: [])
+            }
+        case .reading:
+            readingControls(k)
+        case .writing:
+            if revealed {
+                gradeButtons
+            } else {
+                HStack(spacing: Space.s) {
+                    ActionButton(title: "Clear", kind: .secondary) { clearToken += 1 }
+                        .disabled(!hasInk)
+                    ActionButton(title: "Show") { reveal() }
+                        .keyboardShortcut(.space, modifiers: [])
+                }
+            }
+        }
+    }
+
+    private var gradeButtons: some View {
+        HStack(spacing: Space.s) {
+            ActionButton(title: "Forgot", kind: .secondary) { grade(.again) }
+                .keyboardShortcut("1", modifiers: [])
+            ActionButton(title: "Remembered") { grade(.good) }
+                .keyboardShortcut(.defaultAction)
+        }
+    }
+
+    @ViewBuilder
+    private func readingControls(_ k: Kanji) -> some View {
+        if verdict == nil {
+            VStack(spacing: Space.s) {
+                if let hint = hint {
+                    MixedText(hint, style: .subheadline)
+                        .foregroundStyle(Palette.kohaku)
+                        .multilineTextAlignment(.center)
+                        .transition(.opacity)
+                }
+                answerField(k)
+            }
+        } else if verdict == true {
+            ActionButton(title: "Continue") { grade(.good) }
+                .keyboardShortcut(.defaultAction)
+        } else {
+            HStack(spacing: Space.s) {
+                ActionButton(title: "I mistyped", kind: .secondary) { grade(.good) }
+                ActionButton(title: "Continue") { grade(.again) }
+                    .keyboardShortcut(.defaultAction)
+            }
+        }
+    }
+
+    private func answerField(_ k: Kanji) -> some View {
+        HStack(spacing: Space.xs) {
+            TextField("かな or romaji", text: $typed)
+                .font(.jp(22, relativeTo: .title3))
+                .multilineTextAlignment(.center)
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+                .submitLabel(.go)
+                .focused($fieldFocused)
+                .onSubmit { check(k) }
+                .onChange(of: typed) { _, newValue in
+                    let converted = Romaji.toHiragana(newValue)
+                    if converted != newValue { typed = converted }
+                }
+                .padding(.leading, Space.xxl)
+            Button {
+                check(k)
+            } label: {
+                Image(systemName: "arrow.up.circle.fill")
+                    .font(.title)
+                    .frame(minWidth: Metrics.minTap, minHeight: Metrics.minTap)
+            }
+            .disabled(typed.trimmingCharacters(in: .whitespaces).isEmpty)
+            .accessibilityLabel("Check")
+        }
+        .padding(.horizontal, Space.xxs)
+        .frame(minHeight: Metrics.buttonHeight)
+        .background(Palette.surface, in: Capsule())
+        .modifier(Shake(animatableData: shakes))
+    }
+
+    // MARK: Actions
+
+    private func appear() {
+        shownAt = Date()
+        if item.facet == .reading {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { fieldFocused = true }
+        }
+    }
+
+    private func reveal() {
+        answerMs = Int(Date().timeIntervalSince(shownAt) * 1000)
+        withAnimation(.easeOut(duration: 0.2)) { revealed = true }
+        if settings.haptics { Haptics.tap() }
+        if settings.autoSpeak, let w = word { Speaker.shared.say(w.primaryReading) }
+    }
+
+    private func check(_ k: Kanji) {
+        guard verdict == nil, let w = word else { return }
+        let answer = Kana.normalize(Romaji.toHiragana(typed, final: true))
+        guard !answer.isEmpty else { return }
+        typed = answer
+        let targets = w.readings.map { Kana.normalize($0) }
+        if targets.contains(answer) {
+            finish(correct: true, word: w)
+            return
+        }
+        if !usedHint, let message = nearMissHint(answer, targets: targets, kanji: k) {
+            usedHint = true
+            withAnimation(.easeOut(duration: 0.2)) { hint = message }
+            typed = ""
+            withAnimation(.default) { shakes += 1 }
+            if settings.haptics { Haptics.tap() }
+            return
+        }
+        if inferredMiss == nil { inferredMiss = .reading }
+        finish(correct: false, word: w)
+    }
+
+    private func finish(correct: Bool, word w: Word) {
+        answerMs = Int(Date().timeIntervalSince(shownAt) * 1000)
+        fieldFocused = false
+        withAnimation(.easeOut(duration: 0.2)) {
+            verdict = correct
+            revealed = true
+        }
+        if settings.haptics {
+            if correct { Haptics.success() } else { Haptics.error() }
+        }
+        if settings.autoSpeak { Speaker.shared.say(w.primaryReading) }
+    }
+
+    /// One free retry for answers that are almost right, pointing at exactly
+    /// what to notice. The kind of slip is recorded silently, so patterns
+    /// can shape support without asking the learner anything.
+    private func nearMissHint(_ answer: String, targets: [String], kanji k: Kanji) -> String? {
+        for target in targets {
+            if answer.replacingOccurrences(of: "っ", with: "") == target.replacingOccurrences(of: "っ", with: "") {
+                inferredMiss = .slip
+                return "Almost — check for a small っ."
+            }
+            if Kana.collapseLongVowels(answer) == Kana.collapseLongVowels(target) {
+                inferredMiss = .slip
+                return "Almost — listen for a long vowel."
+            }
+            if Kana.stripVoicing(answer) == Kana.stripVoicing(target) {
+                inferredMiss = .slip
+                return "Almost — check the ゛ marks."
+            }
+        }
+        let readings = k.on + k.kun
+        let candidates = readings.map { Kana.normalize($0) } + readings.map { Kana.normalize(splitKun($0).stem) }
+        if candidates.contains(answer) {
+            inferredMiss = .reading
+            return "That's a reading of \(k.glyph), but not in this word."
+        }
+        return nil
+    }
+
+    private func grade(_ rating: Rating) {
+        let ms = answerMs > 0 ? answerMs : Int(Date().timeIntervalSince(shownAt) * 1000)
+        if settings.haptics && item.facet != .reading { Haptics.tap() }
+        var miss: MissReason? = nil
+        if rating == .again {
+            switch item.facet {
+            case .meaning: miss = .meaning
+            case .reading: miss = inferredMiss ?? .reading
+            case .writing: miss = nil
+            }
+        }
+        model.commit(rating, ms: ms, miss: miss, store: store)
+    }
+}
+
+struct SummaryView: View {
+    @EnvironmentObject var store: Store
+    @ObservedObject var model: SessionModel
+    let onDone: () -> Void
+    @State private var offerReminder = false
+
+    private var title: String {
+        switch model.mode {
+        case .lesson: return "Learned"
+        case .review: return "Reviewed"
+        case .practice: return "Practiced"
+        }
+    }
+
+    private var detail: String {
+        let accuracy = model.total == 0 ? 1 : Double(model.result.firstTry) / Double(model.total)
+        switch model.mode {
+        case .lesson:
+            return "They'll come back in a few hours, while still fresh."
+        case .review:
+            return "\(model.total) \(model.total == 1 ? "card" : "cards") · \(Format.percent(accuracy)) on the first try"
+        case .practice:
+            return "Practice doesn't change your schedule."
+        }
+    }
+
+    var body: some View {
+        VStack(spacing: Space.xl) {
+            Spacer()
+            Hanko(glyph: model.mode == .lesson ? "学" : "済")
+            VStack(spacing: Space.xs) {
+                Text(title)
+                    .font(.title2.weight(.semibold))
+                Text(detail)
+                    .font(.subheadline)
+                    .foregroundStyle(Palette.ink2)
+                    .multilineTextAlignment(.center)
+            }
+            .padding(.horizontal, Space.l)
+            Spacer()
+            VStack(spacing: Space.s) {
+                if offerReminder {
+                    ActionButton(title: "Remind me daily", kind: .secondary) {
+                        Reminders.enable(store) { _ in }
+                        offerReminder = false
+                    }
+                }
+                ActionButton(title: "Done") { finish() }
+                    .keyboardShortcut(.defaultAction)
+            }
+            .padding(.horizontal, Space.l)
+            .padding(.bottom, Space.l)
+            .actionColumn()
+        }
+        .frame(maxWidth: .infinity)
+        .onAppear {
+            // Ask about reminders once, in context, after a first real session.
+            offerReminder = model.mode != .practice && !store.data.settings.askedReminder && !store.data.settings.reminder
+        }
+    }
+
+    private func finish() {
+        if offerReminder { store.data.settings.askedReminder = true }
+        onDone()
+    }
+}
+
+// MARK: Library
 
 struct LibraryView: View {
     @EnvironmentObject var store: Store
-    @State private var level: JLPTLevel? = .n5
+    @EnvironmentObject var router: Router
+    @State private var shelf: Shelf = .kanji
     @State private var query = ""
-    private let columns = [GridItem(.adaptive(minimum: 76, maximum: 112), spacing: Space.s)]
 
-    private var trimmedQuery: String { query.trimmingCharacters(in: .whitespacesAndNewlines) }
+    enum Shelf: String, CaseIterable, Identifiable {
+        case kanji = "Kanji"
+        case texts = "Texts"
+        var id: String { rawValue }
+    }
 
-    /// Search accepts the kanji, an English meaning, or a reading typed in
-    /// kana or romaji — whatever the learner has in mind.
-    private var results: [Kanji] {
-        let q = trimmedQuery
-        guard !q.isEmpty else { return store.library.kanjiList(for: level) }
+    private var searchPrompt: String {
+        shelf == .kanji ? "Kanji, meaning or reading" : "Search texts"
+    }
+
+    private let columns = [GridItem(.adaptive(minimum: 60, maximum: 88), spacing: Space.xs)]
+
+    private var trimmed: String { query.trimmingCharacters(in: .whitespacesAndNewlines) }
+
+    /// Search accepts the kanji, an English meaning, or a reading in kana or
+    /// romaji.
+    private var kanjiResults: [Kanji] {
+        let q = trimmed
+        guard !q.isEmpty else { return store.library.kanji }
         let lower = q.lowercased()
         let kana = Kana.normalize(Romaji.toHiragana(lower, final: true))
         let hasKana = !kana.isEmpty && kana.allSatisfy { $0.isJapanese }
@@ -3963,287 +3241,130 @@ struct LibraryView: View {
         }
     }
 
-    var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: Space.m) {
-                    if trimmedQuery.isEmpty {
-                        LevelPicker(selection: $level)
-                        summary
-                            .padding(.horizontal, Space.l)
-                    }
-                    if results.isEmpty {
-                        emptyState
-                            .padding(.top, Space.xl)
-                    } else {
-                        LazyVGrid(columns: columns, spacing: Space.s) {
-                            ForEach(results) { kanji in
-                                NavigationLink(value: KanjiRoute(glyph: kanji.glyph)) {
-                                    KanjiTile(kanji: kanji)
-                                }
-                                .buttonStyle(.plain)
-                            }
-                        }
-                        .padding(.horizontal, Space.l)
-                    }
-                }
-                .padding(.vertical, Space.s)
-                .padding(.bottom, Space.xxl)
-                .readableColumn()
-            }
-            .background(Palette.paper.ignoresSafeArea())
-            .navigationTitle("Kanji")
-            .searchable(text: $query, prompt: "Kanji, meaning or reading")
-            .navigationDestination(for: KanjiRoute.self) { KanjiDetailView(glyph: $0.glyph) }
+    private var passageResults: [Passage] {
+        let q = trimmed.lowercased()
+        guard !q.isEmpty else { return store.library.passages }
+        return store.library.passages.filter {
+            Ruby.plain($0.title).contains(q) || $0.titleEN.lowercased().contains(q) || $0.topic.lowercased().contains(q)
         }
     }
-
-    private var summary: some View {
-        let list = store.library.kanjiList(for: level)
-        let counts = store.stageCounts(level: level)
-        let known = (counts[.known] ?? 0) + (counts[.mastered] ?? 0)
-        let started = list.count - (counts[.new] ?? 0)
-        return VStack(alignment: .leading, spacing: Space.s) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(level.map { "\($0.label) · \($0.name)" } ?? "All levels")
-                    .font(.headline)
-                    .foregroundStyle(Palette.ink)
-                Text("\(started) of \(list.count) started · \(known) known")
-                    .font(.subheadline)
-                    .foregroundStyle(Palette.ink2)
-            }
-            if !list.isEmpty {
-                StageBar(counts: counts, total: list.count)
-            }
-        }
-        .surfaceCard()
-    }
-
-    @ViewBuilder
-    private var emptyState: some View {
-        if trimmedQuery.isEmpty {
-            ContentUnavailableView {
-                Label("No \(level?.label ?? "") kanji yet", systemImage: "tray")
-            } description: {
-                Text("This level's content hasn't been added. Import a content pack from Settings → Content & data.")
-            }
-        } else {
-            ContentUnavailableView {
-                Label("No matches", systemImage: "magnifyingglass")
-            } description: {
-                Text("Try a meaning like “water”, a reading like “mizu” or the kanji itself.")
-            }
-        }
-    }
-}
-
-/// Memory stages as one stacked bar plus a legend (labels, never color alone).
-struct StageBar: View {
-    let counts: [Stage: Int]
-    let total: Int
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: Space.s) {
-            GeometryReader { geo in
-                let stages = Array(Stage.allCases.reversed()).filter { (counts[$0] ?? 0) > 0 }
-                let gaps = CGFloat(max(stages.count - 1, 0)) * 2
-                HStack(spacing: 2) {
-                    ForEach(stages) { stage in
-                        Rectangle()
-                            .fill(stage == .new ? Palette.sunken : stage.tint)
-                            .frame(width: max(2, (geo.size.width - gaps) * CGFloat(counts[stage] ?? 0) / CGFloat(max(total, 1))))
-                    }
-                }
-                .clipShape(Capsule())
-            }
-            .frame(height: 8)
-
-            FlowLayout(spacing: Space.m, lineSpacing: Space.xs) {
-                ForEach(Stage.allCases) { stage in
-                    HStack(spacing: Space.xxs) {
-                        Circle()
-                            .fill(stage == .new ? Palette.ink3 : stage.tint)
-                            .frame(width: 8, height: 8)
-                        Text("\(stage.title) \(counts[stage] ?? 0)")
-                            .font(.caption.monospacedDigit())
-                            .foregroundStyle(Palette.ink2)
-                    }
-                }
-            }
-        }
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(Stage.allCases.map { "\($0.title) \(counts[$0] ?? 0)" }.joined(separator: ", "))
-    }
-}
-
-struct KanjiDetailView: View {
-    @EnvironmentObject var store: Store
-    let glyph: String
 
     var body: some View {
         ScrollView {
-            KanjiDetailContent(glyph: glyph)
-        }
-        .background(Palette.paper.ignoresSafeArea())
-        .navigationTitle(glyph)
-        .navigationBarTitleDisplayMode(.inline)
-    }
-}
+            VStack(alignment: .leading, spacing: Space.xl) {
+                Picker("Library", selection: $shelf) {
+                    ForEach(Shelf.allCases) { item in
+                        Text(item.rawValue).tag(item)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                .frame(maxWidth: Metrics.actionWidth)
+                .frame(maxWidth: .infinity)
 
-struct KanjiDetailContent: View {
-    @EnvironmentObject var store: Store
-    let glyph: String
-    @State private var confirmReset = false
-    @State private var practice: SessionLaunch? = nil
-
-    var body: some View {
-        if let kanji = store.library.byGlyph[glyph] {
-            VStack(alignment: .leading, spacing: Space.l) {
-                KanjiHero(kanji: kanji)
-                actions(kanji)
-                memoryCard(kanji)
-                KanjiSections(kanji: kanji)
+                if shelf == .kanji {
+                    kanjiSection
+                } else {
+                    textsSection
+                }
             }
             .padding(.horizontal, Space.l)
-            .padding(.vertical, Space.m)
-            .padding(.bottom, Space.xl)
-            .readableColumn()
-            .fullScreenCover(item: $practice) { launch in
-                SessionContainer(launch: launch).environmentObject(store)
-            }
-            .confirmationDialog("Reset progress for \(glyph)?", isPresented: $confirmReset, titleVisibility: .visible) {
-                Button("Reset progress", role: .destructive) { store.resetProgress(for: glyph) }
-                Button("Cancel", role: .cancel) {}
-            } message: {
-                Text("Its review history is cleared and it goes back into your lessons.")
-            }
-        } else {
-            ContentUnavailableView("Kanji not found", systemImage: "questionmark.square.dashed",
-                                   description: Text("It may have been removed along with a content pack."))
-                .padding(.top, Space.xxxl)
+            .padding(.bottom, Space.xxl)
+            .frame(maxWidth: Metrics.gridWidth)
+            .frame(maxWidth: .infinity)
         }
+        .navigationTitle("Library")
+        .searchable(text: $query, prompt: Text(searchPrompt))
     }
 
     @ViewBuilder
-    private func actions(_ kanji: Kanji) -> some View {
-        if store.isStarted(kanji.glyph) {
-            HStack(spacing: Space.s) {
-                Button {
-                    practice = SessionLaunch(mode: .practice, items: store.practiceItems(for: [kanji.glyph]))
-                } label: {
-                    Label("Practice", systemImage: "arrow.triangle.2.circlepath")
-                }
-                .buttonStyle(SecondaryButtonStyle())
-                Button(role: .destructive) {
-                    confirmReset = true
-                } label: {
-                    Label("Reset", systemImage: "arrow.counterclockwise")
-                }
-                .buttonStyle(SecondaryButtonStyle(tint: Palette.shu))
-            }
-        } else if store.data.priority.contains(kanji.glyph) {
-            Label("Queued for your next lesson", systemImage: "checkmark.circle.fill")
-                .font(.subheadline.weight(.semibold))
-                .foregroundStyle(Palette.matcha)
-                .frame(maxWidth: .infinity, minHeight: Metrics.buttonHeight)
+    private var kanjiSection: some View {
+        let results = kanjiResults
+        if results.isEmpty {
+            ContentUnavailableView.search(text: trimmed)
         } else {
-            HStack(spacing: Space.s) {
-                Button {
-                    store.prioritize(kanji.glyph)
-                } label: {
-                    Label("Learn next", systemImage: "plus.circle")
+            ForEach(store.library.levelsWithContent) { level in
+                let inLevel = results.filter { $0.level == level }
+                if !inLevel.isEmpty {
+                    levelBlock(level, kanji: inLevel)
                 }
-                .buttonStyle(PrimaryButtonStyle())
-                Button {
-                    store.markKnown([kanji.glyph])
-                } label: {
-                    Label("I know it", systemImage: "checkmark")
-                }
-                .buttonStyle(SecondaryButtonStyle())
             }
         }
     }
 
-    @ViewBuilder
-    private func memoryCard(_ kanji: Kanji) -> some View {
-        let cards = Facet.allCases.compactMap { store.card(kanji.glyph, $0) }
-        if !cards.isEmpty {
-            VStack(alignment: .leading, spacing: Space.xs) {
-                Eyebrow(text: "Your memory")
-                ForEach(cards) { card in
-                    HStack(spacing: Space.s) {
-                        Image(systemName: card.facet.symbol)
-                            .foregroundStyle(Palette.ink2)
-                            .frame(width: 24)
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(card.facet.title)
-                                .font(.subheadline.weight(.semibold))
-                                .foregroundStyle(Palette.ink)
-                            Text(memoryLine(card))
-                                .font(.caption)
-                                .foregroundStyle(Palette.ink2)
-                                .fixedSize(horizontal: false, vertical: true)
-                        }
-                        Spacer(minLength: Space.xs)
-                        if card.leech {
-                            Chip(text: "Tricky", tint: Palette.shu)
-                        }
+    private func levelBlock(_ level: JLPTLevel, kanji: [Kanji]) -> some View {
+        let all = store.library.kanjiList(for: level)
+        let known = all.filter { store.stage(of: $0.glyph) >= .known }.count
+        return VStack(alignment: .leading, spacing: Space.s) {
+            HStack(alignment: .firstTextBaseline) {
+                Text(level.label)
+                    .font(.headline)
+                Spacer()
+                Text("\(known) of \(all.count) known")
+                    .font(.footnote.monospacedDigit())
+                    .foregroundStyle(Palette.ink2)
+            }
+            LazyVGrid(columns: columns, spacing: Space.xs) {
+                ForEach(kanji) { k in
+                    Button {
+                        router.path.append(.kanji(k.glyph))
+                    } label: {
+                        GlyphCell(kanji: k)
                     }
-                    .frame(minHeight: Metrics.minTap)
+                    .buttonStyle(.plain)
                 }
             }
-            .surfaceCard()
         }
     }
 
-    private func memoryLine(_ card: Card) -> String {
-        let now = Date()
-        let due = card.due <= now ? "due now" : "next \(card.due.formatted(.relative(presentation: .named)))"
-        guard card.reps > 0, let last = card.lastReview else { return "Not reviewed yet · \(due)" }
-        let recall = store.fsrs.retrievability(elapsedDays: now.timeIntervalSince(last) / 86_400, stability: card.stability)
-        let reviews = card.reps == 1 ? "1 review" : "\(card.reps) reviews"
-        return "\(Format.percent(recall)) chance of recall now · \(due) · \(reviews)"
+    @ViewBuilder
+    private var textsSection: some View {
+        let results = passageResults
+        if results.isEmpty {
+            ContentUnavailableView.search(text: trimmed)
+        } else {
+            VStack(spacing: 0) {
+                ForEach(results) { passage in
+                    Button {
+                        router.path.append(.passage(passage.id))
+                    } label: {
+                        PassageRow(passage: passage)
+                    }
+                    .buttonStyle(.plain)
+                    Divider()
+                }
+            }
+        }
     }
 }
 
-// MARK: Read
-
-/// Graded, real-world texts. Each one teaches something about Japan
-/// (content and language together) and comes with notes on register,
-/// discourse and conversation — how the words behave between people.
-struct ReadView: View {
+/// A kanji in the library. Its ink deepens as it settles in memory — faint
+/// when new, full black once known — so progress is visible without a
+/// single chart.
+struct GlyphCell: View {
     @EnvironmentObject var store: Store
+    let kanji: Kanji
+
+    private func inkOpacity(_ stage: Stage) -> Double {
+        switch stage {
+        case .new: return 0.22
+        case .learning: return 0.45
+        case .familiar: return 0.7
+        case .known, .mastered: return 1
+        }
+    }
 
     var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: Space.m) {
-                    Text(store.data.settings.furigana == .adaptive
-                         ? "Short, real-world texts. Furigana appears only above kanji you haven't learned yet, and fades as you learn them."
-                         : "Short, real-world texts. Tap any word to look it up.")
-                        .font(.callout)
-                        .foregroundStyle(Palette.ink2)
-                        .fixedSize(horizontal: false, vertical: true)
-                    if store.library.passages.isEmpty {
-                        ContentUnavailableView("No texts yet", systemImage: "book",
-                                               description: Text("Import a content pack with passages from Settings."))
-                    }
-                    ForEach(store.library.passages) { passage in
-                        NavigationLink(value: passage) {
-                            PassageRow(passage: passage)
-                        }
-                        .buttonStyle(.plain)
-                    }
-                }
-                .padding(.horizontal, Space.l)
-                .padding(.bottom, Space.xxl)
-                .readableColumn()
-            }
-            .background(Palette.paper.ignoresSafeArea())
-            .navigationTitle("Read")
-            .navigationDestination(for: Passage.self) { PassageView(passage: $0) }
-            .navigationDestination(for: KanjiRoute.self) { KanjiDetailView(glyph: $0.glyph) }
-        }
+        let stage = store.stage(of: kanji.glyph)
+        Text(kanji.glyph)
+            .font(.jp(30, face: store.data.settings.face, relativeTo: .title))
+            .foregroundStyle(Palette.ink.opacity(inkOpacity(stage)))
+            .frame(maxWidth: .infinity, minHeight: 60)
+            .contentShape(Rectangle())
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("\(kanji.glyph), \(kanji.primaryMeaning)")
+            .accessibilityValue(stage.title)
+            .accessibilityAddTraits(.isButton)
     }
 }
 
@@ -4252,165 +3373,189 @@ struct PassageRow: View {
     let passage: Passage
 
     var body: some View {
-        let coverage = store.coverage(of: passage)
-        let isRead = store.data.readPassages.contains(passage.id)
-        VStack(alignment: .leading, spacing: Space.s) {
-            HStack(spacing: Space.xs) {
-                Chip(text: passage.genre, tint: Palette.accent)
-                Chip(text: passage.level.label)
-                Spacer()
-                if isRead {
-                    Image(systemName: "checkmark.circle.fill")
-                        .foregroundStyle(Palette.matcha)
-                        .accessibilityLabel("Read")
-                }
-            }
-            Text(Ruby.plain(passage.title))
-                .font(.jp(22, bold: true, relativeTo: .title2))
-                .foregroundStyle(Palette.ink)
-            Text("\(passage.titleEN) · \(passage.topic)")
-                .font(.subheadline)
-                .foregroundStyle(Palette.ink2)
-            HStack(spacing: Space.s) {
-                Meter(value: coverage, tint: Palette.asagi)
-                Text("\(Format.percent(coverage)) familiar")
-                    .font(.caption.monospacedDigit())
+        HStack(alignment: .center, spacing: Space.m) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(Ruby.plain(passage.title))
+                    .font(.jp(20, relativeTo: .title3))
+                    .foregroundStyle(Palette.ink)
+                Text(passage.titleEN)
+                    .font(.subheadline)
                     .foregroundStyle(Palette.ink2)
-                    .fixedSize()
             }
+            Spacer()
+            Text("\(Format.percent(store.coverage(of: passage))) known")
+                .font(.footnote.monospacedDigit())
+                .foregroundStyle(Palette.ink2)
+            Image(systemName: "chevron.right")
+                .font(.footnote.weight(.semibold))
+                .foregroundStyle(Palette.ink3)
         }
-        .surfaceCard()
+        .padding(.vertical, Space.m)
         .contentShape(Rectangle())
+        .accessibilityElement(children: .combine)
     }
 }
 
-struct PassageView: View {
+struct KanjiView: View {
     @EnvironmentObject var store: Store
-    let passage: Passage
-    @State private var shown: Set<Int> = []
-    @State private var lookup: RubyUnit? = nil
-    @State private var choice: Int? = nil
-
-    private var firstSpeaker: String? { passage.lines.first(where: { $0.speaker != nil })?.speaker }
+    @EnvironmentObject var router: Router
+    let glyph: String
+    @State private var confirmReset = false
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: Space.l) {
-                header
-                linesCard
-                if let notes = passage.notes, !notes.isEmpty { notesCard(notes) }
-                if let question = passage.question { questionCard(question) }
-            }
-            .padding(.horizontal, Space.l)
-            .padding(.vertical, Space.m)
-            .padding(.bottom, Space.xxl)
-            .readableColumn()
+            KanjiArticle(glyph: glyph, detailed: true)
+                .padding(.horizontal, Space.l)
+                .padding(.vertical, Space.l)
+                .readableColumn()
         }
-        .background(Palette.paper.ignoresSafeArea())
-        .navigationTitle(passage.titleEN)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
-                SpeakButton(text: passage.lines.map { Ruby.spoken($0.jp) }.joined(separator: "\n"),
-                            label: "Read the whole text aloud")
+                Menu {
+                    menuItems
+                } label: {
+                    Label("Actions", systemImage: "ellipsis.circle")
+                }
             }
         }
-        .sheet(item: $lookup) { unit in
-            WordSheet(unit: unit)
-                .environmentObject(store)
-                .presentationDetents([.medium, .large])
-        }
-        .onDisappear {
-            if passage.question == nil { store.markRead(passage.id) }
+        .confirmationDialog("Reset \(glyph)?", isPresented: $confirmReset, titleVisibility: .visible) {
+            Button("Reset progress", role: .destructive) { store.resetProgress(for: glyph) }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Its reviews are cleared and it returns to your lessons.")
         }
     }
 
-    private var header: some View {
-        VStack(alignment: .leading, spacing: Space.s) {
-            FlowLayout(spacing: Space.xs, lineSpacing: Space.xs) {
-                Chip(text: passage.genre, tint: Palette.accent)
-                Chip(text: passage.topic)
-                Chip(text: passage.level.label)
+    @ViewBuilder
+    private var menuItems: some View {
+        if store.isStarted(glyph) {
+            Button {
+                if let launch = store.practiceLaunch([glyph]) { router.path.append(.study(launch)) }
+            } label: {
+                Label("Practice", systemImage: "arrow.triangle.2.circlepath")
             }
+            Button(role: .destructive) {
+                confirmReset = true
+            } label: {
+                Label("Reset progress", systemImage: "arrow.counterclockwise")
+            }
+        } else {
+            Button {
+                store.prioritize(glyph)
+            } label: {
+                Label(store.data.priority.first == glyph ? "Next in line" : "Learn next", systemImage: "plus.circle")
+            }
+            Button {
+                store.markKnown([glyph])
+            } label: {
+                Label("I already know it", systemImage: "checkmark")
+            }
+        }
+    }
+}
+
+// MARK: Reading
+
+struct PassageView: View {
+    @EnvironmentObject var store: Store
+    let passageID: String
+    @State private var showTranslation = false
+    @State private var lookup: RubyUnit? = nil
+    @State private var choice: Int? = nil
+
+    private var passage: Passage? { store.library.passages.first { $0.id == passageID } }
+
+    var body: some View {
+        if let passage = passage {
+            ScrollView {
+                VStack(alignment: .leading, spacing: Space.xxl) {
+                    header(passage)
+                    lines(passage)
+                    if let notes = passage.notes, !notes.isEmpty { notesView(notes) }
+                    if let question = passage.question { questionView(question, passage: passage) }
+                }
+                .padding(.horizontal, Space.l)
+                .padding(.vertical, Space.l)
+                .readableColumn()
+            }
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItemGroup(placement: .topBarTrailing) {
+                    Button {
+                        Speaker.shared.say(passage.lines.map { Ruby.spoken($0.jp) }.joined(separator: "\n"))
+                    } label: {
+                        Label("Listen", systemImage: "speaker.wave.2")
+                    }
+                    Button {
+                        withAnimation(.easeOut(duration: 0.2)) { showTranslation.toggle() }
+                    } label: {
+                        Label(showTranslation ? "Hide translation" : "Show translation", systemImage: "translate")
+                    }
+                }
+            }
+            .sheet(item: $lookup) { unit in
+                WordSheet(unit: unit)
+                    .environmentObject(store)
+                    .presentationDetents([.medium])
+            }
+            .onDisappear {
+                if passage.question == nil { store.markRead(passage.id) }
+            }
+        } else {
+            ContentUnavailableView("Text not found", systemImage: "doc.text")
+        }
+    }
+
+    private func header(_ passage: Passage) -> some View {
+        VStack(alignment: .leading, spacing: Space.xs) {
             RubyText(markup: passage.title, size: 28)
-            Text("Tap any word to look it up. Try each line before you reveal its translation.")
-                .font(.footnote)
+            Text("\(passage.titleEN) · \(passage.genre)")
+                .font(.subheadline)
                 .foregroundStyle(Palette.ink2)
-                .fixedSize(horizontal: false, vertical: true)
         }
     }
 
-    private var linesCard: some View {
+    private func lines(_ passage: Passage) -> some View {
         VStack(alignment: .leading, spacing: Space.l) {
-            ForEach(Array(passage.lines.enumerated()), id: \.offset) { index, line in
-                HStack(alignment: .top, spacing: Space.s) {
+            ForEach(Array(passage.lines.enumerated()), id: \.offset) { _, line in
+                VStack(alignment: .leading, spacing: Space.xxs) {
                     if let speaker = line.speaker {
-                        Capsule()
-                            .fill(speaker == firstSpeaker ? Palette.accent : Palette.asagi)
-                            .frame(width: 3)
-                    }
-                    VStack(alignment: .leading, spacing: Space.xs) {
-                        if let speaker = line.speaker {
-                            Text(Ruby.plain(speaker))
-                                .font(.jp(13, bold: true, relativeTo: .caption))
-                                .foregroundStyle(speaker == firstSpeaker ? Palette.accent : Palette.asagi)
-                        }
-                        HStack(alignment: .top, spacing: Space.xxs) {
-                            RubyText(markup: line.jp, size: 20, onTap: { lookup = $0 })
-                            SpeakButton(text: Ruby.spoken(line.jp), label: "Play line \(index + 1)")
-                        }
-                        if shown.contains(index) {
-                            Text(line.en)
-                                .font(.callout)
-                                .foregroundStyle(Palette.ink2)
-                                .fixedSize(horizontal: false, vertical: true)
-                                .transition(.opacity)
-                        } else {
-                            Button {
-                                withAnimation(.easeOut(duration: 0.2)) { _ = shown.insert(index) }
-                            } label: {
-                                Label("Translation", systemImage: "eye")
-                            }
-                            .font(.footnote.weight(.semibold))
-                            .frame(minHeight: Metrics.minTap)
-                            .accessibilityLabel("Show translation of line \(index + 1)")
-                        }
-                    }
-                }
-                .fixedSize(horizontal: false, vertical: true)
-            }
-        }
-        .surfaceCard()
-    }
-
-    private func notesCard(_ notes: [PassageNote]) -> some View {
-        VStack(alignment: .leading, spacing: Space.m) {
-            Eyebrow(text: "Beyond the words")
-            ForEach(notes, id: \.self) { note in
-                HStack(alignment: .top, spacing: Space.s) {
-                    Image(systemName: note.symbol)
-                        .foregroundStyle(Palette.accent)
-                        .frame(width: 24)
-                    VStack(alignment: .leading, spacing: Space.xxs) {
-                        Text(note.lens)
-                            .font(.subheadline.weight(.semibold))
-                            .foregroundStyle(Palette.ink)
-                        MixedText(note.text, style: .callout)
+                        Text(Ruby.plain(speaker))
+                            .font(.jp(13, bold: true, relativeTo: .caption))
                             .foregroundStyle(Palette.ink2)
-                            .lineSpacing(3)
+                    }
+                    RubyText(markup: line.jp, size: 20, onTap: { lookup = $0 })
+                    if showTranslation {
+                        Text(line.en)
+                            .font(.subheadline)
+                            .foregroundStyle(Palette.ink2)
                             .fixedSize(horizontal: false, vertical: true)
+                            .transition(.opacity)
                     }
                 }
             }
         }
-        .surfaceCard()
     }
 
-    private func questionCard(_ question: Question) -> some View {
+    private func notesView(_ notes: [PassageNote]) -> some View {
         VStack(alignment: .leading, spacing: Space.m) {
-            Eyebrow(text: "Check your understanding")
+            ForEach(notes, id: \.self) { note in
+                VStack(alignment: .leading, spacing: Space.xxs) {
+                    Text(note.lens)
+                        .font(.footnote.weight(.semibold))
+                        .foregroundStyle(Palette.ink2)
+                    MixedText(note.text, style: .subheadline)
+                        .foregroundStyle(Palette.ink2)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+        }
+    }
+
+    private func questionView(_ question: Question, passage: Passage) -> some View {
+        VStack(alignment: .leading, spacing: Space.s) {
             MixedText(question.prompt, style: .headline, bold: true)
-                .foregroundStyle(Palette.ink)
                 .fixedSize(horizontal: false, vertical: true)
             ForEach(Array(question.options.enumerated()), id: \.offset) { index, option in
                 Button {
@@ -4427,299 +3572,103 @@ struct PassageView: View {
                             .multilineTextAlignment(.leading)
                         Spacer(minLength: Space.xs)
                         if choice != nil && index == question.answer {
-                            Image(systemName: "checkmark.circle.fill").foregroundStyle(Palette.matcha)
+                            Image(systemName: "checkmark").foregroundStyle(Palette.matcha)
                         } else if choice == index {
-                            Image(systemName: "xmark.circle.fill").foregroundStyle(Palette.shu)
+                            Image(systemName: "xmark").foregroundStyle(Palette.shu)
                         }
                     }
-                    .padding(.horizontal, Space.m)
                     .padding(.vertical, Space.s)
-                    .frame(maxWidth: .infinity, minHeight: Metrics.buttonHeight, alignment: .leading)
-                    .background(optionFill(index, question),
-                                in: RoundedRectangle(cornerRadius: Radius.control, style: .continuous))
-                    .contentShape(RoundedRectangle(cornerRadius: Radius.control, style: .continuous))
+                    .frame(maxWidth: .infinity, minHeight: Metrics.minTap, alignment: .leading)
+                    .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .accessibilityAddTraits(choice == index ? .isSelected : [])
             }
-            if let picked = choice {
-                MixedText((picked == question.answer ? "Right. " : "Not quite. ") + (question.explanation ?? ""), style: .callout)
+            if let picked = choice, let explanation = question.explanation {
+                MixedText((picked == question.answer ? "Right. " : "Not quite. ") + explanation, style: .subheadline)
                     .foregroundStyle(Palette.ink2)
                     .fixedSize(horizontal: false, vertical: true)
                     .transition(.opacity)
             }
         }
-        .surfaceCard()
-    }
-
-    private func optionFill(_ index: Int, _ question: Question) -> Color {
-        guard let picked = choice else { return Palette.sunken }
-        if index == question.answer { return Palette.matcha.opacity(0.14) }
-        if index == picked { return Palette.shu.opacity(0.12) }
-        return Palette.sunken
     }
 }
 
-// MARK: Progress
-
-struct StatTile: View {
-    let value: String
-    let label: String
-
-    var body: some View {
-        VStack(spacing: Space.xxs) {
-            Text(value)
-                .font(.statSmall)
-                .foregroundStyle(Palette.ink)
-                .lineLimit(1)
-                .minimumScaleFactor(0.6)
-            Text(label)
-                .font(.caption)
-                .foregroundStyle(Palette.ink2)
-                .lineLimit(2)
-                .multilineTextAlignment(.center)
-        }
-        .frame(maxWidth: .infinity)
-        .surfaceCard(padding: Space.m)
-        .accessibilityElement(children: .combine)
-    }
-}
-
-struct ProgressScreen: View {
+/// Lookup for a tapped word: its reading, the kanji in it, and a way to
+/// queue an unlearned kanji next — reading feeds straight back into study.
+struct WordSheet: View {
     @EnvironmentObject var store: Store
+    let unit: RubyUnit
+
+    private var glyphs: [String] {
+        var seen: [String] = []
+        for ch in unit.base where ch.isKanji {
+            let g = String(ch)
+            if !seen.contains(g) { seen.append(g) }
+        }
+        return seen
+    }
 
     var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: Space.l) {
-                    tiles
-                    stagesCard
-                    levelsCard
-                    forecastCard
-                    activityCard
-                    missesCard
-                }
-                .padding(.horizontal, Space.l)
-                .padding(.bottom, Space.xxl)
-                .readableColumn()
-            }
-            .background(Palette.paper.ignoresSafeArea())
-            .navigationTitle("Progress")
-            .navigationDestination(for: KanjiRoute.self) { KanjiDetailView(glyph: $0.glyph) }
-        }
-    }
-
-    private var tiles: some View {
-        let counts = store.stageCounts()
-        let known = (counts[.known] ?? 0) + (counts[.mastered] ?? 0)
-        let started = store.library.kanji.count - (counts[.new] ?? 0)
-        return HStack(spacing: Space.s) {
-            StatTile(value: "\(started)", label: "Started")
-            StatTile(value: "\(known)", label: "Known")
-            StatTile(value: store.accuracy(days: 30).map { Format.percent($0) } ?? "—", label: "Accuracy, 30 days")
-        }
-    }
-
-    private var stagesCard: some View {
-        VStack(alignment: .leading, spacing: Space.m) {
-            Eyebrow(text: "Memory stages")
-            StageBar(counts: store.stageCounts(), total: store.library.kanji.count)
-            Text("A kanji's stage is set by its weakest skill: Familiar holds for days, Known for weeks, Mastered for months.")
-                .font(.caption)
-                .foregroundStyle(Palette.ink2)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-        .surfaceCard()
-    }
-
-    private var levelsCard: some View {
-        VStack(alignment: .leading, spacing: Space.m) {
-            Eyebrow(text: "JLPT path")
-            ForEach(JLPTLevel.allCases) { level in
-                let list = store.library.kanjiList(for: level)
-                let counts = store.stageCounts(level: level)
-                let known = (counts[.known] ?? 0) + (counts[.mastered] ?? 0)
-                let started = list.count - (counts[.new] ?? 0)
-                VStack(alignment: .leading, spacing: Space.xs) {
-                    HStack(alignment: .firstTextBaseline) {
-                        Text(level.label)
-                            .font(.headline)
-                            .foregroundStyle(list.isEmpty ? Palette.ink3 : Palette.ink)
-                            .frame(width: 64, alignment: .leading)
-                        Text(level.name)
-                            .font(.subheadline)
-                            .foregroundStyle(Palette.ink2)
-                        Spacer()
-                        Text(list.isEmpty ? "Coming soon" : "\(known)/\(list.count)")
-                            .font(.subheadline.monospacedDigit())
+        ScrollView {
+            VStack(alignment: .leading, spacing: Space.l) {
+                VStack(alignment: .leading, spacing: Space.xxs) {
+                    Text(unit.base)
+                        .font(.jp(34, bold: true, face: store.data.settings.face, relativeTo: .largeTitle))
+                    if let reading = unit.reading {
+                        Text(reading)
+                            .font(.jp(18, relativeTo: .title3))
                             .foregroundStyle(Palette.ink2)
                     }
-                    if !list.isEmpty {
-                        ZStack(alignment: .leading) {
-                            Meter(value: Double(started) / Double(list.count), tint: Palette.accent.opacity(0.3))
-                            Meter(value: Double(known) / Double(list.count), tint: Palette.accent, showsTrack: false)
-                        }
-                    }
                 }
-                .accessibilityElement(children: .combine)
+                .contentShape(Rectangle())
+                .onTapGesture { Speaker.shared.say(unit.reading ?? unit.base) }
+                ForEach(glyphs, id: \.self) { glyph in
+                    row(glyph)
+                }
             }
-            Text("Darker bar: known. Lighter bar: started.")
-                .font(.caption)
-                .foregroundStyle(Palette.ink2)
+            .padding(Space.l)
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .surfaceCard()
     }
 
-    private var forecastCard: some View {
-        let days = store.forecast()
-        let peak = days.map(\.count).max() ?? 0
-        return VStack(alignment: .leading, spacing: Space.m) {
-            Eyebrow(text: "Next 7 days")
-            if peak == 0 {
-                Text("Nothing scheduled yet. Reviews appear here as you learn.")
-                    .font(.callout)
-                    .foregroundStyle(Palette.ink2)
-            } else {
-                Chart(days) { day in
-                    BarMark(x: .value("Day", day.label), y: .value("Reviews", day.count), width: .ratio(0.6))
-                        .foregroundStyle(day.offset == 0 ? Palette.accent : Palette.accent.opacity(0.4))
-                        .cornerRadius(4)
-                        .annotation(position: .top, spacing: 4) {
-                            if day.count > 0 {
-                                Text("\(day.count)")
-                                    .font(.caption2.monospacedDigit())
-                                    .foregroundStyle(Palette.ink2)
-                            }
-                        }
+    @ViewBuilder
+    private func row(_ glyph: String) -> some View {
+        if let kanji = store.library.byGlyph[glyph] {
+            let started = store.isStarted(glyph)
+            HStack(spacing: Space.m) {
+                Text(glyph)
+                    .font(.jp(28, face: store.data.settings.face, relativeTo: .title))
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(kanji.meaningList.capitalizedFirst)
+                        .font(.body)
+                    Text(store.stage(of: glyph).title)
+                        .font(.caption)
+                        .foregroundStyle(Palette.ink2)
                 }
-                .chartYAxis(.hidden)
-                .frame(height: 160)
-                .accessibilityElement(children: .ignore)
-                .accessibilityLabel(days.map { "\($0.label): \($0.count)" }.joined(separator: ", "))
-            }
-        }
-        .surfaceCard()
-    }
-
-    private var activityCard: some View {
-        let columns = store.heatmap(weeks: 16)
-        let cells = columns.flatMap { $0 }
-        let peak = max(cells.map(\.count).max() ?? 0, 1)
-        let activeDays = cells.filter { $0.count > 0 }.count
-        return VStack(alignment: .leading, spacing: Space.m) {
-            HStack {
-                Eyebrow(text: "Last 16 weeks")
                 Spacer()
-                Text(activeDays == 1 ? "1 active day" : "\(activeDays) active days")
-                    .font(.caption.monospacedDigit())
+                if !started {
+                    Button(store.data.priority.contains(glyph) ? "Queued" : "Learn next") {
+                        store.prioritize(glyph)
+                    }
+                    .buttonStyle(.bordered)
+                    .disabled(store.data.priority.contains(glyph))
+                }
+            }
+        } else {
+            HStack(spacing: Space.m) {
+                Text(glyph)
+                    .font(.jp(28, relativeTo: .title))
+                Text("Not in your library yet")
+                    .font(.subheadline)
                     .foregroundStyle(Palette.ink2)
             }
-            HStack(alignment: .top, spacing: 3) {
-                ForEach(Array(columns.enumerated()), id: \.offset) { _, column in
-                    VStack(spacing: 3) {
-                        ForEach(column) { cell in
-                            RoundedRectangle(cornerRadius: 3, style: .continuous)
-                                .fill(heatColor(cell, peak: peak))
-                                .aspectRatio(1, contentMode: .fit)
-                        }
-                    }
-                }
-            }
-            .accessibilityElement(children: .ignore)
-            .accessibilityLabel("Studied on \(activeDays) of the last 16 weeks' days")
-            HStack(spacing: Space.xxs) {
-                Text("Less")
-                ForEach([0.0, 0.33, 0.66, 1.0], id: \.self) { level in
-                    RoundedRectangle(cornerRadius: 2, style: .continuous)
-                        .fill(level == 0 ? Palette.sunken : Palette.accent.opacity(0.25 + 0.75 * level))
-                        .frame(width: 10, height: 10)
-                }
-                Text("More")
-                Spacer()
-                Text("No streaks to break — just your rhythm.")
-            }
-            .font(.caption2)
-            .foregroundStyle(Palette.ink2)
-            .accessibilityHidden(true)
         }
-        .surfaceCard()
-    }
-
-    private func heatColor(_ cell: HeatCell, peak: Int) -> Color {
-        if cell.isFuture { return Color.clear }
-        if cell.count == 0 { return Palette.sunken }
-        return Palette.accent.opacity(0.25 + 0.75 * Double(cell.count) / Double(peak))
-    }
-
-    private var missesCard: some View {
-        let tally = store.missTally
-        let total = tally.reduce(0) { $0 + $1.count }
-        return VStack(alignment: .leading, spacing: Space.m) {
-            Eyebrow(text: "What trips you up")
-            if tally.isEmpty {
-                Text("When you miss a reading, tag why. Patterns show up here with a specific tip.")
-                    .font(.callout)
-                    .foregroundStyle(Palette.ink2)
-                    .fixedSize(horizontal: false, vertical: true)
-            } else {
-                ForEach(tally, id: \.reason) { entry in
-                    VStack(alignment: .leading, spacing: Space.xxs) {
-                        HStack {
-                            Label(entry.reason.longTitle, systemImage: entry.reason.symbol)
-                                .font(.subheadline.weight(.semibold))
-                                .foregroundStyle(Palette.ink)
-                            Spacer()
-                            Text("\(entry.count)")
-                                .font(.subheadline.monospacedDigit())
-                                .foregroundStyle(Palette.ink2)
-                        }
-                        Meter(value: Double(entry.count) / Double(max(total, 1)), tint: Palette.kohaku)
-                    }
-                    .accessibilityElement(children: .combine)
-                }
-                if let top = tally.first {
-                    HStack(alignment: .top, spacing: Space.s) {
-                        Image(systemName: "lightbulb.fill")
-                            .foregroundStyle(Palette.kohaku)
-                        Text(top.reason.advice)
-                            .font(.callout)
-                            .foregroundStyle(Palette.ink)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                    .padding(Space.m)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(Palette.kohaku.opacity(0.1), in: RoundedRectangle(cornerRadius: Radius.control, style: .continuous))
-                }
-            }
-            if !store.leeches.isEmpty {
-                Divider().overlay(Palette.hairline)
-                Text("Tricky kanji")
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(Palette.ink)
-                FlowLayout(spacing: Space.xs, lineSpacing: Space.xs) {
-                    ForEach(store.leeches) { kanji in
-                        NavigationLink(value: KanjiRoute(glyph: kanji.glyph)) {
-                            Text(kanji.glyph)
-                                .font(.jp(22, face: store.data.settings.face, relativeTo: .title3))
-                                .foregroundStyle(Palette.shu)
-                                .padding(Space.xs)
-                                .frame(minWidth: 44, minHeight: 44)
-                                .background(Palette.shu.opacity(0.1), in: RoundedRectangle(cornerRadius: Radius.chip, style: .continuous))
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel("\(kanji.glyph), \(kanji.primaryMeaning)")
-                    }
-                }
-            }
-        }
-        .surfaceCard()
     }
 }
 
 // MARK: Settings
 
-/// Few settings, each with a sensible default and a plain-language footer
-/// explaining its trade-off — choice without the paradox of choice.
 struct SettingsView: View {
     @EnvironmentObject var store: Store
     @Environment(\.dismiss) private var dismiss
@@ -4731,20 +3680,104 @@ struct SettingsView: View {
     @State private var alertMessage: String? = nil
     @State private var showKnownPicker = false
 
+    private var paceOptions: [Int] {
+        Array(Set([0, 3, 5, 10, 15, 20, 30, store.data.settings.newPerDay])).sorted()
+    }
+
+    private var reminderBinding: Binding<Bool> {
+        Binding(get: { store.data.settings.reminder }, set: { on in
+            if on {
+                Reminders.enable(store) { granted in
+                    if !granted { alertMessage = "Allow notifications for Sumi in the Settings app to get reminders." }
+                }
+            } else {
+                Reminders.disable(store)
+            }
+        })
+    }
+
+    private var reminderTime: Binding<Date> {
+        Binding(get: {
+            Calendar.current.date(bySettingHour: store.data.settings.reminderHour,
+                                  minute: store.data.settings.reminderMinute, second: 0, of: Date()) ?? Date()
+        }, set: { date in
+            let parts = Calendar.current.dateComponents([.hour, .minute], from: date)
+            store.data.settings.reminderHour = parts.hour ?? 19
+            store.data.settings.reminderMinute = parts.minute ?? 0
+            Reminders.schedule(store)
+        })
+    }
+
+    private var backupBinding: Binding<Bool> {
+        Binding(get: { pendingBackup != nil }, set: { if !$0 { pendingBackup = nil } })
+    }
+
+    private var alertBinding: Binding<Bool> {
+        Binding(get: { alertMessage != nil }, set: { if !$0 { alertMessage = nil } })
+    }
+
     var body: some View {
         NavigationStack {
             Form {
-                paceSection
-                memorySection
-                reviewSection
-                readingSection
-                appearanceSection
-                daySection
-                contentSection
-                aboutSection
+                Section {
+                    Picker("New kanji a day", selection: $store.data.settings.newPerDay) {
+                        ForEach(paceOptions, id: \.self) { n in
+                            Text(n == 0 ? "Paused" : "\(n)").tag(n)
+                        }
+                    }
+                    Toggle("Writing practice", isOn: $store.data.settings.writing)
+                    Picker("Furigana", selection: $store.data.settings.furigana) {
+                        ForEach(FuriganaMode.allCases) { mode in
+                            Text(mode.title).tag(mode)
+                        }
+                    }
+                    Picker("Typeface", selection: $store.data.settings.face) {
+                        ForEach(JPFace.allCases) { face in
+                            Text(face.title).tag(face)
+                        }
+                    }
+                    Toggle("Speak answers", isOn: $store.data.settings.autoSpeak)
+                }
+
+                Section {
+                    Toggle("Daily reminder", isOn: reminderBinding)
+                    if store.data.settings.reminder {
+                        DatePicker("Time", selection: reminderTime, displayedComponents: .hourAndMinute)
+                    }
+                }
+
+                Section {
+                    Button("Mark kanji I know") { showKnownPicker = true }
+                    Button("Import") { importing = true }
+                    Button("Export backup") {
+                        exportDocument = BackupDocument(data: store.exportData())
+                        exporting = true
+                    }
+                    .fileExporter(isPresented: $exporting, document: exportDocument, contentType: .json,
+                                  defaultFilename: "Sumi backup") { result in
+                        if case .failure(let error) = result { alertMessage = error.localizedDescription }
+                    }
+                    ForEach(store.data.packs, id: \.name) { pack in
+                        LabeledContent(pack.name, value: "\(pack.kanji.count) kanji")
+                            .swipeActions {
+                                Button("Remove", role: .destructive) { store.removePack(named: pack.name) }
+                            }
+                    }
+                }
+
+                Section {
+                    NavigationLink("How Sumi works") { AboutView() }
+                    NavigationLink("Privacy") { PrivacyView() }
+                }
+
+                Section {
+                    Button("Reset progress", role: .destructive) { confirmReset = true }
+                } footer: {
+                    Text("Sumi 1.0")
+                        .frame(maxWidth: .infinity)
+                        .padding(.top, Space.l)
+                }
             }
-            .scrollContentBackground(.hidden)
-            .background(Palette.paper.ignoresSafeArea())
             .navigationTitle("Settings")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -4762,7 +3795,7 @@ struct SettingsView: View {
                 Button("Reset everything", role: .destructive) { store.resetAllProgress() }
                 Button("Cancel", role: .cancel) {}
             } message: {
-                Text("Every review and note is erased. Settings and content packs stay. This can't be undone — export a backup first if you might want it back.")
+                Text("Every review and note is erased. This can't be undone.")
             }
             .confirmationDialog("Restore this backup?", isPresented: backupBinding, titleVisibility: .visible) {
                 Button("Replace my progress", role: .destructive) {
@@ -4771,180 +3804,11 @@ struct SettingsView: View {
                 }
                 Button("Cancel", role: .cancel) { pendingBackup = nil }
             } message: {
-                Text("Your current progress on this device will be replaced by the backup.")
+                Text("Your current progress on this device will be replaced.")
             }
             .alert(alertMessage ?? "", isPresented: alertBinding) {
                 Button("OK", role: .cancel) {}
             }
-        }
-    }
-
-    private var backupBinding: Binding<Bool> {
-        Binding(get: { pendingBackup != nil }, set: { if !$0 { pendingBackup = nil } })
-    }
-
-    private var alertBinding: Binding<Bool> {
-        Binding(get: { alertMessage != nil }, set: { if !$0 { alertMessage = nil } })
-    }
-
-    private var paceSection: some View {
-        Section {
-            Stepper(value: $store.data.settings.newPerDay, in: 0...40) {
-                LabeledContent("New kanji per day", value: "\(store.data.settings.newPerDay)")
-            }
-            Stepper(value: $store.data.settings.batchSize, in: 3...10) {
-                LabeledContent("Kanji per lesson", value: "\(store.data.settings.batchSize)")
-            }
-        } header: {
-            Text("Daily pace")
-        } footer: {
-            Text(paceFooter)
-        }
-    }
-
-    /// A rough steady-state estimate: each new kanji adds two cards that are
-    /// reviewed several times in their first month.
-    private var paceFooter: String {
-        let n = store.data.settings.newPerDay
-        if n == 0 { return "New lessons are paused. Reviews carry on as normal." }
-        let multiplier = store.fsrs.workloadMultiplier()
-        let low = Int((Double(n * 2 * 4) * multiplier).rounded())
-        let high = Int((Double(n * 2 * 7) * multiplier).rounded())
-        let minutes = Int((Double(high) * 8 / 60).rounded())
-        return "Expect roughly \(low)–\(high) reviews a day once things settle (up to about \(minutes) min). Lessons come in small batches so each kanji gets attention."
-    }
-
-    private var memorySection: some View {
-        Section {
-            VStack(alignment: .leading, spacing: Space.xs) {
-                LabeledContent("Target recall", value: Format.percent(store.data.settings.retention))
-                Slider(value: $store.data.settings.retention, in: 0.8...0.95, step: 0.01) {
-                    Text("Target recall")
-                }
-            }
-            .padding(.vertical, Space.xxs)
-        } header: {
-            Text("Memory")
-        } footer: {
-            Text("How likely you are to still remember a card when it comes back. 90% is the sweet spot for most people. At \(Format.percent(store.data.settings.retention)) you'll do about \(String(format: "%.1f", store.fsrs.workloadMultiplier()))× the reviews you would at 90%.")
-        }
-    }
-
-    private var reviewSection: some View {
-        Section {
-            Picker("Grading", selection: $store.data.settings.detailedGrading) {
-                Text("Simple").tag(false)
-                Text("Detailed").tag(true)
-            }
-            Toggle("Writing practice", isOn: $store.data.settings.writing)
-            Toggle("Ask why I missed", isOn: $store.data.settings.askWhy)
-            Toggle("Speak answers aloud", isOn: $store.data.settings.autoSpeak)
-            Toggle("Haptics", isOn: $store.data.settings.haptics)
-        } header: {
-            Text("Reviews")
-        } footer: {
-            Text("Simple grading asks only “Forgot” or “Remembered” — all the scheduler needs. Detailed adds Hard and Easy. Writing cards unlock once you recognize a kanji reliably.")
-        }
-    }
-
-    private var readingSection: some View {
-        Section {
-            Picker("Furigana", selection: $store.data.settings.furigana) {
-                ForEach(FuriganaMode.allCases) { mode in
-                    Text(mode.title).tag(mode)
-                }
-            }
-        } header: {
-            Text("Reading")
-        } footer: {
-            Text(store.data.settings.furigana.detail)
-        }
-    }
-
-    private var appearanceSection: some View {
-        Section {
-            Picker("Kanji typeface", selection: $store.data.settings.face) {
-                ForEach(JPFace.allCases) { face in
-                    Text(face.title).tag(face)
-                }
-            }
-            HStack(spacing: Space.l) {
-                ForEach(["日", "語", "読", "書"], id: \.self) { glyph in
-                    Text(glyph)
-                        .font(.jp(34, face: store.data.settings.face, relativeTo: .title))
-                        .foregroundStyle(Palette.ink)
-                }
-                Spacer()
-            }
-            .padding(.vertical, Space.xxs)
-            .accessibilityHidden(true)
-        } header: {
-            Text("Appearance")
-        } footer: {
-            Text("\(store.data.settings.face.detail) Switching now and then trains you to read the varied shapes of real-world print.")
-        }
-    }
-
-    private var daySection: some View {
-        Section {
-            Picker("New day starts at", selection: $store.data.settings.dayStartHour) {
-                ForEach(0..<7, id: \.self) { hour in
-                    Text(Format.hour(hour)).tag(hour)
-                }
-            }
-        } footer: {
-            Text("Study after midnight but before this time still counts toward the previous day.")
-        }
-    }
-
-    private var contentSection: some View {
-        Section {
-            Button {
-                showKnownPicker = true
-            } label: {
-                Label("Mark kanji I already know", systemImage: "checkmark.square")
-            }
-            Button {
-                importing = true
-            } label: {
-                Label("Import content pack or backup", systemImage: "square.and.arrow.down")
-            }
-            Button {
-                exportDocument = BackupDocument(data: store.exportData())
-                exporting = true
-            } label: {
-                Label("Export backup", systemImage: "square.and.arrow.up")
-            }
-            .fileExporter(isPresented: $exporting, document: exportDocument, contentType: .json,
-                          defaultFilename: "Sumi backup") { result in
-                if case .failure(let error) = result { alertMessage = error.localizedDescription }
-            }
-            ForEach(store.data.packs, id: \.name) { pack in
-                LabeledContent(pack.name, value: "\(pack.kanji.count) kanji")
-                    .swipeActions {
-                        Button("Remove", role: .destructive) { store.removePack(named: pack.name) }
-                    }
-            }
-            Button("Reset all progress", role: .destructive) { confirmReset = true }
-        } header: {
-            Text("Content & data")
-        } footer: {
-            Text("Content packs are JSON files that add kanji and reading texts; swipe a pack to remove it. Progress is stored on this device — export a backup to move it.")
-        }
-    }
-
-    private var aboutSection: some View {
-        Section {
-            NavigationLink {
-                MethodView()
-            } label: {
-                Label("How Sumi teaches", systemImage: "graduationcap")
-            }
-            LabeledContent("Version", value: "1.0")
-        } header: {
-            Text("About")
-        } footer: {
-            Text("JLPT levels here are a study guide. The JLPT hasn't published official kanji lists since 2010, so levels follow widely used pre-2010 lists. Sumi isn't affiliated with the Japan Foundation or JEES.")
         }
     }
 
@@ -4963,8 +3827,7 @@ struct SettingsView: View {
                     switch file {
                     case .pack(let pack):
                         store.install(pack)
-                        let passages = pack.passages?.count ?? 0
-                        alertMessage = "Added “\(pack.name)”: \(pack.kanji.count) kanji and \(passages) \(passages == 1 ? "passage" : "passages")."
+                        alertMessage = "Added “\(pack.name)”."
                     case .backup(let backup):
                         pendingBackup = backup
                     }
@@ -4976,95 +3839,156 @@ struct SettingsView: View {
     }
 }
 
-/// Lets experienced learners skip what they know instead of grinding
-/// through it — one of the most common complaints about level-locked apps.
+/// Lets experienced learners skip what they already know.
 struct KnownPickerView: View {
     @EnvironmentObject var store: Store
     @Environment(\.dismiss) private var dismiss
     var onConfirm: (() -> Void)? = nil
-    @State private var level: JLPTLevel? = .n5
     @State private var selected: Set<String> = []
-    private let columns = [GridItem(.adaptive(minimum: 72, maximum: 104), spacing: Space.s)]
-
-    private var candidates: [Kanji] {
-        store.library.kanjiList(for: level).filter { !store.isStarted($0.glyph) }
-    }
-
-    private var allSelected: Bool {
-        !candidates.isEmpty && candidates.allSatisfy { selected.contains($0.glyph) }
-    }
+    private let columns = [GridItem(.adaptive(minimum: 60, maximum: 88), spacing: Space.xs)]
 
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(alignment: .leading, spacing: Space.m) {
-                    Text("Tap every kanji you can already read and understand. Each one gets checked in a review over the next few weeks, and anything you've forgotten simply comes back for practice.")
-                        .font(.callout)
+                VStack(alignment: .leading, spacing: Space.xl) {
+                    Text("Tap the kanji you can already read. Each one is checked later in a review.")
+                        .font(.subheadline)
                         .foregroundStyle(Palette.ink2)
                         .fixedSize(horizontal: false, vertical: true)
-                        .padding(.horizontal, Space.l)
-                    LevelPicker(selection: $level, levels: store.library.levelsWithContent, showsAll: false)
-                    if candidates.isEmpty {
-                        ContentUnavailableView("Nothing to mark here", systemImage: "checkmark.circle",
-                                               description: Text("Every kanji in this level is already started."))
-                    } else {
-                        HStack {
-                            Button(allSelected ? "Clear selection" : "Select all") { toggleAll() }
-                                .font(.subheadline.weight(.semibold))
-                                .frame(minHeight: Metrics.minTap)
-                            Spacer()
-                            Text("\(selected.count) selected")
-                                .font(.subheadline.monospacedDigit())
-                                .foregroundStyle(Palette.ink2)
+                    ForEach(store.library.levelsWithContent) { level in
+                        let candidates = store.library.kanjiList(for: level).filter { !store.isStarted($0.glyph) }
+                        if !candidates.isEmpty {
+                            levelGrid(level, candidates)
                         }
-                        .padding(.horizontal, Space.l)
-                        LazyVGrid(columns: columns, spacing: Space.s) {
-                            ForEach(candidates) { kanji in
-                                Button {
-                                    toggle(kanji.glyph)
-                                } label: {
-                                    KanjiTile(kanji: kanji, selected: selected.contains(kanji.glyph))
-                                }
-                                .buttonStyle(.plain)
-                            }
-                        }
-                        .padding(.horizontal, Space.l)
                     }
                 }
+                .padding(.horizontal, Space.l)
                 .padding(.vertical, Space.m)
-                .readableColumn()
+                .frame(maxWidth: Metrics.gridWidth)
+                .frame(maxWidth: .infinity)
             }
-            .background(Palette.paper.ignoresSafeArea())
-            .navigationTitle("What you know")
+            .navigationTitle("Kanji you know")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { dismiss() }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Mark \(selected.count)") {
-                        store.markKnown(Array(selected))
-                        onConfirm?()
+                    Button(selected.isEmpty ? "Done" : "Mark \(selected.count)") {
+                        if !selected.isEmpty {
+                            store.markKnown(Array(selected))
+                            onConfirm?()
+                        }
                         dismiss()
                     }
                     .fontWeight(.semibold)
-                    .disabled(selected.isEmpty)
                 }
             }
         }
     }
 
-    private func toggle(_ glyph: String) {
-        if selected.contains(glyph) { selected.remove(glyph) } else { selected.insert(glyph) }
-        if store.data.settings.haptics { Haptics.tap() }
+    private func levelGrid(_ level: JLPTLevel, _ candidates: [Kanji]) -> some View {
+        let allSelected = candidates.allSatisfy { selected.contains($0.glyph) }
+        return VStack(alignment: .leading, spacing: Space.s) {
+            HStack {
+                Text(level.label)
+                    .font(.headline)
+                Spacer()
+                Button(allSelected ? "Clear" : "Select all") {
+                    for k in candidates {
+                        if allSelected { selected.remove(k.glyph) } else { selected.insert(k.glyph) }
+                    }
+                }
+                .font(.subheadline)
+                .buttonStyle(.borderless)
+            }
+            LazyVGrid(columns: columns, spacing: Space.xs) {
+                ForEach(candidates) { k in
+                    let isOn = selected.contains(k.glyph)
+                    Button {
+                        if isOn { selected.remove(k.glyph) } else { selected.insert(k.glyph) }
+                    } label: {
+                        Text(k.glyph)
+                            .font(.jp(30, face: store.data.settings.face, relativeTo: .title))
+                            .foregroundStyle(isOn ? Palette.onAccent : Palette.ink)
+                            .frame(maxWidth: .infinity, minHeight: 60)
+                            .background(isOn ? Palette.accent : Color.clear,
+                                        in: RoundedRectangle(cornerRadius: Radius.control, style: .continuous))
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("\(k.glyph), \(k.primaryMeaning)")
+                    .accessibilityAddTraits(isOn ? .isSelected : [])
+                }
+            }
+        }
+    }
+}
+
+struct AboutView: View {
+    private struct Point: Identifiable {
+        let title: String
+        let text: String
+        var id: String { title }
     }
 
-    private func toggleAll() {
-        if allSelected {
-            for k in candidates { selected.remove(k.glyph) }
-        } else {
-            for k in candidates { selected.insert(k.glyph) }
+    private let points: [Point] = [
+        Point(title: "Reviews arrive just before you'd forget",
+              text: "A memory model (FSRS-6) estimates how well you hold each kanji and schedules the next review for when recall drops to about 90%."),
+        Point(title: "You always answer first",
+              text: "Recalling an answer strengthens memory far more than re-reading it."),
+        Point(title: "Readings live in words",
+              text: "A kanji alone rarely has one right reading, so readings are practiced inside real words."),
+        Point(title: "Recognize, then read, then write",
+              text: "Writing unlocks once you recognize a kanji reliably."),
+        Point(title: "Real Japanese",
+              text: "Every kanji comes with words and a sentence, and short texts show furigana only above kanji you haven't learned."),
+        Point(title: "Mistakes are noticed for you",
+              text: "Near misses get a hint and a second try. Kanji you keep forgetting automatically get more support.")
+    ]
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: Space.xl) {
+                ForEach(points) { point in
+                    VStack(alignment: .leading, spacing: Space.xxs) {
+                        Text(point.title)
+                            .font(.headline)
+                        Text(point.text)
+                            .font(.subheadline)
+                            .foregroundStyle(Palette.ink2)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+                Text("JLPT levels are a study guide. The JLPT hasn't published official kanji lists since 2010; Sumi isn't affiliated with the Japan Foundation or JEES.")
+                    .font(.footnote)
+                    .foregroundStyle(Palette.ink3)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .padding(Space.l)
+            .readableColumn()
         }
+        .navigationTitle("How Sumi works")
+        .navigationBarTitleDisplayMode(.inline)
+    }
+}
+
+struct PrivacyView: View {
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: Space.l) {
+                Text("Sumi doesn't collect, track or share any data. There are no accounts, ads or analytics.")
+                Text("Your progress is stored only on this device. Files you import stay inside the app, and backups you export go only where you choose.")
+                Text("Reminders are scheduled on this device. Speech is generated on-device by iOS.")
+                Text("To erase everything, use Reset progress in Settings or delete the app.")
+            }
+            .font(.body)
+            .fixedSize(horizontal: false, vertical: true)
+            .padding(Space.l)
+            .readableColumn()
+        }
+        .navigationTitle("Privacy")
+        .navigationBarTitleDisplayMode(.inline)
     }
 }
 
@@ -5072,145 +3996,59 @@ struct KnownPickerView: View {
 
 struct OnboardingView: View {
     @EnvironmentObject var store: Store
-    @State private var page = 0
     @State private var pace = 10
     @State private var showPicker = false
     @State private var markedKnown = false
-    private let pageCount = 4
 
     var body: some View {
         VStack(spacing: 0) {
-            HStack {
-                Spacer()
-                if page < pageCount - 1 {
-                    Button("Skip") { finish() }
-                        .font(.subheadline.weight(.semibold))
+            Spacer()
+            VStack(spacing: Space.xl) {
+                Text("墨")
+                    .font(.jpFixed(96, face: .mincho))
+                    .accessibilityHidden(true)
+                VStack(spacing: Space.s) {
+                    Text("Kanji, one quiet step at a time.")
+                        .font(.title2.weight(.semibold))
+                        .multilineTextAlignment(.center)
+                    Text("A few minutes a day. Sumi decides what to review and when — you just begin.")
+                        .font(.body)
                         .foregroundStyle(Palette.ink2)
-                        .frame(minWidth: Metrics.minTap, minHeight: Metrics.minTap)
+                        .multilineTextAlignment(.center)
                 }
             }
-            .padding(.horizontal, Space.m)
-            .frame(height: Metrics.minTap)
-
-            TabView(selection: $page) {
-                welcomePage.tag(0)
-                methodPage.tag(1)
-                pacePage.tag(2)
-                startPage.tag(3)
-            }
-            .tabViewStyle(.page(indexDisplayMode: .never))
-
-            HStack(spacing: Space.xs) {
-                ForEach(0..<pageCount, id: \.self) { i in
-                    Capsule()
-                        .fill(i == page ? Palette.accent : Palette.hairline)
-                        .frame(width: i == page ? 20 : 8, height: 8)
+            .padding(.horizontal, Space.xl)
+            .readableColumn()
+            Spacer()
+            VStack(spacing: Space.l) {
+                VStack(spacing: Space.xs) {
+                    Picker("New kanji a day", selection: $pace) {
+                        Text("5").tag(5)
+                        Text("10").tag(10)
+                        Text("20").tag(20)
+                    }
+                    .pickerStyle(.segmented)
+                    Text("new kanji a day")
+                        .font(.footnote)
+                        .foregroundStyle(Palette.ink2)
                 }
-            }
-            .animation(.easeOut(duration: 0.2), value: page)
-            .padding(.vertical, Space.m)
-            .accessibilityElement()
-            .accessibilityLabel("Page \(page + 1) of \(pageCount)")
-
-            if page < pageCount - 1 {
-                Button("Continue") { withAnimation { page += 1 } }
-                    .buttonStyle(PrimaryButtonStyle())
+                ActionButton(title: "Begin") { finish() }
                     .keyboardShortcut(.defaultAction)
-                    .padding(.horizontal, Space.l)
-                    .padding(.bottom, Space.m)
-                    .readableColumn()
-            } else {
-                Color.clear.frame(height: Metrics.buttonHeight + Space.m)
+                Button("I already know some kanji") { showPicker = true }
+                    .font(.subheadline)
+                    .buttonStyle(.borderless)
+                    .frame(minHeight: Metrics.minTap)
             }
+            .padding(.horizontal, Space.l)
+            .padding(.bottom, Space.l)
+            .actionColumn()
         }
-        .background(Palette.paper.ignoresSafeArea())
         .interactiveDismissDisabled()
         .sheet(isPresented: $showPicker, onDismiss: {
             if markedKnown { finish() }
         }) {
-            KnownPickerView(onConfirm: { markedKnown = true }).environmentObject(store)
-        }
-    }
-
-    private var welcomePage: some View {
-        OnboardingPage {
-            VStack(spacing: Space.xl) {
-                Text("墨")
-                    .font(.jpFixed(88, face: .mincho))
-                    .foregroundStyle(Palette.ink)
-                    .frame(width: 140, height: 140)
-                    .background(Palette.surface, in: RoundedRectangle(cornerRadius: 32, style: .continuous))
-                    .overlay(RoundedRectangle(cornerRadius: 32, style: .continuous).strokeBorder(Palette.hairline, lineWidth: 1))
-                    .accessibilityHidden(true)
-                VStack(spacing: Space.s) {
-                    Text("Learn kanji the way memory works")
-                        .font(.largeTitle.weight(.bold))
-                        .foregroundStyle(Palette.ink)
-                        .multilineTextAlignment(.center)
-                    MixedText("From your first 一 to N1 and beyond, a few focused minutes a day.", style: .title3)
-                        .foregroundStyle(Palette.ink2)
-                        .multilineTextAlignment(.center)
-                }
-                VStack(alignment: .leading, spacing: Space.l) {
-                    FeatureRow(symbol: "clock.arrow.circlepath", title: "Reviewed just before you'd forget",
-                               text: "A modern memory model schedules every card for you.")
-                    FeatureRow(symbol: "text.book.closed", title: "Kanji inside real Japanese",
-                               text: "Words, sentences, signs and conversations — never in isolation.")
-                    FeatureRow(symbol: "pencil.and.outline", title: "Recognize, read and write",
-                               text: "Recall in every direction, not just multiple choice.")
-                }
-            }
-        }
-    }
-
-    private var methodPage: some View {
-        OnboardingPage {
-            VStack(alignment: .leading, spacing: Space.xl) {
-                Text("How each kanji becomes yours")
-                    .font(.largeTitle.weight(.bold))
-                    .foregroundStyle(Palette.ink)
-                StepRow(number: 1, title: "Learn", text: "Its parts, a memory hook, real words and a sentence. Trace it once.")
-                StepRow(number: 2, title: "Recall", text: "A short quiz straight away. Answering beats re-reading.")
-                StepRow(number: 3, title: "Review", text: "It returns just before you'd forget — hours, then days, then months.")
-                StepRow(number: 4, title: "Read", text: "Meet it in real texts, with furigana that fades as you learn.")
-            }
-        }
-    }
-
-    private var pacePage: some View {
-        OnboardingPage {
-            VStack(alignment: .leading, spacing: Space.xl) {
-                VStack(alignment: .leading, spacing: Space.s) {
-                    Text("Pick a daily pace")
-                        .font(.largeTitle.weight(.bold))
-                        .foregroundStyle(Palette.ink)
-                    Text("You can change it any time. Steady beats intense — reviews build up from what you learn.")
-                        .font(.body)
-                        .foregroundStyle(Palette.ink2)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                VStack(spacing: Space.s) {
-                    PaceOption(title: "Light", detail: "5 new kanji a day · about 10 min", value: 5, selection: $pace)
-                    PaceOption(title: "Steady", detail: "10 new kanji a day · about 20 min", value: 10, selection: $pace)
-                    PaceOption(title: "Intense", detail: "20 new kanji a day · about 40 min", value: 20, selection: $pace)
-                }
-            }
-        }
-    }
-
-    private var startPage: some View {
-        OnboardingPage {
-            VStack(alignment: .leading, spacing: Space.xl) {
-                Text("Where are you starting?")
-                    .font(.largeTitle.weight(.bold))
-                    .foregroundStyle(Palette.ink)
-                VStack(spacing: Space.s) {
-                    StartOption(symbol: "leaf", title: "I'm new to kanji",
-                                detail: "Start with N5, the most common characters.") { finish() }
-                    StartOption(symbol: "checkmark.square", title: "I know some already",
-                                detail: "Check off what you know and skip straight past it.") { showPicker = true }
-                }
-            }
+            KnownPickerView(onConfirm: { markedKnown = true })
+                .environmentObject(store)
         }
     }
 
@@ -5220,325 +4058,85 @@ struct OnboardingView: View {
     }
 }
 
-struct OnboardingPage<Content: View>: View {
-    @ViewBuilder var content: Content
+// MARK: Reminders
 
-    var body: some View {
-        ScrollView {
-            content
-                .padding(.horizontal, Space.xl)
-                .padding(.vertical, Space.l)
-                .frame(maxWidth: 560)
-                .frame(maxWidth: .infinity)
-        }
-    }
-}
+/// Local reminders that say exactly how many reviews are waiting. Nothing
+/// leaves the device; the next two weeks are rescheduled each time the app
+/// goes to the background, so counts stay accurate.
+enum Reminders {
+    private static let prefix = "sumi.reminder."
+    private static let days = 14
 
-struct FeatureRow: View {
-    let symbol: String
-    let title: String
-    let text: String
+    private static var identifiers: [String] { (0..<days).map { prefix + String($0) } }
 
-    var body: some View {
-        HStack(alignment: .top, spacing: Space.m) {
-            Image(systemName: symbol)
-                .font(.title3)
-                .foregroundStyle(Palette.accent)
-                .frame(width: 32)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title)
-                    .font(.headline)
-                    .foregroundStyle(Palette.ink)
-                Text(text)
-                    .font(.subheadline)
-                    .foregroundStyle(Palette.ink2)
-                    .fixedSize(horizontal: false, vertical: true)
+    static func enable(_ store: Store, completion: @escaping (Bool) -> Void) {
+        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { granted, _ in
+            DispatchQueue.main.async {
+                store.data.settings.askedReminder = true
+                store.data.settings.reminder = granted
+                if granted { schedule(store) }
+                completion(granted)
             }
         }
-        .accessibilityElement(children: .combine)
     }
-}
 
-struct StepRow: View {
-    let number: Int
-    let title: String
-    let text: String
-
-    var body: some View {
-        HStack(alignment: .top, spacing: Space.m) {
-            Text("\(number)")
-                .font(.headline.monospacedDigit())
-                .foregroundStyle(Palette.onAccent)
-                .frame(width: 32, height: 32)
-                .background(Palette.accent, in: Circle())
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title)
-                    .font(.headline)
-                    .foregroundStyle(Palette.ink)
-                Text(text)
-                    .font(.subheadline)
-                    .foregroundStyle(Palette.ink2)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-        }
-        .accessibilityElement(children: .combine)
+    static func disable(_ store: Store) {
+        store.data.settings.reminder = false
+        let center = UNUserNotificationCenter.current()
+        center.removePendingNotificationRequests(withIdentifiers: identifiers)
+        center.setBadgeCount(0, withCompletionHandler: nil)
     }
-}
 
-struct PaceOption: View {
-    let title: String
-    let detail: String
-    let value: Int
-    @Binding var selection: Int
-
-    var body: some View {
-        let isOn = selection == value
-        Button {
-            selection = value
-        } label: {
-            HStack(spacing: Space.m) {
-                Image(systemName: isOn ? "largecircle.fill.circle" : "circle")
-                    .font(.title3)
-                    .foregroundStyle(isOn ? Palette.accent : Palette.ink3)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(title)
-                        .font(.headline)
-                        .foregroundStyle(Palette.ink)
-                    Text(detail)
-                        .font(.subheadline)
-                        .foregroundStyle(Palette.ink2)
+    /// Turns reminders off here if they were turned off in the Settings app.
+    static func sync(_ store: Store) {
+        guard store.data.settings.reminder else { return }
+        UNUserNotificationCenter.current().getNotificationSettings { settings in
+            let allowed = settings.authorizationStatus == .authorized || settings.authorizationStatus == .provisional
+            DispatchQueue.main.async {
+                if allowed {
+                    schedule(store)
+                } else {
+                    disable(store)
                 }
-                Spacer()
-            }
-            .padding(Space.m)
-            .background(isOn ? Palette.accent.opacity(0.1) : Palette.surface,
-                        in: RoundedRectangle(cornerRadius: Radius.control, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: Radius.control, style: .continuous)
-                    .strokeBorder(isOn ? Palette.accent : Palette.hairline, lineWidth: isOn ? 2 : 1)
-            )
-            .contentShape(RoundedRectangle(cornerRadius: Radius.control, style: .continuous))
-        }
-        .buttonStyle(.plain)
-        .accessibilityAddTraits(isOn ? .isSelected : [])
-    }
-}
-
-struct StartOption: View {
-    let symbol: String
-    let title: String
-    let detail: String
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            HStack(spacing: Space.m) {
-                Image(systemName: symbol)
-                    .font(.title2)
-                    .foregroundStyle(Palette.accent)
-                    .frame(width: 36)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(title)
-                        .font(.headline)
-                        .foregroundStyle(Palette.ink)
-                    Text(detail)
-                        .font(.subheadline)
-                        .foregroundStyle(Palette.ink2)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                Spacer()
-                Image(systemName: "chevron.right")
-                    .font(.footnote.weight(.semibold))
-                    .foregroundStyle(Palette.ink3)
-            }
-            .padding(Space.m)
-            .frame(minHeight: 72)
-            .background(Palette.surface, in: RoundedRectangle(cornerRadius: Radius.control, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: Radius.control, style: .continuous)
-                    .strokeBorder(Palette.hairline, lineWidth: 1)
-            )
-            .contentShape(RoundedRectangle(cornerRadius: Radius.control, style: .continuous))
-        }
-        .buttonStyle(.plain)
-    }
-}
-
-// MARK: Method
-
-/// Plain-language explanations of why the app works the way it does, so
-/// nothing about the system is a black box.
-struct MethodView: View {
-    private struct Principle: Identifiable {
-        let symbol: String
-        let title: String
-        let text: String
-        let source: String
-        var id: String { title }
-    }
-
-    private let principles: [Principle] = [
-        Principle(symbol: "clock.arrow.circlepath", title: "Spaced retrieval",
-                  text: "Every card returns just before you're likely to forget it. The FSRS-6 model tracks how stable and how difficult each memory is, and schedules reviews to hit your target recall with as few reviews as possible.",
-                  source: "Cepeda et al. 2006; Ye et al. 2022 (FSRS)"),
-        Principle(symbol: "brain.head.profile", title: "Testing beats re-reading",
-                  text: "You always produce the answer before seeing it. Retrieval practice is one of the most reliable effects in learning research.",
-                  source: "Roediger & Karpicke 2006; Adesope et al. 2017"),
-        Principle(symbol: "square.stack.3d.up", title: "Parts, pictures and stories",
-                  text: "Kanji are broken into meaningful parts with a memory hook, pairing words with images. Component analysis beats memorizing whole characters, and parts are taught before the kanji that contain them.",
-                  source: "Paivio 1971 (dual coding); kanji component-analysis studies"),
-        Principle(symbol: "text.quote", title: "Readings live in words",
-                  text: "A kanji alone rarely has one right reading, so readings are tested inside real words — with a free retry when you give a valid reading the word doesn't use.",
-                  source: "Vocabulary-in-context research"),
-        Principle(symbol: "highlighter", title: "Notice the form",
-                  text: "The kanji you're learning is highlighted wherever it appears, and near-miss hints point at exactly what to notice: small っ, long vowels, voicing marks.",
-                  source: "Schmidt 1990 (noticing); Sharwood Smith 1993 (input enhancement)"),
-        Principle(symbol: "pencil.tip", title: "Produce it yourself",
-                  text: "Writing from memory forces precise recall of the shape and adds a motor memory trace. It unlocks once you recognize a kanji reliably.",
-                  source: "Swain 1985 (output); Naka & Naoi 1995"),
-        Principle(symbol: "book", title: "Input just beyond your level",
-                  text: "Reading texts show furigana only above kanji you haven't learned yet, so the support fades exactly as your knowledge grows.",
-                  source: "Krashen 1985 (comprehensible input)"),
-        Principle(symbol: "globe.asia.australia", title: "Content, culture and conversation",
-                  text: "Each text teaches something real about Japan, with notes on politeness, register and how conversations unfold — kanji as they live between people.",
-                  source: "CLIL (Coyle, Hood & Marsh 2010); sociolinguistics; conversation analysis"),
-        Principle(symbol: "arrow.triangle.branch", title: "Notice, evaluate, adjust",
-                  text: "When you miss, you can tag why. Patterns surface with a specific next step — the language-management cycle applied to your own learning.",
-                  source: "Neustupný & Jernudd 1987 (Language Management Theory)"),
-        Principle(symbol: "square.grid.2x2", title: "Mixed, not blocked",
-                  text: "Reviews are interleaved so the same kanji never appears twice in a row, and look-alikes are contrasted directly.",
-                  source: "Rohrer & Taylor 2007 (interleaving)"),
-        Principle(symbol: "leaf", title: "Calm motivation",
-                  text: "No streak to lose and no hearts to run out of. You see your rhythm and real progress — autonomy and competence sustain learning; anxiety doesn't.",
-                  source: "Deci & Ryan (self-determination theory)")
-    ]
-
-    var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: Space.m) {
-                Text("Every part of Sumi is built on research into how memory and language learning actually work.")
-                    .font(.callout)
-                    .foregroundStyle(Palette.ink2)
-                    .fixedSize(horizontal: false, vertical: true)
-                ForEach(principles) { principle in
-                    HStack(alignment: .top, spacing: Space.m) {
-                        Image(systemName: principle.symbol)
-                            .font(.title3)
-                            .foregroundStyle(Palette.accent)
-                            .frame(width: 28)
-                        VStack(alignment: .leading, spacing: Space.xs) {
-                            Text(principle.title)
-                                .font(.headline)
-                                .foregroundStyle(Palette.ink)
-                            MixedText(principle.text, style: .subheadline)
-                                .foregroundStyle(Palette.ink2)
-                                .lineSpacing(2)
-                                .fixedSize(horizontal: false, vertical: true)
-                            Text(principle.source)
-                                .font(.caption)
-                                .foregroundStyle(Palette.ink3)
-                        }
-                    }
-                    .surfaceCard()
-                }
-                shortcutsCard
-            }
-            .padding(.horizontal, Space.l)
-            .padding(.vertical, Space.m)
-            .readableColumn()
-        }
-        .background(Palette.paper.ignoresSafeArea())
-        .navigationTitle("How Sumi teaches")
-        .navigationBarTitleDisplayMode(.inline)
-    }
-
-    private struct Shortcut: Identifiable {
-        let key: String
-        let action: String
-        var id: String { key }
-    }
-
-    private let shortcuts: [Shortcut] = [
-        Shortcut(key: "Space", action: "Show answer"),
-        Shortcut(key: "Return", action: "Remembered / Continue"),
-        Shortcut(key: "1", action: "Forgot"),
-        Shortcut(key: "2 · 4", action: "Hard · Easy (detailed grading)"),
-        Shortcut(key: "⌘Z", action: "Undo last answer"),
-        Shortcut(key: "Esc", action: "End session")
-    ]
-
-    private var shortcutsCard: some View {
-        VStack(alignment: .leading, spacing: Space.s) {
-            Eyebrow(text: "Keyboard shortcuts (iPad)")
-            ForEach(shortcuts) { shortcut in
-                shortcutRow(shortcut)
             }
         }
-        .surfaceCard()
     }
 
-    private func shortcutRow(_ shortcut: Shortcut) -> some View {
-        HStack {
-            Text(shortcut.key)
-                .font(.subheadline.monospaced().weight(.semibold))
-                .foregroundStyle(Palette.ink)
-                .padding(.horizontal, Space.xs)
-                .padding(.vertical, Space.xxs)
-                .background(Palette.sunken, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
-            Spacer()
-            Text(shortcut.action)
-                .font(.subheadline)
-                .foregroundStyle(Palette.ink2)
+    static func schedule(_ store: Store) {
+        let center = UNUserNotificationCenter.current()
+        center.removePendingNotificationRequests(withIdentifiers: identifiers)
+        let settings = store.data.settings
+        guard settings.reminder else { return }
+
+        let calendar = Calendar.current
+        let now = Date()
+        let cards = Array(store.data.cards.values).filter { $0.facet != .writing || settings.writing }
+        let hasLessons = !store.lessonQueue.isEmpty && settings.newPerDay > 0
+        let lessonsLeftToday = store.lessonsLeftToday > 0
+
+        for day in 0..<days {
+            guard let base = calendar.date(byAdding: .day, value: day, to: calendar.startOfDay(for: now)),
+                  let fire = calendar.date(bySettingHour: settings.reminderHour, minute: settings.reminderMinute,
+                                           second: 0, of: base),
+                  fire > now else { continue }
+            let due = cards.filter { $0.due <= fire }.count
+            let content = UNMutableNotificationContent()
+            if due > 0 {
+                content.body = due == 1 ? "1 kanji is ready to review." : "\(due) kanji reviews are ready."
+            } else if hasLessons && (day > 0 || lessonsLeftToday) {
+                content.body = "New kanji are ready when you are."
+            } else {
+                continue
+            }
+            content.title = "Sumi"
+            content.sound = .default
+            content.badge = NSNumber(value: due)
+            let components = calendar.dateComponents([.year, .month, .day, .hour, .minute], from: fire)
+            let trigger = UNCalendarNotificationTrigger(dateMatching: components, repeats: false)
+            center.add(UNNotificationRequest(identifier: prefix + String(day), content: content, trigger: trigger),
+                       withCompletionHandler: nil)
         }
-    }
-}
-
-// MARK: Root
-
-enum AppTab: Hashable {
-    case today, kanji, read, progress
-}
-
-/// The app's root view. It owns the store, so it is fully self-contained:
-/// `WindowGroup { ContentView() }` is all an App needs.
-struct ContentView: View {
-    @StateObject private var store = Store()
-    @Environment(\.scenePhase) private var scenePhase
-    @State private var tab: AppTab = .today
-
-    private var needsOnboarding: Binding<Bool> {
-        Binding(get: { !store.data.onboarded }, set: { if !$0 { store.data.onboarded = true } })
-    }
-
-    var body: some View {
-        TabView(selection: $tab) {
-            TodayView()
-                .tabItem { Label("Today", systemImage: "sun.max") }
-                .tag(AppTab.today)
-            LibraryView()
-                .tabItem { Label("Kanji", systemImage: "square.grid.3x3") }
-                .tag(AppTab.kanji)
-            ReadView()
-                .tabItem { Label("Read", systemImage: "book") }
-                .tag(AppTab.read)
-            ProgressScreen()
-                .tabItem { Label("Progress", systemImage: "chart.bar") }
-                .tag(AppTab.progress)
-        }
-        .tint(Palette.accent)
-        .environmentObject(store)
-        .fullScreenCover(isPresented: needsOnboarding) {
-            OnboardingView().environmentObject(store)
-        }
-        .onChange(of: scenePhase) { _, phase in
-            if phase != .active { store.saveNow() }
-        }
-    }
-}
-
-struct ContentView_Previews: PreviewProvider {
-    static var previews: some View {
-        ContentView()
+        center.setBadgeCount(store.dueCount, withCompletionHandler: nil)
     }
 }
 

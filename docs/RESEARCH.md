@@ -8,6 +8,42 @@ questions that only testing with real learners can answer.
 
 ---
 
+## 0. Revision 2 — munkens mat (minimal redesign)
+
+The first build exposed too much: four tabs, cards on every screen,
+interval labels, charts, eleven settings. Revision 2 follows *munkens mat*,
+the monk's meal: serve only what nourishes. The learning logic below is
+unchanged — it simply moved out of sight.
+
+| Removed from view | Where the logic lives now |
+|---|---|
+| Today dashboard (rhythm, tricky kanji, backlog banner, reading card) | Home picks one state — review, learn or rest — from the store. Catch-up batching and lesson pausing still run silently. |
+| Progress tab (charts, heatmap, forecast, misses) | Stage is shown by ink density in the Library; statistics are still computed and stored. |
+| Interval labels, Hard/Easy, "why did you miss?" chips | FSRS still schedules; grading is pass/fail; slip type is inferred from the answer and logged. |
+| Retention, batch size, day start, grading and haptics settings | Fixed research defaults (90%, 5, 4 AM); haptics follow the system setting. |
+| Mnemonic and look-alikes on every answer | Shown only for new, relearning or leech cards — support appears when it's needed. |
+| Cards, chips, eyebrows, custom buttons | Plain typography on the system background; system bordered buttons. |
+
+What Apple's guidance asked for, and how it's met:
+
+- *"Help people concentrate on primary tasks and content by limiting the
+  number of onscreen controls while making secondary details and actions
+  discoverable with minimal interaction"* (Designing for iOS) — one primary
+  action per screen; secondary actions live in toolbars, menus and taps.
+- *"Minimizing modal interfaces and full-screen transitions"* (Designing for
+  iPadOS) — study sessions are pushed onto the navigation stack, so Back
+  always leaves and every answer is already saved.
+- iPhone Duo (Sept 2026) — standard `NavigationStack`, toolbars and system
+  buttons, so the system can move bars to the side; no fixed widths (only
+  maximum widths); toolbar items use `Label` with both title and symbol;
+  layouts adapt by available space.
+- App Review 5.1.1 — an in-app Privacy page (no data collected, everything
+  on device). 2.1 — no placeholder content: levels without kanji are hidden
+  rather than shown as "coming soon". 2.3.7 / 5.2.1 — "JLPT" isn't used in
+  the app name, and the app disclaims affiliation.
+
+---
+
 ## 1. Where existing apps let learners down
 
 Findings from learner communities (WaniKani forums, Anki forums, reviews of

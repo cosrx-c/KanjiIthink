@@ -1,4 +1,4 @@
-# Sumi 墨 — kanji, the way memory works
+# Sumi 墨 — kanji, one quiet step at a time
 
 A native SwiftUI kanji trainer for iPhone and iPad, from JLPT N5 to N1 and
 beyond. Built in Swift Playgrounds and synced through GitHub.
@@ -6,27 +6,38 @@ beyond. Built in Swift Playgrounds and synced through GitHub.
 *"Sumi" (墨, ink) is a working name — rename it in Swift Playgrounds' app
 settings.*
 
-## What's in the app
+## Design: munkens mat
 
-| Tab | What it does |
+*Munkens mat* — the monk's meal — serves only what nourishes. Every screen
+offers one thing to do; everything else happens out of sight.
+
+**What you see**
+
+| Screen | Contents |
 |---|---|
-| **Today** | One clear next step: reviews due (with a time estimate), the next lesson batch, your week's rhythm, a reading suggestion and any tricky kanji. A calm catch-up mode takes over after a break. |
-| **Kanji** | Every kanji by JLPT level with its memory stage. Search by kanji, English meaning, or reading in kana *or* romaji. Each kanji page has readings, parts, a memory hook (plus your own), words, a sentence with furigana, real-life usage, look-alikes and your memory stats. |
-| **Read** | Short real-world texts (station signs, a restaurant dialogue, a diary, an email, the seasons) with adaptive furigana, tap-to-look-up, per-line translations, audio, and notes on culture, register, discourse and conversation. |
-| **Progress** | Memory stages, JLPT path, 7-day forecast, a 16-week activity map (no streaks), and what trips you up with a matching tip. |
+| **Home** | One number (reviews waiting) or one glyph (the next new kanji), and one button. When you're done: "Done", when the next review is, and at most two quiet links (read a text, learn more today). |
+| **Study** | The prompt in the middle, the answer controls at the bottom, a thin progress line, Back and Undo. Nothing else. |
+| **Library** | Kanji grouped by level. Each glyph's ink deepens as you learn it — faint when new, full black once known. A second tab lists the reading texts. Search takes kanji, English, kana or romaji. |
+| **Kanji page** | The glyph, its meaning and readings, a memory hook (or your own), words and a sentence — tap any of them to hear it. |
+| **Settings** | Daily pace, writing practice, furigana, typeface, speech, a daily reminder, import/export, privacy. |
 
-Study sessions run full-screen:
+**What happens behind it**
 
-- **Lessons** teach 5 kanji at a time (parts are taught before the kanji
-  that contain them), with a trace-it-once writing pad and an "I already
-  know this" skip, then an immediate quiz.
-- **Reviews** cover three skills per kanji: *meaning* (self-graded),
-  *reading* inside a real word (typed in romaji or kana, auto-graded with a
-  free retry for near-misses), and *writing* from memory on a 田-grid pad
-  (unlocks once recognition is stable).
-- Scheduling uses **FSRS-6**, the model Anki adopted, with a 90% default
-  target. Every grade button shows its next interval. Undo is ⌘Z (or the
-  ↶ button); misses come back a few cards later.
+- **FSRS-6 scheduling** at a 90% recall target — intervals are never shown.
+- **Pacing:** reviews always come before new kanji; after a long break,
+  reviews arrive 50 at a time, most-at-risk first, and new lessons pause.
+- **Order:** parts are taught before the kanji that contain them.
+- **Three skills per kanji:** meaning, reading (typed in kana or romaji,
+  inside a real word) and writing (unlocks once recognition is stable).
+- **Mistakes are noticed for you:** near misses (small っ, long vowels,
+  ゛ marks, a valid reading the word doesn't use) get a hint and a free retry;
+  the type of slip is logged silently; the memory hook and look-alike tips
+  appear only for new, relearning or repeatedly forgotten cards.
+- **Adaptive furigana** shows readings only above kanji you haven't learned.
+- **Reminders** (opt-in, offered once after your first session) state the
+  exact number of reviews waiting and keep the app badge accurate.
+- **Hidden power:** ⌘Z undo, Space to reveal, Return for Remembered/Continue,
+  1 for Forgot; "I mistyped" override; practice any kanji from its page.
 
 The research behind every decision is in [docs/RESEARCH.md](docs/RESEARCH.md).
 
