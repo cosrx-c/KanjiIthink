@@ -9,48 +9,73 @@ settings.*
 ## Design: munkens mat, moving like a feed
 
 *Munkens mat* — the monk's meal — serves only what nourishes. Every screen
-offers one thing to do; everything else happens out of sight. Study moves
-the way people already move through short-video feeds.
+offers one thing to do; everything else happens out of sight. Study has no
+buttons at all: the page is the control, and it moves the way people
+already move through short-video feeds.
 
-**Reviews: a vertical feed, like Reels**
+**Study: one full-screen feed, no buttons**
 
-Each card fills the screen. Drag up and the next card rises from below
-under your finger; drag down and the previous one comes back from above.
+Each card fills the screen, edge to edge. Drag up and the next card slides
+over this one while this one recedes — smaller, dimmer, its corners
+rounding — the way a sheet pushes back what's beneath it. Lessons use the
+same feed: a page for each new kanji, then its quiz.
 
 | Gesture | Action | Borrowed from |
 |---|---|---|
 | Tap | Reveal the answer (tap again: hear it) | Tap to play |
-| Swipe ↑ | Next card — counts as "knew it" unless marked Forgot | Next reel |
-| Swipe ↓ | Previous card, its answer undone | Previous reel |
-| Swipe ← / → | Mark / clear Forgot | Flashcard apps: left = still learning |
-| Double-tap | Save the kanji | Liking/saving a post |
-| Hold | Play the stroke order (release to stop) | Pressing a Live Photo |
+| Swipe ↑ | Next — counts as "knew it" unless marked | Next reel |
+| Swipe ↓ | Previous card, its answer undone (first card: close) | Previous reel; pulling a photo down to close it |
+| Swipe → | Forgot | Mail-style swipe action |
+| Swipe ← | Save for later | Mail-style swipe action |
+| Double-tap | Easy — a heart pops (on a new kanji: "I already know this") | Liking a post |
+| Hold | Stroke order and sound together, a soft tap on every stroke | Pressing a Live Photo |
+| Pinch | Close | Pinching a photo closed |
 
 Swiping up on a hidden answer reveals it as the card moves, so you always
-see what you're confirming. A Reels-style rail on the right — **Forgot**,
-**Save**, **Listen**, **Strokes** — and a tappable "Swipe up for next"
-caption give every gesture a visible alternative; hardware keys (Space,
-Return, ↑ ↓ ← →, S, Esc) and VoiceOver actions cover them too. A tick of
-haptics marks the point where letting go commits; swipes that aren't
-available rubber-band back.
+see what you're confirming. Swiping sideways uncovers the action behind
+the page, and a tick of haptics marks the point where letting go commits.
+Directions that do nothing rubber-band. Small glass chips at the top show
+what's marked (Forgot, Easy, Saved). The first five cards each teach one
+gesture in a single line of text, then the hints are gone for good.
+Hardware keys (Space, Return, ↑ ↓ ← →, E, P, Esc) and VoiceOver actions
+cover every gesture.
 
-**Lessons: Stories.** Segmented bars on top, swipe between new kanji, and
-each kanji draws itself stroke by stroke as its page opens.
+**Built to feel like it belongs on iOS**
 
-**Light gamification, no anxiety.** A combo badge (×3, ×4…) counts
-first-try answers and quietly resets on a miss; milestones get a haptic, the
-recap notes your best run, and a hanko stamp closes each session. Saved
-kanji form a collection you can practice. There are no streaks to lose, no
-hearts, no leaderboards.
+- *Motion:* springs that start from where things are and inherit the
+  finger's velocity, so a flick carries straight into the page turn;
+  momentum is projected the way scroll views decelerate; edges resist with
+  Apple's rubber-band curve. Reduce Motion turns all of it into crossfades.
+- *Spatial continuity:* the session rises from Home on the same swipe up
+  that starts it; the cover is clear, so pulling the first page down or
+  pinching shows Home underneath; the recap and the onboarding lift away
+  like the Lock Screen.
+- *Haptics (Core Haptics):* a soft tap per stroke in time with the drawing,
+  a rising double pop for the heart, two dull knocks for Forgot, a crisp
+  click for Save, a selection tick at commit points, a barely-there detent
+  as each page lands. Each one fires on the same frame as its visual, and
+  all of them can be switched off.
+- *Sound:* the best Japanese voice installed (Premium, then Enhanced), or
+  the one you pick in Settings. Automatic speech follows the Ring/Silent
+  switch and mixes with your music; anything you ask for (tap, hold)
+  plays and briefly ducks it.
+- *Materials:* Liquid Glass (iOS 26) for the floating chips only — never
+  for content — with a thin material on earlier systems.
+
+**Light gamification, no anxiety.** A combo chip (×3, ×4…) counts first-try
+answers and quietly resets on a miss; milestones get a haptic, the recap
+notes your best run, and a hanko stamp closes each session. Saved kanji
+form a collection you can practice. There are no streaks to lose, no
+lives, no leaderboards.
 
 **Screens**
 
 | Screen | Contents |
 |---|---|
-| **Home** | One number (reviews waiting) or one glyph (the next new kanji), and one button. When you're done: when the next review is, plus quiet links (read a text, practice saved, learn more). |
+| **Home** | One number (reviews waiting) or one glyph (the next new kanji), and "Swipe up to review/learn". When you're done: when the next review is, plus quiet links (read a text, practice saved, learn more). |
 | **Library** | Kanji, Saved and Texts. Each glyph's ink deepens as you learn it — faint when new, full black once known. Search takes kanji, English, kana or romaji. |
-| **Kanji page** | The glyph (hold for stroke order, double-tap to save), meaning, readings, a memory hook (or your own), words and a sentence — tap any to hear it. |
-| **Settings** | Daily pace, writing, type readings, furigana, typeface, audio, a daily reminder, import/export, privacy. |
+| **Kanji page** | The glyph (hold for strokes and sound, double-tap to save), meaning, readings, a memory hook (or your own), words and a sentence — tap any to hear it. |
+| **Settings** | Daily pace, writing, type readings, furigana, typeface, audio, voice, haptics, a daily reminder, import/export, privacy. |
 
 **What happens behind it**
 
@@ -60,8 +85,8 @@ hearts, no leaderboards.
 - **Order:** parts are taught before the kanji that contain them.
 - **Three skills per kanji:** meaning; reading inside a real word (said in
   your head and checked by ear, or typed in kana/romaji with *Type
-  readings*); and writing — in the air, on paper or on the pad — which
-  unlocks once recognition is stable and ends with the stroke order.
+  readings*); and writing — in the air or on paper — which unlocks once
+  recognition is stable and ends with the stroke order drawing itself.
 - **Context cards:** every seventh first-try success is followed by an
   ungraded sentence that shows the kanji at work.
 - **Mistakes are noticed for you:** typed near misses (small っ, long
@@ -71,7 +96,7 @@ hearts, no leaderboards.
   cards.
 - **Adaptive furigana** shows readings only above kanji you haven't learned.
 - **Audio** plays automatically on reveal but respects the Ring/Silent
-  switch; tapping a speaker plays even in silent mode.
+  switch; a tap or hold plays even in silent mode.
 - **Reminders** (opt-in, offered once after your first session) state the
   exact number of reviews waiting and keep the app badge accurate.
 
@@ -195,7 +220,7 @@ error line will point to a specific view and is likely a one-line fix.
 ## Roadmap
 
 - Content: N5 complete (~80), then N4, N3, N2, N1 packs; audio recordings.
-- Stroke-order animation and stroke-by-stroke checking from KanjiVG (CC BY-SA 3.0).
+- Stroke-by-stroke writing checks against KanjiVG (the animation is in).
 - iCloud sync (CloudKit) so iPhone, iPad and a future Mac app share progress.
 - Per-learner FSRS parameter optimization from the review log.
 - iPad and Mac layouts with a sidebar (`NavigationSplitView`).

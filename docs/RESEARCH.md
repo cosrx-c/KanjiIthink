@@ -8,6 +8,84 @@ questions that only testing with real learners can answer.
 
 ---
 
+## 0b. Revision 4 — no buttons, and an Apple feel
+
+Revision 3 put a Reels-style rail of buttons beside every card. Revision 4
+removes it: the page is the only control. This revision's gesture map
+replaces the one in 0a.
+
+| Gesture | Action | Why this gesture |
+|---|---|---|
+| Tap | Reveal; then hear it again | HIG: tap activates; tap to play |
+| Swipe ↑ | Next (counts as known) | Reels, TikTok, Shorts: up = next |
+| Swipe ↓ | Previous, its answer undone; on the first card, close | Down = previous; pulling a photo down dismisses it |
+| Swipe → | Forgot | A swipe action, as in Mail; one deliberate movement for the rarer outcome |
+| Swipe ← | Save for later | A swipe action, as in Mail ("flag for later") |
+| Double-tap | Easy (a heart); on a new kanji, "I already know this" | Double-tap = "like": this one is effortless |
+| Hold | Stroke order and sound together | Pressing a Live Photo plays it |
+| Pinch in | Close | Pinching a photo closed |
+
+**Easy comes back.** Revision 2 cut grading to pass/fail to remove a
+decision from every card. That stays true: doing nothing extra still means
+*Good*. Double-tap adds FSRS's *Easy* grade only when it's effortless, so
+the cost of the extra option is paid only by someone who wants it, and
+FSRS uses it to stretch that card's next interval.
+
+### What makes an interface feel like Apple made it
+
+Studying Apple's own design talks and guidelines, the "feel" comes from a
+handful of properties that combine. Each is applied here:
+
+| Property | Apple's source | In Sumi |
+|---|---|---|
+| **Response** — feedback the instant a finger lands | *Designing Fluid Interfaces* (WWDC18) | The card dips (98%) on touch-down; drags track 1:1 from the first point |
+| **Springs, not curves** — motion described by duration and bounce, critically damped by default, bounce only after momentum | *Animate with springs* (WWDC23) | `Motion.settle` (bounce 0), `Motion.flick` (0.2) after a released drag, `Motion.reveal` (0.08) |
+| **Velocity handoff** — the animation starts at the finger's speed, so there is no seam between dragging and animating | WWDC18; WWDC23 | Page turns use `interpolatingSpring(initialVelocity:)` with the release velocity relative to the distance left |
+| **Momentum projection** — decide by where a flick is going, not where it let go | WWDC18 sample code | `Motion.project` (UIScrollView's deceleration formula) decides every swipe |
+| **Rubber-banding** — resist progressively at boundaries instead of stopping dead | WWDC18; UIScrollView | Apple's curve `(x·d·c)/(d + c·x)`, c = 0.55, on unavailable directions and past side-swipe limits |
+| **Spatial consistency** — things leave the way they came | WWDC18 | The session rises on the swipe up that starts it; the first page pulled down falls back into Home; recap and onboarding lift away upward |
+| **Depth** — what's underneath recedes, dims and rounds, as with stacked sheets | iOS sheet presentation | The outgoing page scales to 92%, dims and takes the display's corner radius while the next slides over it |
+| **Haptics with meaning** — causality, harmony, utility; system patterns used by their documented meaning | HIG *Playing haptics*; *Designing Audio-Haptic Experiences* (WWDC19) | Selection tick at commit points, soft detent on page landing, notification success only for real milestones; Core Haptics patterns for strokes, heart, forgot, save — each started on the frame of its visual |
+| **Materials for the functional layer only** | *Meet Liquid Glass* (WWDC25); HIG *Materials* | Glass on the floating status chips and the combo chip, never on the content |
+| **The best voice available** | AVSpeechSynthesizer voice quality | Premium, then Enhanced, then default Japanese voice; a picker lists what's installed and plays each when chosen |
+| **Audio etiquette** | HIG *Playing audio* | Automatic speech is ambient (honors Silent, mixes with music); speech you ask for plays and ducks other audio |
+| **Restraint** | HIG; "utility" in WWDC19 | No sounds of our own, no confetti; the one celebratory moment (the heart) is tied to a real judgment |
+| **Accessibility as part of the feel** | HIG *Accessibility*, *Motion* | Reduce Motion turns every slide into a crossfade and stops the shimmer; every gesture is a VoiceOver action; the hidden keyboard keys cover all of them |
+
+### Gestures without buttons — the trade-off, handled
+
+The HIG warns that custom gestures are hard to discover and asks for more
+than one way to do things. Hiding every control trades discoverability for
+calm, so the cost is paid back three ways:
+
+1. **Familiar vocabulary first.** Swipe up and tap need no teaching; the
+   first screen of the app (*Swipe up to begin*) is itself the first lesson,
+   and Home uses the same gesture.
+2. **One gesture per card, once.** The first five cards each carry one line —
+   *Swipe up for next*, *Forgot it? Swipe right*, *Knew it instantly?
+   Double-tap*, *Swipe left to save · hold for strokes and sound*, *Pinch to
+   close* — then disappear for good (Krug: teach in context, then get out of
+   the way). Swipe hints shimmer like the old *slide to unlock*.
+3. **Other ways in.** VoiceOver users get named actions (Next, Forgot, Easy,
+   Save, Previous, Play stroke order and sound, Close) and the escape
+   gesture; keyboard users get Space/Return, the arrows, E, P and Esc;
+   *How Sumi works* lists every gesture.
+
+Swipes that would do nothing resist and spring back, and side swipes show
+the action they will take before you let go, so a gesture never has a
+surprising result.
+
+### Known limits of this revision
+
+- A page turn in flight (about 0.4 s) can't be grabbed and reversed —
+  SwiftUI's completion-based page swap ignores input until it lands. Apple's
+  ideal is full interruptibility.
+- The hold-to-play haptic pattern plays each stroke once while the
+  animation loops; it stops when the finger lifts.
+- iPad has no Taptic Engine, so Settings hides the Haptics switch there.
+- Liquid Glass needs the iOS 26 SDK; on older toolchains the same chips use
+  a thin material.
+
 ## 0a. Revision 3 — a feed people already know how to use
 
 Revision 2 made the app quiet; revision 3 makes it move. The aim: keep the
@@ -320,9 +398,12 @@ pure red; green confirms. Stage colors always come with a text label
 
 ### Motion and haptics
 
-Short springs (0.22–0.35 s) for state changes, a shake for "try again", a
-stamp for completion. Reduce Motion swaps springs for fades. Haptics: light
-tap on reveal and self-grade, success/error on typed answers — all optional.
+Springs described by duration and bounce (critically damped by default,
+a little bounce only after a released drag), page turns that inherit the
+finger's velocity, a shake for "try again", a stamp for completion. Reduce
+Motion swaps every slide for a crossfade. Haptics follow the system's
+meanings plus a few Core Haptics patterns (strokes, heart, forgot, save) —
+all optional. Details in section 0b.
 
 ### Accessibility
 
@@ -385,10 +466,11 @@ motivation and habit questions (Hall; Marsh).
   Market it as *JLPT-aligned*.
 - Starter content covers 59 N5 + 5 N4 kanji and 5 passages. Etymology
   (`kind`) is only given where it's well established.
-- No stroke-order animation yet (KanjiVG, CC BY-SA 3.0, is the natural
-  source) and no handwriting recognition — writing is self-checked against
-  the model glyph.
-- Speech uses the system Japanese voice, fed kana so it never misreads kanji.
+- Stroke order animates from KanjiVG (CC BY-SA 3.0), but there's no
+  handwriting recognition — writing is self-checked against the animation.
+- Speech uses the best installed Japanese system voice, fed kana so it
+  never misreads kanji. Premium and Enhanced voices must be downloaded by
+  the learner in Settings › Accessibility › Spoken Content.
 - FSRS parameters are the global defaults; per-user optimization from the
   review log is a natural next step once learners have ~1,000 reviews.
 
@@ -421,3 +503,11 @@ motivation and habit questions (Hall; Marsh).
 - Apple Human Interface Guidelines — Gestures. https://developer.apple.com/design/human-interface-guidelines/gestures
 - Apple Human Interface Guidelines — Designing for iPhone Duo. https://developer.apple.com/design/human-interface-guidelines/designing-for-iphone-duo
 - KanjiVG stroke order data (CC BY-SA 3.0). https://kanjivg.tagaini.net
+- Apple — Designing Fluid Interfaces (WWDC18). https://developer.apple.com/videos/play/wwdc2018/803/
+- Apple — Animate with springs (WWDC23). https://developer.apple.com/videos/play/wwdc2023/10158/
+- Apple — Designing Audio-Haptic Experiences (WWDC19). https://developer.apple.com/videos/play/wwdc2019/810/
+- Apple Human Interface Guidelines — Playing haptics. https://developer.apple.com/design/human-interface-guidelines/playing-haptics
+- Apple Human Interface Guidelines — Materials. https://developer.apple.com/design/human-interface-guidelines/materials
+- Apple — Meet Liquid Glass (WWDC25). https://developer.apple.com/videos/play/wwdc2025/219/
+- Apple — Applying Liquid Glass to custom views. https://developer.apple.com/documentation/swiftui/applying-liquid-glass-to-custom-views
+- Apple Developer Documentation — AVSpeechSynthesisVoice and voice quality. https://developer.apple.com/documentation/avfaudio/avspeechsynthesisvoice

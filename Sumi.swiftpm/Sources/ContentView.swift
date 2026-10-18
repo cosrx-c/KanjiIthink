@@ -6,22 +6,23 @@
 //  nourishes. Every screen offers one thing to do; scheduling, pacing,
 //  catch-up, error analysis, writing unlocks and reminders run out of sight.
 //
-//  Interaction: reviews are a vertical card feed people already know from
-//  Reels — tap flips, swipe right "knew it", left "again", up "later",
-//  down "back", double-tap saves, hold plays the stroke order. Lessons read
-//  like Stories. Every gesture also has a button, a keyboard shortcut and a
-//  VoiceOver action.
+//  Interaction: study is one full-screen vertical feed with no buttons —
+//  tap reveals, swipe up for next, down for back, right for Forgot, left to
+//  save, double-tap for Easy, hold for stroke order and sound, pinch to
+//  close. Motion uses springs that inherit the finger's velocity; haptics
+//  and speech land on the same frame as the visual they belong to. Every
+//  gesture also has a keyboard key and a VoiceOver action.
 //
 //  Everything lives in this file so it syncs cleanly through Swift
 //  Playgrounds and GitHub:
 //
-//    1. Design system      tokens, haptics, speech and shared controls
+//    1. Design system      tokens, motion, haptics, speech, glass
 //    2. Content model      kanji, words, passages, look-alikes (JSON-backed)
 //    3. Language helpers   furigana markup, kana and romaji conversion
 //    4. Memory model       FSRS-6 scheduler and the study-day clock
 //    5. Store              persistence, progress, statistics, import/export
 //    6. Sessions           the study queue, combos, undo, context cards
-//    7. Screens            Home, Feed, Stories, Library, Settings, onboarding
+//    7. Screens            Home, the study feed, Library, Settings, onboarding
 //    8. Built-in content   the starter pack (with KanjiVG strokes) as JSON
 //
 //  The research behind each decision is in docs/RESEARCH.md at the root
@@ -29,7 +30,7 @@
 //
 
 import SwiftUI
-import PencilKit
+import CoreHaptics
 import AVFoundation
 import UniformTypeIdentifiers
 import UserNotifications
@@ -164,46 +165,6 @@ extension View {
     }
 }
 
-/// The app's only button. System bordered styles keep Apple's materials and
-/// shapes (including Liquid Glass on newer systems); the primary kind is
-/// filled with the accent, the secondary kind is a neutral tint.
-struct ActionButton: View {
-    enum Kind {
-        case primary, secondary
-    }
-
-    let title: String
-    var kind: Kind = .primary
-    let action: () -> Void
-
-    var body: some View {
-        switch kind {
-        case .primary:
-            Button(action: action) {
-                label.foregroundStyle(Palette.onAccent)
-            }
-            .buttonStyle(.borderedProminent)
-            .tint(Palette.accent)
-            .controlSize(.large)
-        case .secondary:
-            Button(action: action) {
-                label
-            }
-            .buttonStyle(.bordered)
-            .tint(Color.primary)
-            .controlSize(.large)
-        }
-    }
-
-    private var label: some View {
-        Text(title)
-            .font(.headline)
-            .lineLimit(1)
-            .minimumScaleFactor(0.8)
-            .frame(maxWidth: .infinity)
-    }
-}
-
 /// A small caps caption that names a task without competing with it.
 struct Caption: View {
     let text: String
@@ -216,23 +177,174 @@ struct Caption: View {
     }
 }
 
+/// Motion in Apple's terms: springs that start from where things are,
+/// inherit the finger's velocity, project momentum and resist at the edges.
+enum Motion {
+    /// Critically damped — for things that simply settle.
+    static let settle = Animation.spring(duration: 0.35, bounce: 0)
+    /// A touch of overshoot, only after a gesture carried momentum.
+    static let flick = Animation.spring(duration: 0.4, bounce: 0.2)
+    /// Answers arriving on a reveal.
+    static let reveal = Animation.spring(duration: 0.45, bounce: 0.08)
 
-/// Haptics follow the system's own vocabulary: a tick when a swipe will
-/// commit, a soft tap for "knew it", a firmer one for "again", a success
-/// pattern only for real milestones.
-enum Haptics {
-    static func success() { UINotificationFeedbackGenerator().notificationOccurred(.success) }
-    static func error() { UINotificationFeedbackGenerator().notificationOccurred(.error) }
-    static func warning() { UINotificationFeedbackGenerator().notificationOccurred(.warning) }
-    static func tap() { UIImpactFeedbackGenerator(style: .light).impactOccurred() }
-    static func soft() { UIImpactFeedbackGenerator(style: .soft).impactOccurred() }
-    static func rigid() { UIImpactFeedbackGenerator(style: .rigid).impactOccurred(intensity: 0.7) }
-    static func medium() { UIImpactFeedbackGenerator(style: .medium).impactOccurred() }
-    static func tick() { UISelectionFeedbackGenerator().selectionChanged() }
+    /// A page turn that continues at the finger's speed. `velocity` is
+    /// relative: points per second divided by the distance left to travel.
+    static func page(velocity: Double) -> Animation {
+        .interpolatingSpring(duration: 0.38, bounce: 0, initialVelocity: velocity)
+    }
+
+    /// Apple's rubber-band curve: the further past the edge, the less the
+    /// content follows.
+    static func rubberband(_ overshoot: CGFloat, dimension: CGFloat, constant: CGFloat = 0.55) -> CGFloat {
+        guard dimension > 0 else { return 0 }
+        let distance = abs(overshoot)
+        let resisted = (distance * dimension * constant) / (dimension + constant * distance)
+        return overshoot < 0 ? -resisted : resisted
+    }
+
+    /// Where a flick comes to rest (UIScrollView's fast deceleration).
+    static func project(_ velocity: CGFloat, decelerationRate: CGFloat = 0.99) -> CGFloat {
+        (velocity / 1000) * decelerationRate / (1 - decelerationRate)
+    }
 }
 
-/// Japanese speech from the system voice. Automatic playback respects the
-/// Ring/Silent switch (like video feeds); a deliberate tap on a speaker
+/// Haptics use the system's documented meanings — selection for "this will
+/// commit", impact for things snapping into place, notifications only for
+/// real outcomes — plus a few Core Haptics patterns for moments that deserve
+/// their own feel: a brush touching paper on every stroke, a heart that
+/// pops, two dull knocks for "forgot". All of it can be switched off.
+enum Haptics {
+    static var enabled = true
+    private static var engine: CHHapticEngine?
+    private static var player: CHHapticPatternPlayer?
+    private static let supportsCustom = CHHapticEngine.capabilitiesForHardware().supportsHaptics
+
+    /// iPad has no Taptic Engine, so Settings hides the switch there.
+    static var isSupported: Bool { supportsCustom }
+
+    /// Stops a pattern in progress, such as the stroke taps when a hold ends.
+    static func stop() {
+        try? player?.stop(atTime: CHHapticTimeImmediate)
+        player = nil
+    }
+
+    static func success() {
+        guard enabled else { return }
+        UINotificationFeedbackGenerator().notificationOccurred(.success)
+    }
+
+    static func error() {
+        guard enabled else { return }
+        UINotificationFeedbackGenerator().notificationOccurred(.error)
+    }
+
+    static func warning() {
+        guard enabled else { return }
+        UINotificationFeedbackGenerator().notificationOccurred(.warning)
+    }
+
+    static func tap() {
+        guard enabled else { return }
+        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+    }
+
+    static func soft() {
+        guard enabled else { return }
+        UIImpactFeedbackGenerator(style: .soft).impactOccurred()
+    }
+
+    static func rigid() {
+        guard enabled else { return }
+        UIImpactFeedbackGenerator(style: .rigid).impactOccurred(intensity: 0.7)
+    }
+
+    static func medium() {
+        guard enabled else { return }
+        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+    }
+
+    /// A value is about to change — the swipe will commit if released now.
+    static func tick() {
+        guard enabled else { return }
+        UISelectionFeedbackGenerator().selectionChanged()
+    }
+
+    /// A page settling into place — barely there, like a detent.
+    static func snap() {
+        guard enabled else { return }
+        UIImpactFeedbackGenerator(style: .soft).impactOccurred(intensity: 0.55)
+    }
+
+    /// One soft touch at the start of each stroke, in time with the drawing.
+    static func strokes(count: Int, interval: TimeInterval) {
+        guard count > 0 else { return }
+        let events = (0..<count).map { index in
+            transient(at: Double(index) * interval, intensity: 0.45, sharpness: 0.2)
+        }
+        play(events)
+    }
+
+    /// The heart: a quick, rising double pop.
+    static func heart() {
+        play([transient(at: 0, intensity: 0.55, sharpness: 0.45),
+              transient(at: 0.09, intensity: 1, sharpness: 0.75)])
+    }
+
+    /// Forgot: two low, dull knocks.
+    static func forgot() {
+        play([transient(at: 0, intensity: 0.75, sharpness: 0.12),
+              transient(at: 0.12, intensity: 0.5, sharpness: 0.08)])
+    }
+
+    /// Saved: one crisp click.
+    static func saved() {
+        play([transient(at: 0, intensity: 0.85, sharpness: 0.9)])
+    }
+
+    private static func transient(at time: TimeInterval, intensity: Float, sharpness: Float) -> CHHapticEvent {
+        CHHapticEvent(eventType: .hapticTransient,
+                      parameters: [CHHapticEventParameter(parameterID: .hapticIntensity, value: intensity),
+                                   CHHapticEventParameter(parameterID: .hapticSharpness, value: sharpness)],
+                      relativeTime: time)
+    }
+
+    private static func play(_ events: [CHHapticEvent]) {
+        guard enabled else { return }
+        guard supportsCustom else {
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            return
+        }
+        do {
+            let engine = try runningEngine()
+            let next = try engine.makePlayer(with: CHHapticPattern(events: events, parameters: []))
+            stop()
+            try next.start(atTime: CHHapticTimeImmediate)
+            player = next
+        } catch {
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        }
+    }
+
+    private static func runningEngine() throws -> CHHapticEngine {
+        if let engine = engine {
+            try engine.start()
+            return engine
+        }
+        let created = try CHHapticEngine()
+        created.playsHapticsOnly = true
+        created.isAutoShutdownEnabled = true
+        created.resetHandler = {
+            try? Haptics.engine?.start()
+        }
+        try created.start()
+        engine = created
+        return created
+    }
+}
+
+/// Japanese speech from the best voice installed — Premium, then Enhanced,
+/// then the default — or the voice chosen in Settings. Automatic playback
+/// respects the Ring/Silent switch (like video feeds); a deliberate gesture
 /// plays even in silent mode (like Dictionary). Callers pass kana so the
 /// voice never guesses a kanji reading.
 ///
@@ -240,11 +352,41 @@ enum Haptics {
 /// the delegate protocol requires) is safe.
 final class Speaker: NSObject, AVSpeechSynthesizerDelegate, @unchecked Sendable {
     static let shared = Speaker()
+    /// Identifier of the voice picked in Settings; empty means automatic.
+    static var preferredVoiceID = ""
     private let synthesizer = AVSpeechSynthesizer()
 
     override init() {
         super.init()
         synthesizer.delegate = self
+    }
+
+    /// Installed Japanese voices, best quality first.
+    static var japaneseVoices: [AVSpeechSynthesisVoice] {
+        AVSpeechSynthesisVoice.speechVoices()
+            .filter { $0.language == "ja-JP" }
+            .sorted { lhs, rhs in
+                lhs.quality.rawValue == rhs.quality.rawValue
+                    ? lhs.name < rhs.name
+                    : lhs.quality.rawValue > rhs.quality.rawValue
+            }
+    }
+
+    static func qualityName(_ quality: AVSpeechSynthesisVoiceQuality) -> String {
+        switch quality {
+        case .premium: return "Premium"
+        case .enhanced: return "Enhanced"
+        default: return "Standard"
+        }
+    }
+
+    private var voice: AVSpeechSynthesisVoice? {
+        let voices = Speaker.japaneseVoices
+        if !Speaker.preferredVoiceID.isEmpty,
+           let chosen = voices.first(where: { $0.identifier == Speaker.preferredVoiceID }) {
+            return chosen
+        }
+        return voices.first ?? AVSpeechSynthesisVoice(language: "ja-JP")
     }
 
     func say(_ text: String, deliberate: Bool = true) {
@@ -258,9 +400,14 @@ final class Speaker: NSObject, AVSpeechSynthesizerDelegate, @unchecked Sendable 
         try? session.setActive(true)
         if synthesizer.isSpeaking { synthesizer.stopSpeaking(at: .immediate) }
         let utterance = AVSpeechUtterance(string: text)
-        utterance.voice = AVSpeechSynthesisVoice(language: "ja-JP")
-        utterance.rate = AVSpeechUtteranceDefaultSpeechRate * 0.9
+        utterance.voice = voice
+        utterance.rate = AVSpeechUtteranceDefaultSpeechRate * 0.92
+        utterance.preUtteranceDelay = 0
         synthesizer.speak(utterance)
+    }
+
+    func stop() {
+        if synthesizer.isSpeaking { synthesizer.stopSpeaking(at: .word) }
     }
 
     func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didFinish utterance: AVSpeechUtterance) {
@@ -268,29 +415,88 @@ final class Speaker: NSObject, AVSpeechSynthesizerDelegate, @unchecked Sendable 
     }
 }
 
-// MARK: Shared pieces
-
-/// The 田-shaped guide found on Japanese practice paper (練習用紙).
-struct PracticeGrid: View {
-    var body: some View {
-        GeometryReader { geo in
-            let w = geo.size.width
-            let h = geo.size.height
-            ZStack {
-                Path { p in
-                    p.move(to: CGPoint(x: w / 2, y: 0))
-                    p.addLine(to: CGPoint(x: w / 2, y: h))
-                    p.move(to: CGPoint(x: 0, y: h / 2))
-                    p.addLine(to: CGPoint(x: w, y: h / 2))
-                }
-                .stroke(Palette.hairline, style: StrokeStyle(lineWidth: 1, dash: [5, 5]))
-                RoundedRectangle(cornerRadius: Radius.control, style: .continuous)
-                    .strokeBorder(Palette.hairline, lineWidth: 1)
-            }
+extension View {
+    /// Liquid Glass on systems that have it; a thin material before that.
+    /// Used only for floating status, never for content.
+    @ViewBuilder
+    func glassCapsule() -> some View {
+        #if compiler(>=6.2)
+        if #available(iOS 26.0, *) {
+            self.glassEffect(.regular, in: Capsule())
+        } else {
+            self.background(.ultraThinMaterial, in: Capsule())
         }
-        .accessibilityHidden(true)
+        #else
+        self.background(.ultraThinMaterial, in: Capsule())
+        #endif
     }
 }
+
+/// "Swipe up to …" with a light sweeping across it, the way the Lock Screen
+/// once invited people to slide to unlock. Static with Reduce Motion.
+struct ShimmerText: View {
+    let text: String
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var phase: CGFloat = -1
+
+    var body: some View {
+        label
+            .foregroundStyle(Palette.ink3)
+            .overlay {
+                if !reduceMotion {
+                    sweep
+                }
+            }
+            .onAppear {
+                if !reduceMotion { phase = 1 }
+            }
+    }
+
+    private var label: some View {
+        HStack(spacing: Space.xxs) {
+            Image(systemName: "chevron.up")
+            Text(text)
+        }
+        .font(.subheadline.weight(.medium))
+    }
+
+    private var sweep: some View {
+        GeometryReader { geo in
+            LinearGradient(colors: [Color.clear, Palette.ink.opacity(0.9), Color.clear],
+                           startPoint: .leading, endPoint: .trailing)
+                .frame(width: geo.size.width * 0.45)
+                .offset(x: phase * geo.size.width * 1.4)
+                // Scoped to the sweep, so the endless repeat can never leak
+                // into the layout of whatever the text sits in.
+                .animation(.linear(duration: 2.4).repeatForever(autoreverses: false), value: phase)
+        }
+        .mask(label)
+        .allowsHitTesting(false)
+    }
+}
+
+/// The heart that pops on a double-tap, as on a liked post.
+struct HeartBurst: View {
+    @State private var shown = false
+    @State private var gone = false
+
+    var body: some View {
+        Image(systemName: "heart.fill")
+            .font(.system(size: 92, weight: .regular))
+            .foregroundStyle(Color.pink.gradient)
+            .shadow(color: Color.black.opacity(0.12), radius: 12, x: 0, y: 6)
+            .scaleEffect(shown ? (gone ? 1.25 : 1) : 0.3)
+            .opacity(gone ? 0 : (shown ? 1 : 0))
+            .onAppear {
+                withAnimation(.spring(duration: 0.35, bounce: 0.5)) { shown = true }
+                withAnimation(.easeIn(duration: 0.25).delay(0.5)) { gone = true }
+            }
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
+    }
+}
+
+// MARK: Shared pieces
 
 /// A vermilion seal (判子) used to mark a finished session — in Japan a
 /// stamp is how something is signed off as done.
@@ -1300,16 +1506,18 @@ struct AppSettings: Codable, Equatable {
     var reminderHour = 19
     var reminderMinute = 0
     var askedReminder = false
-    /// Gesture teaching: swipe hints show until three answers are given;
-    /// the hold/double-tap tip shows until either is used once.
-    var coachSwipes = 0
+    /// The Japanese voice picked in Settings; empty means the best installed.
+    var voiceID = ""
+    /// Gesture teaching: the feed teaches one gesture per card for the first
+    /// five cards; the hold tip on kanji pages shows until it's used once.
+    var coachStep = 0
     var coachTips = false
 
     init() {}
 
     enum CodingKeys: String, CodingKey {
         case newPerDay, batchSize, retention, writing, typeReadings, autoSpeak, haptics, furigana, face
-        case dayStartHour, reminder, reminderHour, reminderMinute, askedReminder, coachSwipes, coachTips
+        case dayStartHour, reminder, reminderHour, reminderMinute, askedReminder, voiceID, coachStep, coachTips
     }
 
     /// Missing keys fall back to defaults, so adding a setting in a future
@@ -1331,7 +1539,8 @@ struct AppSettings: Codable, Equatable {
         reminderHour = (try? c.decode(Int.self, forKey: .reminderHour)) ?? d.reminderHour
         reminderMinute = (try? c.decode(Int.self, forKey: .reminderMinute)) ?? d.reminderMinute
         askedReminder = (try? c.decode(Bool.self, forKey: .askedReminder)) ?? d.askedReminder
-        coachSwipes = (try? c.decode(Int.self, forKey: .coachSwipes)) ?? d.coachSwipes
+        voiceID = (try? c.decode(String.self, forKey: .voiceID)) ?? d.voiceID
+        coachStep = (try? c.decode(Int.self, forKey: .coachStep)) ?? d.coachStep
         coachTips = (try? c.decode(Bool.self, forKey: .coachTips)) ?? d.coachTips
     }
 }
@@ -1896,6 +2105,8 @@ struct StudyItem: Identifiable, Hashable {
         case card
         /// An ungraded sentence that puts a kanji just seen in context.
         case context
+        /// A new kanji being introduced in a lesson.
+        case teach
     }
 
     let id = UUID()
@@ -1927,8 +2138,8 @@ struct SessionResult {
     var started = Date()
 }
 
-/// The study feed. Cards are pages: the current one, the one below it (next)
-/// and the one above it (the previous card, which "back" restores).
+/// One vertical feed for everything: lesson pages, then their quiz, or a
+/// review run. Every move can be taken back with a swipe down.
 final class SessionModel: ObservableObject {
     let mode: SessionMode
     @Published private(set) var queue: [StudyItem]
@@ -1953,31 +2164,36 @@ final class SessionModel: ObservableObject {
 
     init(mode: SessionMode, items: [StudyItem], contextGlyphs: Set<String> = []) {
         self.mode = mode
-        var ordered = SessionModel.interleave(items)
+        let teach = items.filter { $0.kind == .teach }
+        var cards = SessionModel.interleave(items.filter { $0.kind == .card })
         if mode == .review && !contextGlyphs.isEmpty {
-            ordered = SessionModel.weaveContext(into: ordered, glyphs: contextGlyphs)
+            cards = SessionModel.weaveContext(into: cards, glyphs: contextGlyphs)
         }
-        self.queue = ordered
-        self.total = items.count
+        self.queue = teach + cards
+        self.total = teach.count + items.filter { $0.kind == .card }.count
     }
 
     var current: StudyItem? { queue.first }
     var upcoming: StudyItem? { queue.count > 1 ? queue[1] : nil }
-    /// The card "back" would restore — the one on screen before the last answer.
+    /// The page "back" would restore — the one on screen before the last move.
     var previousItem: StudyItem? { history.last?.queue.first }
     var isFinished: Bool { queue.isEmpty }
     var progress: Double { total == 0 ? 1 : Double(completed) / Double(total) }
 
     private static func key(_ item: StudyItem) -> String { item.glyph + "#" + item.facet.rawValue }
 
+    private func remember(_ store: Store) {
+        history.append(Snapshot(save: store.data, queue: queue, completed: completed, total: total,
+                                result: result, failed: failed, combo: combo))
+        if history.count > 60 { history.removeFirst() }
+        canUndo = true
+    }
+
     /// Records an answer. A miss goes back into the feed a few cards later,
     /// so it's retrieved again while the correction is fresh.
     func commit(_ rating: Rating, ms: Int, miss: MissReason?, store: Store) {
         guard let item = queue.first, item.kind == .card else { return }
-        history.append(Snapshot(save: store.data, queue: queue, completed: completed, total: total,
-                                result: result, failed: failed, combo: combo))
-        if history.count > 40 { history.removeFirst() }
-        canUndo = true
+        remember(store)
         if mode != .practice {
             store.record(rating, glyph: item.glyph, facet: item.facet, ms: ms, miss: miss)
         }
@@ -2005,15 +2221,27 @@ final class SessionModel: ObservableObject {
         if store.data.bestCombo < r.bestCombo { store.data.bestCombo = r.bestCombo }
     }
 
-    /// Moves past an ungraded context page.
-    func dismissContext() {
-        guard let item = queue.first, item.kind == .context else { return }
+    /// Moves past a lesson page or a context page.
+    func advancePage(store: Store) {
+        guard let item = queue.first, item.kind != .card else { return }
+        remember(store)
         var next = queue
         next.removeFirst()
+        if item.kind == .teach { completed += 1 }
         queue = next
     }
 
-    /// Brings back the previous card exactly as it was before it was answered.
+    /// "I already know this one" on a lesson page: it's marked known and its
+    /// quiz questions disappear.
+    func skipKnown(_ glyph: String, store: Store) {
+        remember(store)
+        store.markKnown([glyph])
+        let before = queue.count
+        queue.removeAll { $0.glyph == glyph }
+        total = max(total - (before - queue.count), completed)
+    }
+
+    /// Brings back the previous page exactly as it was.
     @discardableResult
     func undo(store: Store) -> Bool {
         guard let last = history.popLast() else { return false }
@@ -2028,16 +2256,10 @@ final class SessionModel: ObservableObject {
         return true
     }
 
-    func remove(glyph: String) {
-        let before = queue.count
-        queue.removeAll { $0.glyph == glyph }
-        total = max(total - (before - queue.count), completed)
-    }
-
     func skipCurrent() {
         guard !queue.isEmpty else { return }
         queue.removeFirst()
-        total = max(completed + queue.filter { $0.kind == .card }.count, completed)
+        total = max(completed + queue.filter { $0.kind != .context }.count, completed)
     }
 
     /// Mixes facets so the same kanji never appears twice in a row
@@ -2070,84 +2292,6 @@ final class SessionModel: ObservableObject {
             }
         }
         return out
-    }
-}
-
-// MARK: Writing surface
-
-/// A square writing surface over 田-grid paper. After an answer is revealed
-/// the model shape fades in beneath your strokes for direct comparison.
-struct WritingPad: View {
-    let clearToken: Int
-    @Binding var hasInk: Bool
-    var guide: String?
-    var guideOpacity: Double = 0.2
-    var face: JPFace = .gothic
-
-    var body: some View {
-        GeometryReader { geo in
-            ZStack {
-                RoundedRectangle(cornerRadius: Radius.card, style: .continuous)
-                    .fill(Palette.surface)
-                PracticeGrid()
-                if let guide = guide {
-                    Text(guide)
-                        .font(.jpFixed(geo.size.width * 0.78, face: face))
-                        .foregroundStyle(Palette.accent.opacity(guideOpacity))
-                        .allowsHitTesting(false)
-                        .transition(.opacity)
-                }
-                InkCanvas(clearToken: clearToken, hasInk: $hasInk)
-            }
-        }
-        .clipShape(RoundedRectangle(cornerRadius: Radius.card, style: .continuous))
-        .animation(.easeOut(duration: 0.3), value: guide)
-        .accessibilityElement()
-        .accessibilityLabel("Writing area")
-        .accessibilityHint("Draw the kanji with your finger or Apple Pencil")
-    }
-}
-
-struct InkCanvas: UIViewRepresentable {
-    let clearToken: Int
-    @Binding var hasInk: Bool
-
-    func makeCoordinator() -> Coordinator { Coordinator(hasInk: $hasInk) }
-
-    func makeUIView(context: Context) -> PKCanvasView {
-        let canvas = PKCanvasView()
-        canvas.drawingPolicy = .anyInput
-        canvas.tool = PKInkingTool(.pen, color: .label, width: 9)
-        canvas.backgroundColor = .clear
-        canvas.isOpaque = false
-        canvas.isScrollEnabled = false
-        canvas.delegate = context.coordinator
-        context.coordinator.lastClear = clearToken
-        return canvas
-    }
-
-    func updateUIView(_ canvas: PKCanvasView, context: Context) {
-        if context.coordinator.lastClear != clearToken {
-            context.coordinator.lastClear = clearToken
-            canvas.drawing = PKDrawing()
-        }
-    }
-
-    final class Coordinator: NSObject, PKCanvasViewDelegate {
-        var hasInk: Binding<Bool>
-        var lastClear = 0
-
-        init(hasInk: Binding<Bool>) {
-            self.hasInk = hasInk
-        }
-
-        func canvasViewDrawingDidChange(_ canvasView: PKCanvasView) {
-            let inked = !canvasView.drawing.strokes.isEmpty
-            let binding = hasInk
-            DispatchQueue.main.async {
-                if binding.wrappedValue != inked { binding.wrappedValue = inked }
-            }
-        }
     }
 }
 
@@ -2333,7 +2477,10 @@ extension Store {
         let count = extra ? size : min(size, lessonsLeftToday)
         let batch = Array(lessonQueue.prefix(max(count, 1)))
         guard !batch.isEmpty else { return nil }
-        return SessionLaunch(mode: .lesson, items: lessonItems(for: batch), lessonGlyphs: batch.map(\.glyph))
+        // Each new kanji gets a page of its own; the quiz follows in the
+        // same feed.
+        let teach = batch.map { StudyItem(glyph: $0.glyph, facet: .meaning, wordIndex: 0, kind: .teach) }
+        return SessionLaunch(mode: .lesson, items: teach + lessonItems(for: batch), lessonGlyphs: batch.map(\.glyph))
     }
 
     func practiceLaunch(_ glyphs: [String]) -> SessionLaunch? {
@@ -2412,6 +2559,15 @@ struct ContentView: View {
                 Reminders.schedule(store)
             }
         }
+        .onAppear(perform: applyPreferences)
+        .onChange(of: store.data.settings) { _, _ in applyPreferences() }
+    }
+
+    /// Haptics and the voice are used outside SwiftUI views, so they mirror
+    /// the saved settings.
+    private func applyPreferences() {
+        Haptics.enabled = store.data.settings.haptics
+        Speaker.preferredVoiceID = store.data.settings.voiceID
     }
 
     @ViewBuilder
@@ -2435,29 +2591,21 @@ struct ContentView_Previews: PreviewProvider {
 
 // MARK: Home
 
-/// One number or one glyph, one action. Nothing else competes for attention.
+/// One number or one glyph, and one gesture: swipe up (or tap) to begin.
+/// The study feed rises from below, continuing the swipe.
 struct HomeView: View {
     @EnvironmentObject var store: Store
     @EnvironmentObject var router: Router
     @Binding var showSettings: Bool
     @ScaledMetric(relativeTo: .largeTitle) private var heroSize: CGFloat = 104
+    @State private var lift: CGFloat = 0
+    @State private var armed = false
 
     private var hero: CGFloat { min(heroSize, 160) }
 
     var body: some View {
         TimelineView(.everyMinute) { _ in
-            let state = store.homeState
-            VStack(spacing: 0) {
-                Spacer(minLength: Space.xl)
-                centerpiece(state)
-                    .padding(.horizontal, Space.l)
-                Spacer(minLength: Space.xl)
-                actions(state)
-                    .padding(.horizontal, Space.l)
-                    .padding(.bottom, Space.l)
-                    .actionColumn()
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            screen(store.homeState)
         }
         .toolbar {
             ToolbarItemGroup(placement: .topBarTrailing) {
@@ -2478,6 +2626,29 @@ struct HomeView: View {
                 .environmentObject(store)
                 .environmentObject(router)
         }
+    }
+
+    private func screen(_ state: HomeState) -> some View {
+        VStack(spacing: 0) {
+            Spacer(minLength: Space.xl)
+            centerpiece(state)
+                .padding(.horizontal, Space.l)
+                .contentShape(Rectangle())
+                .onTapGesture { start(state) }
+                .accessibilityAddTraits(canStart(state) ? .isButton : [])
+                .accessibilityAction { start(state) }
+                .offset(y: lift)
+            Spacer(minLength: Space.xl)
+            footer(state)
+                .padding(.horizontal, Space.l)
+                .padding(.bottom, Space.l)
+                .actionColumn()
+                .opacity(1 - Double(min(-lift / 120, 0.7)))
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .contentShape(Rectangle())
+        .gesture(startGesture(state))
+        .background(startKey(state))
     }
 
     @ViewBuilder
@@ -2528,50 +2699,113 @@ struct HomeView: View {
     }
 
     @ViewBuilder
-    private func actions(_ state: HomeState) -> some View {
+    private func footer(_ state: HomeState) -> some View {
         switch state {
         case .review:
-            ActionButton(title: "Review") {
-                if let launch = store.reviewLaunch() { router.session = launch }
-            }
-            .keyboardShortcut(.defaultAction)
+            startHint("Swipe up to review", label: "Review", state: state)
         case .learn:
-            ActionButton(title: "Learn") {
-                if let launch = store.lessonLaunch(extra: false) { router.session = launch }
-            }
-            .keyboardShortcut(.defaultAction)
+            startHint("Swipe up to learn", label: "Learn", state: state)
         case .rest(_, let canLearnMore, let passage):
-            VStack(spacing: Space.s) {
-                if let passage = passage {
-                    Button {
-                        router.path.append(.passage(passage.id))
-                    } label: {
-                        Text("Read “\(Ruby.plain(passage.title))”")
-                            .font(.body)
-                    }
-                    .buttonStyle(.borderless)
+            restLinks(canLearnMore: canLearnMore, passage: passage)
+        }
+    }
+
+    private func startHint(_ text: String, label: String, state: HomeState) -> some View {
+        ShimmerText(text: text)
+            .frame(maxWidth: .infinity, minHeight: Metrics.buttonHeight)
+            .contentShape(Rectangle())
+            .onTapGesture { start(state) }
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(Text(label))
+            .accessibilityAddTraits(.isButton)
+            .accessibilityAction { start(state) }
+    }
+
+    /// When the day's work is done, a few quiet ways to keep going.
+    private func restLinks(canLearnMore: Bool, passage: Passage?) -> some View {
+        VStack(spacing: Space.s) {
+            if let passage = passage {
+                Button {
+                    router.path.append(.passage(passage.id))
+                } label: {
+                    Text("Read “\(Ruby.plain(passage.title))”")
+                        .font(.body)
                 }
-                if !store.data.saved.isEmpty {
-                    Button {
-                        if let launch = store.practiceLaunch(store.data.saved) { router.session = launch }
-                    } label: {
-                        Text("Practice saved kanji")
-                            .font(.body)
-                    }
-                    .buttonStyle(.borderless)
+                .buttonStyle(.borderless)
+            }
+            if !store.data.saved.isEmpty {
+                Button {
+                    if let launch = store.practiceLaunch(store.data.saved) { router.session = launch }
+                } label: {
+                    Text("Practice saved kanji")
+                        .font(.body)
                 }
-                if canLearnMore {
-                    Button {
-                        if let launch = store.lessonLaunch(extra: true) { router.session = launch }
-                    } label: {
-                        Text("Learn more today")
-                            .font(.body)
-                    }
-                    .buttonStyle(.borderless)
+                .buttonStyle(.borderless)
+            }
+            if canLearnMore {
+                Button {
+                    if let launch = store.lessonLaunch(extra: true) { router.session = launch }
+                } label: {
+                    Text("Learn more today")
+                        .font(.body)
+                }
+                .buttonStyle(.borderless)
+            }
+        }
+        .frame(minHeight: Metrics.buttonHeight)
+    }
+
+    private func canStart(_ state: HomeState) -> Bool {
+        switch state {
+        case .review, .learn: return true
+        case .rest: return false
+        }
+    }
+
+    private func sessionLaunch(for state: HomeState) -> SessionLaunch? {
+        switch state {
+        case .review: return store.reviewLaunch()
+        case .learn: return store.lessonLaunch(extra: false)
+        case .rest: return nil
+        }
+    }
+
+    private func start(_ state: HomeState) {
+        guard router.session == nil, let launch = sessionLaunch(for: state) else { return }
+        router.session = launch
+    }
+
+    /// The centerpiece follows the finger with resistance; a tick says
+    /// "let go now", and momentum counts, so a quick flick is enough.
+    private func startGesture(_ state: HomeState) -> some Gesture {
+        DragGesture(minimumDistance: 10)
+            .onChanged { value in
+                guard canStart(state) else { return }
+                let up = min(value.translation.height, 0)
+                lift = Motion.rubberband(up, dimension: 360)
+                let ready = up < -110
+                if ready != armed {
+                    if ready { Haptics.tick() }
+                    armed = ready
                 }
             }
-            .frame(minHeight: Metrics.buttonHeight)
-        }
+            .onEnded { value in
+                guard canStart(state) else { return }
+                let projected = value.translation.height + Motion.project(value.velocity.height)
+                if projected < -110 && value.velocity.height < 300 {
+                    start(state)
+                }
+                armed = false
+                withAnimation(Motion.flick) { lift = 0 }
+            }
+    }
+
+    private func startKey(_ state: HomeState) -> some View {
+        Button("") { start(state) }
+            .keyboardShortcut(.defaultAction)
+            .opacity(0)
+            .accessibilityHidden(true)
+            .disabled(!canStart(state))
     }
 }
 
@@ -2617,18 +2851,18 @@ struct KanjiArticle: View {
                 .contentShape(Rectangle())
                 .onTapGesture(count: 2) { toggleSave(kanji) }
                 .onLongPressGesture(minimumDuration: 0.3, maximumDistance: 12, perform: {
-                    guard !kanji.strokePaths.isEmpty else { return }
-                    holding = true
-                    if store.data.settings.haptics { Haptics.tick() }
-                    if !store.data.settings.coachTips { store.data.settings.coachTips = true }
+                    startHold(kanji)
                 }, onPressingChanged: { pressing in
-                    if !pressing { holding = false }
+                    if !pressing && holding {
+                        holding = false
+                        Haptics.stop()
+                    }
                 })
-                .accessibilityAction(named: "Play stroke order") { autoplay(kanji) }
+                .accessibilityAction(named: "Play stroke order and sound") { autoplay(kanji) }
                 .accessibilityAction(named: saveActionName) { toggleSave(kanji) }
                 .onAppear { if autoplayStrokes { autoplay(kanji) } }
             if !kanji.strokePaths.isEmpty && !store.data.settings.coachTips {
-                Text("Hold for stroke order · double-tap to save")
+                Text("Hold for strokes and sound · double-tap to save")
                     .font(.footnote)
                     .foregroundStyle(Palette.ink3)
             }
@@ -2643,9 +2877,21 @@ struct KanjiArticle: View {
         .frame(maxWidth: .infinity)
     }
 
+    /// Hold: the strokes draw while the word is spoken, a soft tap marking
+    /// each stroke — the same as in the study feed.
+    private func startHold(_ kanji: Kanji) {
+        if let reading = kanji.words.first?.primaryReading { Speaker.shared.say(reading) }
+        if !store.data.settings.coachTips { store.data.settings.coachTips = true }
+        guard !kanji.strokePaths.isEmpty else { return }
+        holding = true
+        Haptics.strokes(count: kanji.strokePaths.count, interval: StrokeOrderView.perStroke)
+    }
+
     private func autoplay(_ kanji: Kanji) {
+        if let reading = kanji.words.first?.primaryReading { Speaker.shared.say(reading) }
         guard !kanji.strokePaths.isEmpty else { return }
         autoplaying = true
+        Haptics.strokes(count: kanji.strokePaths.count, interval: StrokeOrderView.perStroke)
         DispatchQueue.main.asyncAfter(deadline: .now() + StrokeOrderView.duration(for: kanji.strokePaths.count)) {
             autoplaying = false
         }
@@ -2653,7 +2899,7 @@ struct KanjiArticle: View {
 
     private func toggleSave(_ kanji: Kanji) {
         store.toggleSaved(kanji.glyph)
-        if store.data.settings.haptics { Haptics.medium() }
+        Haptics.saved()
         burst = true
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.75) {
             withAnimation(.easeOut(duration: 0.2)) { burst = false }
@@ -2864,7 +3110,7 @@ struct LibraryView: View {
         let saved = store.savedKanji.filter { trimmed.isEmpty || results.contains($0) }
         if saved.isEmpty {
             ContentUnavailableView("Nothing saved yet", systemImage: "bookmark",
-                                   description: Text("Double-tap a kanji, or tap its bookmark, to keep it here."))
+                                   description: Text("Swipe left on a card while studying, or double-tap a kanji, to keep it here."))
         } else {
             VStack(alignment: .leading, spacing: Space.xl) {
                 LazyVGrid(columns: columns, spacing: Space.xs) {
@@ -2877,10 +3123,12 @@ struct LibraryView: View {
                         .buttonStyle(.plain)
                     }
                 }
-                ActionButton(title: "Practice saved") {
+                Button("Practice saved") {
                     if let launch = store.practiceLaunch(saved.map(\.glyph)) { router.session = launch }
                 }
-                .actionColumn()
+                .font(.body.weight(.medium))
+                .buttonStyle(.borderless)
+                .frame(maxWidth: .infinity, minHeight: Metrics.minTap)
             }
         }
     }
@@ -3278,6 +3526,7 @@ struct SettingsView: View {
     @State private var confirmReset = false
     @State private var alertMessage: String? = nil
     @State private var showKnownPicker = false
+    @State private var voices: [AVSpeechSynthesisVoice] = Speaker.japaneseVoices
 
     private var paceOptions: [Int] {
         Array(Set([0, 3, 5, 10, 15, 20, 30, store.data.settings.newPerDay])).sorted()
@@ -3336,7 +3585,23 @@ struct SettingsView: View {
                         }
                     }
                     Toggle("Type readings", isOn: $store.data.settings.typeReadings)
+                }
+
+                Section {
                     Toggle("Play audio", isOn: $store.data.settings.autoSpeak)
+                    if !voices.isEmpty {
+                        Picker("Voice", selection: $store.data.settings.voiceID) {
+                            Text("Automatic").tag("")
+                            ForEach(voices, id: \.identifier) { voice in
+                                Text(voiceName(voice)).tag(voice.identifier)
+                            }
+                        }
+                    }
+                    if Haptics.isSupported {
+                        Toggle("Haptics", isOn: $store.data.settings.haptics)
+                    }
+                } footer: {
+                    Text("For the most natural Japanese, download an Enhanced or Premium voice in Settings › Accessibility › Spoken Content › Voices.")
                 }
 
                 Section {
@@ -3380,6 +3645,7 @@ struct SettingsView: View {
             }
             .navigationTitle("Settings")
             .navigationBarTitleDisplayMode(.inline)
+            .onChange(of: store.data.settings.voiceID) { _, id in previewVoice(id) }
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Done") { dismiss() }
@@ -3410,6 +3676,16 @@ struct SettingsView: View {
                 Button("OK", role: .cancel) {}
             }
         }
+    }
+
+    private func voiceName(_ voice: AVSpeechSynthesisVoice) -> String {
+        "\(voice.name) · \(Speaker.qualityName(voice.quality))"
+    }
+
+    /// Picking a voice plays it, as in Spoken Content settings.
+    private func previewVoice(_ id: String) {
+        Speaker.preferredVoiceID = id
+        Speaker.shared.say("こんにちは")
     }
 
     private func handleImport(_ result: Result<URL, Error>) {
@@ -3537,10 +3813,12 @@ struct AboutView: View {
               text: "A memory model (FSRS-6) estimates how well you hold each kanji and schedules the next review for when recall drops to about 90%."),
         Point(title: "You always answer first",
               text: "Recalling an answer strengthens memory far more than re-reading it."),
+        Point(title: "Three honest answers",
+              text: "Swiping up means you knew it. Swipe right when you didn't, or double-tap when it was effortless and the next review moves further out."),
         Point(title: "Readings live in words",
               text: "A kanji alone rarely has one right reading, so readings are practiced inside real words."),
         Point(title: "Recognize, then read, then write",
-              text: "Writing unlocks once you recognize a kanji reliably. Write it in the air or on paper, or draw it on the pad."),
+              text: "Writing unlocks once you recognize a kanji reliably. Write it in the air or on paper, then reveal it to check the strokes."),
         Point(title: "Small wins, no pressure",
               text: "Runs of first-try answers build a combo. Miss one and it quietly resets; there are no streaks to lose."),
         Point(title: "Real Japanese",
@@ -3550,13 +3828,14 @@ struct AboutView: View {
     ]
 
     private let gestures: [Point] = [
-        Point(title: "Tap", text: "Reveal the answer"),
-        Point(title: "Swipe up", text: "Next card (counts as known)"),
+        Point(title: "Tap", text: "Reveal, then hear it again"),
+        Point(title: "Swipe up", text: "Next (counts as known)"),
         Point(title: "Swipe down", text: "Back to the previous card"),
-        Point(title: "Swipe left", text: "Mark as forgotten"),
-        Point(title: "Swipe right", text: "Clear the mark"),
-        Point(title: "Double-tap", text: "Save the kanji"),
-        Point(title: "Hold", text: "Play the stroke order")
+        Point(title: "Swipe right", text: "Forgot"),
+        Point(title: "Swipe left", text: "Save for later"),
+        Point(title: "Double-tap", text: "Easy — or “I know this” on a new kanji"),
+        Point(title: "Hold", text: "Stroke order and sound"),
+        Point(title: "Pinch", text: "Close")
     ]
 
     var body: some View {
@@ -3573,9 +3852,10 @@ struct AboutView: View {
                             Text(gesture.text)
                                 .font(.subheadline)
                                 .foregroundStyle(Palette.ink2)
+                                .multilineTextAlignment(.trailing)
                         }
                     }
-                    Text("Every gesture also has a button, a VoiceOver action and a keyboard key (Space, arrows, Return, S).")
+                    Text("Every gesture also has a VoiceOver action and a keyboard key: Space or Return, the arrow keys, E for easy, P for strokes and Esc to close.")
                         .font(.footnote)
                         .foregroundStyle(Palette.ink3)
                         .fixedSize(horizontal: false, vertical: true)
@@ -3628,13 +3908,41 @@ struct PrivacyView: View {
 
 // MARK: Onboarding
 
+/// The first screen teaches the app's first gesture: swipe up. The page
+/// lifts away under the finger like the Lock Screen, uncovering Home.
 struct OnboardingView: View {
     @EnvironmentObject var store: Store
     @State private var pace = 10
     @State private var showPicker = false
     @State private var markedKnown = false
+    @State private var lift: CGFloat = 0
+    @State private var height: CGFloat = 900
+    @State private var leaving = false
+    @State private var gone = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
+        page
+            .offset(y: lift)
+            .opacity(gone ? 0 : 1)
+            .gesture(beginGesture)
+            .background(beginKey)
+            .background {
+                GeometryReader { geo in
+                    Color.clear.onAppear { height = geo.size.height }
+                }
+            }
+            .presentationBackground(Color.clear)
+            .interactiveDismissDisabled()
+            .sheet(isPresented: $showPicker, onDismiss: {
+                if markedKnown { begin() }
+            }) {
+                KnownPickerView(onConfirm: { markedKnown = true })
+                    .environmentObject(store)
+            }
+    }
+
+    private var page: some View {
         VStack(spacing: 0) {
             Spacer()
             VStack(spacing: Space.xl) {
@@ -3654,41 +3962,95 @@ struct OnboardingView: View {
             .padding(.horizontal, Space.xl)
             .readableColumn()
             Spacer()
-            VStack(spacing: Space.l) {
-                VStack(spacing: Space.xs) {
-                    Picker("New kanji a day", selection: $pace) {
-                        Text("5").tag(5)
-                        Text("10").tag(10)
-                        Text("20").tag(20)
-                    }
-                    .pickerStyle(.segmented)
-                    Text("new kanji a day")
-                        .font(.footnote)
-                        .foregroundStyle(Palette.ink2)
-                }
-                ActionButton(title: "Begin") { finish() }
-                    .keyboardShortcut(.defaultAction)
-                Button("I already know some kanji") { showPicker = true }
-                    .font(.subheadline)
-                    .buttonStyle(.borderless)
-                    .frame(minHeight: Metrics.minTap)
-            }
-            .padding(.horizontal, Space.l)
-            .padding(.bottom, Space.l)
-            .actionColumn()
+            footer
         }
-        .interactiveDismissDisabled()
-        .sheet(isPresented: $showPicker, onDismiss: {
-            if markedKnown { finish() }
-        }) {
-            KnownPickerView(onConfirm: { markedKnown = true })
-                .environmentObject(store)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Palette.paper)
+        .contentShape(Rectangle())
+    }
+
+    private var footer: some View {
+        VStack(spacing: Space.l) {
+            VStack(spacing: Space.xs) {
+                Picker("New kanji a day", selection: $pace) {
+                    Text("5").tag(5)
+                    Text("10").tag(10)
+                    Text("20").tag(20)
+                }
+                .pickerStyle(.segmented)
+                Text("new kanji a day")
+                    .font(.footnote)
+                    .foregroundStyle(Palette.ink2)
+            }
+            ShimmerText(text: "Swipe up to begin")
+                .frame(maxWidth: .infinity, minHeight: Metrics.buttonHeight)
+                .contentShape(Rectangle())
+                .onTapGesture { begin() }
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(Text("Begin"))
+                .accessibilityAddTraits(.isButton)
+                .accessibilityAction { begin() }
+            Button("I already know some kanji") { showPicker = true }
+                .font(.subheadline)
+                .buttonStyle(.borderless)
+                .frame(minHeight: Metrics.minTap)
+        }
+        .padding(.horizontal, Space.l)
+        .padding(.bottom, Space.l)
+        .actionColumn()
+    }
+
+    /// 1:1 upward, resisting downward; released past a quarter of the
+    /// screen (or flicked), the page keeps going at the finger's speed.
+    private var beginGesture: some Gesture {
+        DragGesture(minimumDistance: 10)
+            .onChanged { value in
+                guard !leaving, !reduceMotion else { return }
+                let t = value.translation.height
+                lift = t < 0 ? t : Motion.rubberband(t, dimension: height)
+            }
+            .onEnded { value in
+                guard !leaving else { return }
+                let projected = value.translation.height + Motion.project(value.velocity.height)
+                if projected < -height * 0.25 && value.velocity.height < 300 {
+                    begin(velocity: value.velocity.height)
+                } else {
+                    withAnimation(Motion.flick) { lift = 0 }
+                }
+            }
+    }
+
+    private var beginKey: some View {
+        Button("") { begin() }
+            .keyboardShortcut(.defaultAction)
+            .opacity(0)
+            .accessibilityHidden(true)
+    }
+
+    private func begin(velocity: CGFloat = 0) {
+        guard !leaving else { return }
+        leaving = true
+        store.data.settings.newPerDay = pace
+        Haptics.snap()
+        if reduceMotion {
+            withAnimation(.easeOut(duration: 0.25)) { gone = true } completion: { finish() }
+            return
+        }
+        let target = -(height * 1.2)
+        let remaining = target - lift
+        let relative = remaining == 0 ? 0 : Double(velocity / remaining)
+        withAnimation(Motion.page(velocity: max(relative, 0))) {
+            lift = target
+        } completion: {
+            finish()
         }
     }
 
+    /// The page is already gone, so the cover leaves without its own slide.
     private func finish() {
-        store.data.settings.newPerDay = pace
-        store.data.onboarded = true
+        var transaction = Transaction()
+        transaction.disablesAnimations = true
+        withTransaction(transaction) { store.data.onboarded = true }
     }
 }
 
@@ -3942,7 +4304,7 @@ struct StrokeOrderView: View {
     var loops: Bool
     @State private var start = Date()
 
-    private static let perStroke: Double = 0.42
+    static let perStroke: Double = 0.42
 
     init(paths: [String], playing: Bool, loops: Bool = true) {
         self.strokes = paths.map { SVGPath.parse($0) }
@@ -4013,7 +4375,7 @@ struct StrokeGlyph: View {
     }
 }
 
-/// The bookmark that pops when something is saved with a double-tap.
+/// The bookmark that pops when something is saved.
 struct SaveBurst: View {
     let saved: Bool
     @State private var pop = false
@@ -4034,15 +4396,15 @@ struct SaveBurst: View {
 
 // MARK: Study cover
 
-/// Study runs full-screen, like a video feed: no tab or navigation bars, no
-/// edge-swipe-back to collide with card swipes, and the Home indicator
-/// fades away. Every answer is saved the moment it's given.
+/// Study is one full-screen feed, like a video app: no bars, no buttons,
+/// and the Home indicator fades away. Every answer is saved the moment it's
+/// given, so leaving — pinch, pull the first page down, Esc, or the
+/// VoiceOver escape gesture — never loses anything. The cover itself is
+/// clear, so Home shows through whenever a page is pulled away.
 struct StudyCover: View {
     @EnvironmentObject var store: Store
-    @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject var router: Router
     @StateObject private var model: SessionModel
-    @State private var teaching: Bool
-    @State private var page = 0
     @State private var previousBest = 0
     let launch: SessionLaunch
 
@@ -4050,241 +4412,263 @@ struct StudyCover: View {
         self.launch = launch
         _model = StateObject(wrappedValue: SessionModel(mode: launch.mode, items: launch.items,
                                                         contextGlyphs: launch.contextGlyphs))
-        _teaching = State(initialValue: !launch.lessonGlyphs.isEmpty)
     }
 
     var body: some View {
         ZStack {
-            Palette.paper
-                .ignoresSafeArea()
-            if teaching {
-                LessonStories(glyphs: launch.lessonGlyphs, page: $page,
-                              onKnown: markKnown, onFinish: finishTeaching, onClose: close)
-                    .transition(.opacity)
-            } else if model.isFinished {
-                RecapView(model: model, previousBest: previousBest, onDone: close)
-                    .transition(.opacity)
-            } else {
-                ReelsFeed(model: model, onClose: close)
+            if model.isFinished {
+                RecapView(model: model, previousBest: previousBest, onDone: close(animated:))
+            }
+            if !model.isFinished {
+                ReelsFeed(model: model, onClose: close(animated:))
                     .transition(.opacity)
             }
         }
-        .animation(.easeInOut(duration: 0.25), value: teaching)
-        .animation(.easeInOut(duration: 0.25), value: model.isFinished)
+        .presentationBackground(Color.clear)
         .persistentSystemOverlays(.hidden)
         .onAppear { previousBest = store.data.bestCombo }
     }
 
-    private func close() {
+    /// Gestures that close the session have already moved the page out of
+    /// the way, so the cover then goes without a slide of its own.
+    private func close(animated: Bool) {
+        Speaker.shared.stop()
+        Haptics.stop()
         store.saveNow()
-        dismiss()
-    }
-
-    /// Skips a kanji the learner already knows; a spaced check verifies it
-    /// later instead.
-    private func markKnown(_ glyph: String) {
-        store.markKnown([glyph])
-        model.remove(glyph: glyph)
-        if store.data.settings.haptics { Haptics.success() }
-        if page >= launch.lessonGlyphs.count - 1 {
-            finishTeaching()
+        if animated {
+            router.session = nil
         } else {
-            withAnimation { page += 1 }
-        }
-    }
-
-    private func finishTeaching() {
-        if model.isFinished {
-            close()
-        } else {
-            teaching = false
+            var transaction = Transaction()
+            transaction.disablesAnimations = true
+            withTransaction(transaction) { router.session = nil }
         }
     }
 }
 
-// MARK: Lessons (stories)
+/// Fades a view in from a blur, the way system content materializes.
+struct BlurFade: ViewModifier {
+    let amount: CGFloat
 
-/// New kanji, one per page like Stories: segmented bars on top, swipe
-/// sideways between kanji, the stroke order plays as each page opens.
-struct LessonStories: View {
-    let glyphs: [String]
-    @Binding var page: Int
-    let onKnown: (String) -> Void
-    let onFinish: () -> Void
-    let onClose: () -> Void
-
-    private var isLast: Bool { page >= glyphs.count - 1 }
-
-    var body: some View {
-        VStack(spacing: 0) {
-            HStack(spacing: Space.s) {
-                HStack(spacing: Space.xxs) {
-                    ForEach(0..<glyphs.count, id: \.self) { index in
-                        Capsule()
-                            .fill(index <= page ? Palette.ink : Palette.ink3.opacity(0.5))
-                            .frame(height: 3)
-                    }
-                }
-                .animation(.easeOut(duration: 0.2), value: page)
-                .accessibilityElement()
-                .accessibilityLabel("Kanji \(page + 1) of \(glyphs.count)")
-                Button(action: onClose) {
-                    Image(systemName: "xmark")
-                        .font(.body.weight(.semibold))
-                        .foregroundStyle(Palette.ink2)
-                        .frame(width: Metrics.minTap, height: Metrics.minTap)
-                        .contentShape(Rectangle())
-                }
-                .accessibilityLabel("Close")
-                .keyboardShortcut(.cancelAction)
-            }
-            .padding(.leading, Space.l)
-            .padding(.trailing, Space.xs)
-
-            TabView(selection: $page) {
-                ForEach(Array(glyphs.enumerated()), id: \.offset) { offset, glyph in
-                    ScrollView {
-                        KanjiArticle(glyph: glyph, autoplayStrokes: offset == page)
-                            .padding(.horizontal, Space.l)
-                            .padding(.vertical, Space.l)
-                            .readableColumn()
-                    }
-                    .tag(offset)
-                }
-            }
-            .tabViewStyle(.page(indexDisplayMode: .never))
-
-            HStack(spacing: Space.s) {
-                ActionButton(title: "I know it", kind: .secondary) {
-                    if glyphs.indices.contains(page) { onKnown(glyphs[page]) }
-                }
-                ActionButton(title: isLast ? "Start" : "Next") { advance() }
-                    .keyboardShortcut(.defaultAction)
-            }
-            .padding(.horizontal, Space.l)
-            .padding(.vertical, Space.m)
-            .actionColumn()
-        }
-        .background(keyboardPaging)
-    }
-
-    private func advance() {
-        if isLast {
-            onFinish()
-        } else {
-            withAnimation { page += 1 }
-        }
-    }
-
-    private var keyboardPaging: some View {
-        ZStack {
-            Button("") { advance() }
-                .keyboardShortcut(.rightArrow, modifiers: [])
-            Button("") { if page > 0 { withAnimation { page -= 1 } } }
-                .keyboardShortcut(.leftArrow, modifiers: [])
-        }
-        .opacity(0)
-        .accessibilityHidden(true)
+    func body(content: Content) -> some View {
+        content
+            .blur(radius: amount)
+            .opacity(amount == 0 ? 1 : 0)
     }
 }
 
-// MARK: Review feed (reels)
+extension AnyTransition {
+    static var blurFade: AnyTransition {
+        .modifier(active: BlurFade(amount: 10), identity: BlurFade(amount: 0))
+    }
+}
 
-/// Reviews as a vertical feed of full-screen pages, the way Reels works:
-/// drag up and the next card rises from below under your finger; drag down
-/// and the previous card comes back from above. The neighbouring pages are
-/// real renderings, so a swipe always shows exactly what's coming.
+// MARK: Feed
+
+/// A vertical feed of full-screen pages. Dragging up slides the next page
+/// over this one while this one recedes — smaller, dimmer, corners
+/// rounding — the way a sheet pushes back what's beneath it. Dragging down
+/// brings the previous page back the same way. Momentum decides the
+/// outcome, and the page turn carries on at the speed of the flick.
 struct ReelsFeed: View {
     @EnvironmentObject var store: Store
     @ObservedObject var model: SessionModel
-    let onClose: () -> Void
+    let onClose: (Bool) -> Void
     @State private var dragY: CGFloat = 0
+    @State private var pinch: CGFloat = 1
+    @State private var vanishing = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    /// Pulling the first page down closes the session.
+    private var pullingToClose: Bool { dragY > 0 && model.previousItem == nil }
+    private var pinching: Bool { pinch < 1 || vanishing }
+    private var closing: Bool { pullingToClose || pinching }
 
     var body: some View {
-        GeometryReader { geo in
-            pages(size: geo.size)
-        }
-        .overlay(alignment: .top) {
+        ZStack(alignment: .top) {
+            GeometryReader { geo in
+                pages(size: geo.size, insets: geo.safeAreaInsets)
+            }
+            .ignoresSafeArea()
             topBar
+                .opacity(closing ? 0 : 1)
+                .animation(.easeOut(duration: 0.15), value: closing)
         }
+        .simultaneousGesture(pinchToClose)
+        .background(escapeKey)
+        .accessibilityAction(.escape) { onClose(true) }
     }
 
-    private func pages(size: CGSize) -> some View {
-        ZStack {
-            if let previous = model.previousItem {
-                ReelPage(model: model, item: previous, live: false, dragY: .constant(0), pageSize: size)
-                    .offset(y: dragY - size.height)
-            }
-            if let next = model.upcoming {
-                ReelPage(model: model, item: next, live: false, dragY: .constant(0), pageSize: size)
-                    .offset(y: dragY + size.height)
-            }
+    private func pages(size: CGSize, insets: EdgeInsets) -> some View {
+        let travel = min(abs(dragY) / max(size.height, 1), 1)
+        let recedes = dragY < 0 ? model.upcoming != nil : (dragY > 0 && model.previousItem != nil)
+        return ZStack {
+            backdrop(travel: travel)
             if let item = model.current {
-                ReelPage(model: model, item: item, live: true, dragY: $dragY, pageSize: size)
-                    .id(item.id)
-                    .offset(y: dragY)
+                livePage(item, size: size, insets: insets, travel: travel, recedes: recedes)
+            }
+            if dragY < 0, let next = model.upcoming {
+                neighbour(next, size: size, insets: insets, offset: size.height + dragY, travel: travel)
+            }
+            if dragY > 0, let previous = model.previousItem {
+                neighbour(previous, size: size, insets: insets, offset: dragY - size.height, travel: travel)
             }
         }
         .frame(width: size.width, height: size.height)
         .clipped()
     }
 
+    /// How far a closing gesture has gone, from 0 to 1.
+    private func closeAmount(_ travel: CGFloat) -> CGFloat {
+        if vanishing { return 1 }
+        if pinch < 1 { return min(max((1 - pinch) / 0.35, 0), 1) }
+        return pullingToClose ? travel : 0
+    }
+
+    /// Black behind pages that recede, as behind stacked sheets; paper when
+    /// the last page leaves; Home, dimmed, while closing.
+    @ViewBuilder
+    private func backdrop(travel: CGFloat) -> some View {
+        if closing {
+            Color.black.opacity(Double(0.3 * (1 - closeAmount(travel))))
+        } else if model.current == nil || (dragY < 0 && model.upcoming == nil) {
+            Palette.paper
+        } else {
+            Color.black
+        }
+    }
+
+    private func livePage(_ item: StudyItem, size: CGSize, insets: EdgeInsets,
+                          travel: CGFloat, recedes: Bool) -> some View {
+        let depth: CGFloat = recedes && !reduceMotion ? travel : 0
+        let shut = closeAmount(travel)
+        let rounding: CGFloat = min(1, (depth + shut) * 8)
+        let pulled: CGFloat = pullingToClose ? 1 - 0.15 * travel : 1
+        let scale: CGFloat = pinching ? pinch : (1 - 0.08 * depth) * pulled
+        let follows = !recedes && dragY != 0 && !reduceMotion
+        let fade: Double = reduceMotion ? Double(1 - travel) : (vanishing ? 0 : 1)
+        return ReelPage(model: model, item: item, live: true, dragY: $dragY, pageSize: size, insets: insets,
+                        frozen: pinching, onClose: onClose)
+            .id(item.id)
+            .overlay {
+                Color.black
+                    .opacity(Double(0.22 * depth))
+                    .allowsHitTesting(false)
+            }
+            .clipShape(RoundedRectangle(cornerRadius: 44 * rounding, style: .continuous))
+            .scaleEffect(scale)
+            .offset(y: follows ? dragY : 0)
+            .opacity(fade)
+    }
+
+    private func neighbour(_ item: StudyItem, size: CGSize, insets: EdgeInsets,
+                           offset: CGFloat, travel: CGFloat) -> some View {
+        let shadow: Double = reduceMotion ? 0 : Double(0.2 * travel)
+        let fade: Double = reduceMotion ? Double(travel) : 1
+        return ReelPage(model: model, item: item, live: false, dragY: .constant(0), pageSize: size, insets: insets,
+                        frozen: true, onClose: { _ in })
+            .shadow(color: Color.black.opacity(shadow), radius: 24, x: 0, y: 0)
+            .offset(y: reduceMotion ? 0 : offset)
+            .opacity(fade)
+    }
+
     private var topBar: some View {
         HStack(spacing: Space.s) {
-            Button(action: onClose) {
-                Image(systemName: "xmark")
-                    .font(.body.weight(.semibold))
-                    .foregroundStyle(Palette.ink2)
-                    .frame(width: Metrics.minTap, height: Metrics.minTap)
-                    .contentShape(Rectangle())
-            }
-            .accessibilityLabel("Close")
-            .keyboardShortcut(.cancelAction)
-            ProgressView(value: model.progress)
-                .tint(Palette.accent)
-                .accessibilityLabel("\(model.completed) of \(model.total) done")
-            ComboBadge(combo: model.combo)
-                .frame(minWidth: 56, alignment: .trailing)
+            progressLine
+            ComboChip(combo: model.combo)
         }
-        .padding(.leading, Space.xs)
-        .padding(.trailing, Space.m)
+        .padding(.horizontal, Space.l)
+        .padding(.top, Space.xs)
+        .allowsHitTesting(false)
+    }
+
+    private var progressLine: some View {
+        GeometryReader { geo in
+            ZStack(alignment: .leading) {
+                Capsule()
+                    .fill(Palette.ink3.opacity(0.3))
+                Capsule()
+                    .fill(Palette.ink.opacity(0.85))
+                    .frame(width: geo.size.width * CGFloat(min(max(model.progress, 0), 1)))
+            }
+        }
+        .frame(height: 3)
+        .animation(Motion.settle, value: model.progress)
+        .accessibilityElement()
+        .accessibilityLabel("\(model.completed) of \(model.total) done")
+    }
+
+    /// Pinching shrinks the page under the fingers, as when closing a photo;
+    /// let go small enough and it's gone.
+    private var pinchToClose: some Gesture {
+        MagnifyGesture()
+            .onChanged { value in
+                guard !vanishing, model.current != nil else { return }
+                let m = value.magnification
+                pinch = m < 1 ? max(m, 0.4) : 1
+            }
+            .onEnded { value in
+                guard !vanishing, model.current != nil else { return }
+                if value.magnification < 0.8 {
+                    vanish()
+                } else {
+                    withAnimation(Motion.flick) { pinch = 1 }
+                }
+            }
+    }
+
+    private func vanish() {
+        Haptics.snap()
+        withAnimation(Motion.settle) {
+            vanishing = true
+            pinch = 0.6
+        } completion: {
+            onClose(false)
+        }
+    }
+
+    private var escapeKey: some View {
+        Button("") { onClose(true) }
+            .keyboardShortcut(.cancelAction)
+            .opacity(0)
+            .accessibilityHidden(true)
     }
 }
 
-/// Consecutive first-try answers. It appears quietly at three, grows with
+/// Consecutive first-try answers, on glass. It appears at three, grows with
 /// the run and simply disappears on a miss — no penalty, no lost streak.
-struct ComboBadge: View {
+struct ComboChip: View {
     let combo: Int
 
     var body: some View {
         ZStack {
             if combo >= 3 {
                 Text("×\(combo)")
-                    .font(.subheadline.weight(.semibold).monospacedDigit())
+                    .font(.footnote.weight(.semibold).monospacedDigit())
                     .foregroundStyle(Palette.matcha)
                     .contentTransition(.numericText())
-                    .padding(.horizontal, Space.xs)
-                    .padding(.vertical, Space.xxs)
-                    .background(Palette.matcha.opacity(0.14), in: Capsule())
-                    .transition(.scale.combined(with: .opacity))
+                    .padding(.horizontal, Space.s)
+                    .padding(.vertical, Space.xxs + 2)
+                    .glassCapsule()
+                    .transition(.scale(scale: 0.6).combined(with: .opacity))
                     .accessibilityLabel("\(combo) in a row")
             }
         }
-        .animation(.spring(response: 0.3, dampingFraction: 0.6), value: combo)
+        .animation(Motion.flick, value: combo)
     }
 }
 
-/// One full-screen page of the feed.
+/// One full-screen page. There are no buttons: the page is the control.
 ///
-///   tap          reveal (then: hear it)
-///   swipe ↑      next — counts as "knew it" unless marked Forgot
-///   swipe ↓      back to the previous card, its answer undone
-///   swipe ←      mark Forgot        swipe →   clear the mark
-///   double-tap   save               hold      play the stroke order
+///   tap          reveal · then hear it again
+///   swipe ↑      next — counted as known, unless marked Forgot or Easy
+///   swipe ↓      back to the previous page (on the first page: close)
+///   swipe →      Forgot          swipe ←   Save
+///   double-tap   Easy — or, on a new kanji, "I already know this"
+///   hold         stroke order and sound together
+///   pinch        close
 ///
-/// The right-hand rail (Forgot, Save, Listen, Strokes) and the caption
-/// ("Swipe up for next") are tappable too; hardware keys and VoiceOver
-/// actions cover every gesture.
+/// Hardware keys and VoiceOver actions cover every gesture, and first-run
+/// hints teach them one per card.
 struct ReelPage: View {
     @EnvironmentObject var store: Store
     @ObservedObject var model: SessionModel
@@ -4292,21 +4676,28 @@ struct ReelPage: View {
     let live: Bool
     @Binding var dragY: CGFloat
     let pageSize: CGSize
+    let insets: EdgeInsets
+    /// True while a pinch is in progress; page swipes wait.
+    let frozen: Bool
+    let onClose: (Bool) -> Void
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     @State private var revealed = false
     @State private var marked = false
+    @State private var easy = false
     @State private var dragX: CGFloat = 0
     @State private var axis: Axis? = nil
     @State private var armed = false
     @State private var leaving = false
     @State private var holding = false
+    @State private var pressing = false
     @State private var autoStrokes = false
-    @State private var burst = false
-    @State private var bounce = false
+    @State private var showHeart = false
+    @State private var heartToken = 0
+    @State private var showSaveBurst = false
+    @State private var saveToken = 0
     @State private var shownAt = Date()
     @State private var answerMs = 0
-    @State private var showDraw = false
     @State private var typed = ""
     @State private var verdict: Bool? = nil
     @State private var hint: String? = nil
@@ -4315,23 +4706,24 @@ struct ReelPage: View {
     @State private var shakes: CGFloat = 0
     @FocusState var fieldFocused: Bool
 
-    private static let threshold: CGFloat = 90
-    private static let flingThreshold: CGFloat = 280
+    private static let sideThreshold: CGFloat = 80
 
     private var settings: AppSettings { store.data.settings }
     private var kanji: Kanji? { store.library.byGlyph[item.glyph] }
-    private var isContext: Bool { item.kind == .context }
-    private var typing: Bool { item.facet == .reading && settings.typeReadings && !isContext }
-    private var hero: CGFloat { min(pageSize.width * 0.5, 220) }
+    private var isCard: Bool { item.kind == .card }
+    private var typing: Bool { isCard && item.facet == .reading && settings.typeReadings }
+    private var hero: CGFloat { min(pageSize.width * 0.5, pageSize.height * 0.28, 220) }
     private var card: Card? { store.card(item.glyph, item.facet) }
-    private var canAdvance: Bool { isContext || !typing || verdict != nil }
+    private var canAdvance: Bool { !typing || verdict != nil }
+    private var isPlayable: Bool { item.facet != .reading || word != nil || !isCard }
+    private var strokesShowing: Bool { holding || autoStrokes }
 
     private var word: Word? {
         guard let k = kanji, !k.words.isEmpty else { return nil }
         return k.words[item.wordIndex % k.words.count]
     }
 
-    /// The memory hook appears only when it can help: new, relearning or
+    /// The memory hook appears only when it helps: new, relearning or
     /// repeatedly forgotten cards, or once marked forgotten.
     private var needsSupport: Bool {
         if marked { return true }
@@ -4340,7 +4732,7 @@ struct ReelPage: View {
     }
 
     var body: some View {
-        if let k = kanji, item.facet != .reading || word != nil || isContext {
+        if let k = kanji, isPlayable {
             if live {
                 livePage(k)
             } else {
@@ -4358,34 +4750,40 @@ struct ReelPage: View {
     // MARK: Layout
 
     private func livePage(_ k: Kanji) -> some View {
-        withGestures(pageContent(k), k)
-            .background(hiddenShortcuts(k))
-            .onAppear(perform: appear)
-            .sheet(isPresented: $showDraw) {
-                DrawSheet(kanji: k) { rating in
-                    setMarked(rating == .again, k)
-                    advance(k)
-                }
-                .environmentObject(store)
-            }
+        withAccessibility(withGestures(pageContent(k), k), k)
+            .background(hiddenKeys(k))
+            .onAppear { appear(k) }
     }
 
+    /// The page over a quieter surface: pushing it sideways uncovers the
+    /// action it will take, as with Mail's swipe actions.
     private func pageContent(_ k: Kanji) -> some View {
+        ZStack {
+            Palette.surface
+            swipeActions
+            surface(k)
+                .offset(x: dragX)
+        }
+        .frame(width: pageSize.width, height: pageSize.height)
+    }
+
+    private func surface(_ k: Kanji) -> some View {
         ZStack(alignment: .bottom) {
             Palette.paper
             if marked {
                 forgotWash
             }
             centerColumn(k)
-            bottomBar(k)
+                .scaleEffect(pressing && !reduceMotion ? 0.98 : 1)
+                .animation(Motion.settle, value: pressing)
+            bottomArea(k)
+        }
+        .overlay(alignment: .top) {
+            statusChips(k)
         }
         .overlay {
-            if burst {
-                SaveBurst(saved: store.isSaved(k.glyph))
-            }
+            bursts
         }
-        .frame(width: pageSize.width, height: pageSize.height)
-        .offset(x: dragX)
     }
 
     private var forgotWash: some View {
@@ -4394,29 +4792,109 @@ struct ReelPage: View {
             .allowsHitTesting(false)
     }
 
+    private var swipeActions: some View {
+        HStack {
+            Image(systemName: marked ? "arrow.uturn.backward" : "arrow.counterclockwise")
+                .font(.title.weight(.semibold))
+                .foregroundStyle(Palette.shu)
+                .scaleEffect(armed && dragX > 0 ? 1.2 : 0.85)
+                .opacity(dragX > 0 && isCard ? Double(min(dragX / 36, 1)) : 0)
+            Spacer()
+            Image(systemName: store.isSaved(item.glyph) ? "bookmark.slash.fill" : "bookmark.fill")
+                .font(.title.weight(.semibold))
+                .foregroundStyle(Palette.accent)
+                .scaleEffect(armed && dragX < 0 ? 1.2 : 0.85)
+                .opacity(dragX < 0 && item.kind != .context ? Double(min(-dragX / 36, 1)) : 0)
+        }
+        .padding(.horizontal, Space.xl)
+        .animation(Motion.flick, value: armed)
+        .accessibilityHidden(true)
+    }
+
+    private func statusChips(_ k: Kanji) -> some View {
+        HStack(spacing: Space.xs) {
+            if marked {
+                chip("Forgot", symbol: "arrow.counterclockwise", tint: Palette.shu)
+            }
+            if easy {
+                chip("Easy", symbol: "heart.fill", tint: Color.pink)
+            }
+            if store.isSaved(k.glyph) && item.kind != .context {
+                chip("Saved", symbol: "bookmark.fill", tint: Palette.accent)
+            }
+        }
+        .padding(.top, insets.top + 30)
+        .animation(Motion.flick, value: marked)
+        .animation(Motion.flick, value: easy)
+        .allowsHitTesting(false)
+    }
+
+    private func chip(_ title: String, symbol: String, tint: Color) -> some View {
+        Label(title, systemImage: symbol)
+            .font(.footnote.weight(.semibold))
+            .foregroundStyle(tint)
+            .padding(.horizontal, Space.s)
+            .padding(.vertical, Space.xs)
+            .glassCapsule()
+            .transition(.scale(scale: 0.6).combined(with: .opacity))
+    }
+
+    @ViewBuilder
+    private var bursts: some View {
+        if showHeart {
+            HeartBurst()
+                .id(heartToken)
+        }
+        if showSaveBurst {
+            SaveBurst(saved: store.isSaved(item.glyph))
+                .id(saveToken)
+        }
+    }
+
     private func centerColumn(_ k: Kanji) -> some View {
         VStack(spacing: Space.l) {
-            Spacer(minLength: 72)
-            if isContext {
-                contextContent(k)
-            } else {
-                prompt(k)
-                if revealed {
-                    answer(k)
-                        .transition(.opacity.combined(with: .offset(y: 12)))
-                }
-            }
-            Spacer(minLength: 150)
+            Spacer(minLength: 84)
+            mainContent(k)
+            Spacer(minLength: 110)
         }
+        .padding(.top, insets.top)
+        .padding(.bottom, insets.bottom)
         .padding(.horizontal, Space.xl)
         .frame(maxWidth: Metrics.readableWidth)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .accessibilityElement(children: .combine)
-        .accessibilityAddTraits(.isButton)
-        .accessibilityHint(Text(revealHint))
-        .accessibilityAction { if live { tap(k) } }
-        .accessibilityActions {
-            if live { accessibilityButtons(k) }
+    }
+
+    @ViewBuilder
+    private func mainContent(_ k: Kanji) -> some View {
+        switch item.kind {
+        case .teach:
+            teachContent(k)
+        case .context:
+            contextContent(k)
+        case .card:
+            cardContent(k)
+        }
+    }
+
+    // MARK: Cards
+
+    @ViewBuilder
+    private func cardContent(_ k: Kanji) -> some View {
+        prompt(k)
+        if revealed {
+            answer(k)
+                .transition(reduceMotion ? AnyTransition.opacity : AnyTransition.blurFade)
+        } else {
+            Caption(text: facetLabel)
+                .transition(.opacity)
+        }
+    }
+
+    private var facetLabel: String {
+        switch item.facet {
+        case .meaning: return "Meaning"
+        case .reading: return typing ? "Type the reading" : "Say the reading"
+        case .writing: return "Write it in the air"
         }
     }
 
@@ -4424,10 +4902,14 @@ struct ReelPage: View {
     private func prompt(_ k: Kanji) -> some View {
         switch item.facet {
         case .meaning:
-            StrokeGlyph(kanji: k, size: revealed ? hero * 0.72 : hero, playing: holding || autoStrokes, loops: holding)
+            StrokeGlyph(kanji: k, size: revealed ? hero * 0.72 : hero, playing: strokesShowing, loops: holding)
         case .reading:
             if let w = word {
                 VStack(spacing: Space.xs) {
+                    if strokesShowing && !k.strokePaths.isEmpty {
+                        StrokeGlyph(kanji: k, size: hero * 0.6, playing: true, loops: holding)
+                            .transition(.scale(scale: 0.9).combined(with: .opacity))
+                    }
                     jpText(w.word, highlight: k.glyph, size: min(hero * 0.55, 80), face: settings.face)
                         .lineLimit(1)
                         .minimumScaleFactor(0.4)
@@ -4436,33 +4918,22 @@ struct ReelPage: View {
                         .foregroundStyle(Palette.ink2)
                         .multilineTextAlignment(.center)
                 }
+                .animation(Motion.settle, value: strokesShowing)
             }
         case .writing:
             if revealed {
-                StrokeGlyph(kanji: k, size: hero * 0.8, playing: holding || autoStrokes, loops: holding)
+                StrokeGlyph(kanji: k, size: hero * 0.8, playing: strokesShowing, loops: holding)
             } else {
-                writingPrompt(k)
+                VStack(spacing: Space.s) {
+                    Text(k.meaningList.capitalizedFirst)
+                        .font(.title.weight(.semibold))
+                        .multilineTextAlignment(.center)
+                    Text(readingLine(k))
+                        .font(.jp(18, relativeTo: .title3))
+                        .foregroundStyle(Palette.ink2)
+                        .multilineTextAlignment(.center)
+                }
             }
-        }
-    }
-
-    private func writingPrompt(_ k: Kanji) -> some View {
-        VStack(spacing: Space.s) {
-            Text(k.meaningList.capitalizedFirst)
-                .font(.title.weight(.semibold))
-                .multilineTextAlignment(.center)
-            Text(readingLine(k))
-                .font(.jp(18, relativeTo: .title3))
-                .foregroundStyle(Palette.ink2)
-                .multilineTextAlignment(.center)
-            Button {
-                showDraw = true
-            } label: {
-                Label("Draw it", systemImage: "pencil.tip")
-            }
-            .buttonStyle(.bordered)
-            .tint(Palette.ink)
-            .padding(.top, Space.s)
         }
     }
 
@@ -4528,6 +4999,81 @@ struct ReelPage: View {
         }
     }
 
+    // MARK: Lesson and context pages
+
+    /// A new kanji on one page. The layout steps down — fewer words, no
+    /// sentence — until it fits, so nothing ever needs scrolling.
+    private func teachContent(_ k: Kanji) -> some View {
+        ViewThatFits(in: .vertical) {
+            teachLayout(k, words: 3, sentence: true)
+            teachLayout(k, words: 2, sentence: false)
+            teachLayout(k, words: 0, sentence: false)
+        }
+        .frame(maxHeight: max(pageSize.height - insets.top - insets.bottom - 220, 200))
+    }
+
+    private func teachLayout(_ k: Kanji, words: Int, sentence: Bool) -> some View {
+        VStack(spacing: Space.m) {
+            Caption(text: "New kanji")
+            StrokeGlyph(kanji: k, size: hero * 0.8, playing: strokesShowing, loops: holding)
+            VStack(spacing: Space.xxs) {
+                Text(k.meaningList.capitalizedFirst)
+                    .font(.title2.weight(.semibold))
+                    .multilineTextAlignment(.center)
+                Text(readingLine(k))
+                    .font(.jp(17, relativeTo: .body))
+                    .foregroundStyle(Palette.ink2)
+                    .multilineTextAlignment(.center)
+            }
+            if !k.parts.isEmpty {
+                MixedText(k.parts.map { "\($0.glyph) \($0.meaning)" }.joined(separator: " + "), style: .footnote)
+                    .foregroundStyle(Palette.ink3)
+            }
+            MixedText(hookText(k), style: .callout)
+                .foregroundStyle(Palette.ink2)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+            if words > 0 {
+                teachWords(k, limit: words)
+            }
+            if sentence && !k.sentence.isEmpty {
+                teachSentence(k)
+            }
+        }
+    }
+
+    private func teachWords(_ k: Kanji, limit: Int) -> some View {
+        VStack(spacing: Space.xs) {
+            ForEach(Array(k.words.prefix(limit))) { w in
+                HStack(alignment: .firstTextBaseline, spacing: Space.s) {
+                    jpText(w.word, highlight: k.glyph, size: 18, face: settings.face, fixed: false)
+                        .fixedSize()
+                    Text(w.primaryReading)
+                        .font(.jp(13, relativeTo: .footnote))
+                        .foregroundStyle(Palette.ink2)
+                        .fixedSize()
+                    Spacer(minLength: Space.s)
+                    Text(w.meaning)
+                        .font(.footnote)
+                        .foregroundStyle(Palette.ink2)
+                        .multilineTextAlignment(.trailing)
+                }
+            }
+        }
+        .frame(maxWidth: 420)
+    }
+
+    private func teachSentence(_ k: Kanji) -> some View {
+        VStack(spacing: Space.xxs) {
+            RubyText(markup: k.sentence, size: 17, highlight: k.glyph)
+            Text(k.translation)
+                .font(.footnote)
+                .foregroundStyle(Palette.ink2)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
     private func contextContent(_ k: Kanji) -> some View {
         VStack(spacing: Space.l) {
             Caption(text: "In context")
@@ -4540,102 +5086,56 @@ struct ReelPage: View {
         }
     }
 
-    // MARK: Bottom bar
+    // MARK: Bottom: typing and first-run hints
 
-    private func bottomBar(_ k: Kanji) -> some View {
+    private func bottomArea(_ k: Kanji) -> some View {
         VStack(spacing: Space.m) {
             if typing && verdict == nil {
                 typedField(k)
             }
-            HStack(alignment: .bottom, spacing: Space.m) {
-                caption(k)
-                Spacer(minLength: Space.s)
-                rail(k)
+            if let tip = coachTip {
+                coachLine(tip)
+                    .transition(.opacity)
             }
         }
         .padding(.horizontal, Space.l)
-        .padding(.bottom, Space.m)
+        .padding(.bottom, insets.bottom + Space.l)
     }
 
-    private var revealHint: String {
-        revealed || isContext ? "" : "Reveals the answer"
-    }
-
-    private var facetLabel: String {
-        if isContext { return "In context" }
-        switch item.facet {
-        case .meaning: return "Meaning"
-        case .reading: return typing ? "Type the reading" : "Say the reading"
-        case .writing: return "Write it"
+    /// One gesture is taught per card for the first five cards, then the
+    /// hints are gone for good.
+    private var coachTip: String? {
+        let step = settings.coachStep
+        switch item.kind {
+        case .teach:
+            return step == 0 ? "Swipe up for next · double-tap if you know it" : nil
+        case .context:
+            return step < 5 ? "Swipe up to continue" : nil
+        case .card:
+            if !revealed { return step == 0 && !typing ? "Tap to reveal" : nil }
+            switch step {
+            case 0: return "Swipe up for next"
+            case 1: return "Forgot it? Swipe right"
+            case 2: return "Knew it instantly? Double-tap"
+            case 3: return "Swipe left to save · hold for strokes and sound"
+            case 4: return "Pinch to close"
+            default: return nil
+            }
         }
     }
 
-    private var hintText: String {
-        if isContext { return "Swipe up to continue" }
-        if typing && verdict == nil { return "Then press return" }
-        if !revealed { return "Tap to reveal" }
-        if marked { return "Marked forgot · swipe up" }
-        return "Swipe up for next"
-    }
-
-    private func caption(_ k: Kanji) -> some View {
-        VStack(alignment: .leading, spacing: Space.xxs) {
-            Caption(text: facetLabel)
-            Button {
-                primaryAction(k)
-            } label: {
-                HStack(spacing: Space.xxs) {
-                    Text(hintText)
-                    if revealed || isContext {
-                        Image(systemName: "chevron.up")
-                            .offset(y: bounce ? -3 : 0)
-                    }
-                }
+    @ViewBuilder
+    private func coachLine(_ tip: String) -> some View {
+        if tip.hasPrefix("Swipe up") {
+            ShimmerText(text: tip)
+                .accessibilityHidden(true)
+        } else {
+            Text(tip)
                 .font(.subheadline.weight(.medium))
-                .foregroundStyle(Palette.ink2)
-                .frame(minHeight: Metrics.minTap, alignment: .leading)
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .disabled(typing && verdict == nil)
+                .foregroundStyle(Palette.ink3)
+                .multilineTextAlignment(.center)
+                .accessibilityHidden(true)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-    }
-
-    private func rail(_ k: Kanji) -> some View {
-        VStack(spacing: Space.s) {
-            if !isContext {
-                railItem(marked ? "arrow.counterclockwise.circle.fill" : "arrow.counterclockwise.circle",
-                         title: "Forgot", active: marked, tint: Palette.shu) { setMarked(!marked, k) }
-                railItem(store.isSaved(k.glyph) ? "bookmark.fill" : "bookmark",
-                         title: store.isSaved(k.glyph) ? "Saved" : "Save",
-                         active: store.isSaved(k.glyph), tint: Palette.accent) { toggleSave(k) }
-            }
-            railItem("speaker.wave.2", title: "Listen", active: false, tint: Palette.ink) { listen(k) }
-            if !isContext && !k.strokePaths.isEmpty {
-                railItem("scribble", title: "Strokes", active: autoStrokes || holding, tint: Palette.accent) {
-                    playStrokesOnce(k)
-                }
-            }
-        }
-    }
-
-    private func railItem(_ symbol: String, title: String, active: Bool, tint: Color,
-                          action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            VStack(spacing: 2) {
-                Image(systemName: symbol)
-                    .font(.title2)
-                Text(title)
-                    .font(.caption2.weight(.medium))
-            }
-            .foregroundStyle(active ? tint : Palette.ink2)
-            .frame(minWidth: Metrics.minTap, minHeight: Metrics.minTap)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(title)
-        .accessibilityAddTraits(active ? .isSelected : [])
     }
 
     private func typedField(_ k: Kanji) -> some View {
@@ -4645,34 +5145,22 @@ struct ReelPage: View {
                     .foregroundStyle(Palette.kohaku)
                     .multilineTextAlignment(.center)
             }
-            HStack(spacing: Space.xs) {
-                TextField("かな or romaji", text: $typed)
-                    .font(.jp(22, relativeTo: .title3))
-                    .multilineTextAlignment(.center)
-                    .textInputAutocapitalization(.never)
-                    .autocorrectionDisabled()
-                    .submitLabel(.go)
-                    .focused($fieldFocused)
-                    .onSubmit { check(k) }
-                    .onChange(of: typed) { _, newValue in
-                        let converted = Romaji.toHiragana(newValue)
-                        if converted != newValue { typed = converted }
-                    }
-                    .padding(.leading, Space.xxl)
-                Button {
-                    check(k)
-                } label: {
-                    Image(systemName: "arrow.up.circle.fill")
-                        .font(.title)
-                        .frame(minWidth: Metrics.minTap, minHeight: Metrics.minTap)
+            TextField("かな or romaji", text: $typed)
+                .font(.jp(22, relativeTo: .title3))
+                .multilineTextAlignment(.center)
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+                .submitLabel(.go)
+                .focused($fieldFocused)
+                .onSubmit { check(k) }
+                .onChange(of: typed) { _, newValue in
+                    let converted = Romaji.toHiragana(newValue)
+                    if converted != newValue { typed = converted }
                 }
-                .disabled(typed.trimmingCharacters(in: .whitespaces).isEmpty)
-                .accessibilityLabel("Check")
-            }
-            .padding(.horizontal, Space.xxs)
-            .frame(height: Metrics.buttonHeight)
-            .background(Palette.surface, in: Capsule())
-            .modifier(Shake(animatableData: shakes))
+                .padding(.horizontal, Space.l)
+                .frame(height: Metrics.buttonHeight)
+                .glassCapsule()
+                .modifier(Shake(animatableData: shakes))
         }
         .actionColumn()
     }
@@ -4683,88 +5171,122 @@ struct ReelPage: View {
         content
             .contentShape(Rectangle())
             .gesture(pageDrag(k))
-            .onTapGesture(count: 2) { toggleSave(k) }
+            .onTapGesture(count: 2) { doubleTap(k) }
             .onTapGesture { tap(k) }
-            .onLongPressGesture(minimumDuration: 0.35, maximumDistance: 12, perform: {
+            .onLongPressGesture(minimumDuration: 0.3, maximumDistance: 12, perform: {
                 startHold(k)
-            }, onPressingChanged: { pressing in
-                if !pressing { holding = false }
+            }, onPressingChanged: { isPressing in
+                pressing = isPressing
+                if !isPressing { endHold() }
             })
     }
 
     private func pageDrag(_ k: Kanji) -> some Gesture {
-        DragGesture(minimumDistance: 12)
+        DragGesture(minimumDistance: 10)
             .onChanged { value in
                 dragChanged(value.translation, k)
             }
             .onEnded { value in
-                dragEnded(value.translation, predicted: value.predictedEndTranslation, k)
+                dragEnded(value.translation, velocity: value.velocity, k)
             }
     }
 
     private func dragChanged(_ t: CGSize, _ k: Kanji) {
-        guard !leaving, !holding else { return }
+        guard !leaving, !holding, !frozen else { return }
         if axis == nil {
             axis = abs(t.height) >= abs(t.width) ? .vertical : .horizontal
         }
         if axis == .vertical {
             let up = t.height < 0
-            let allowed = up ? canAdvance : model.canUndo
-            dragY = allowed ? t.height : t.height * 0.25
-            if up && allowed && !revealed && !isContext && t.height < -24 {
+            let allowed = !up || canAdvance
+            dragY = allowed ? t.height : Motion.rubberband(t.height, dimension: pageSize.height)
+            if up && allowed && isCard && !revealed && t.height < -24 {
                 reveal(k)
             }
-            updateArmed(allowed && abs(t.height) > ReelPage.threshold)
         } else {
-            dragX = t.width * 0.4
-            updateArmed(!isContext && abs(t.width) > 70)
+            let allowed = t.width < 0 ? item.kind != .context : isCard
+            dragX = sideOffset(t.width, allowed: allowed)
+            updateArmed(allowed && abs(t.width) > ReelPage.sideThreshold)
         }
     }
 
+    /// 1:1 until just past the commit point, then rubber-banded; a direction
+    /// with no action resists from the start.
+    private func sideOffset(_ x: CGFloat, allowed: Bool) -> CGFloat {
+        guard allowed else { return Motion.rubberband(x, dimension: pageSize.width * 0.3) }
+        let limit = ReelPage.sideThreshold * 1.4
+        guard abs(x) > limit else { return x }
+        let extra = Motion.rubberband(abs(x) - limit, dimension: pageSize.width)
+        return x < 0 ? -(limit + extra) : limit + extra
+    }
+
+    /// A selection tick the moment a sideways swipe would commit if released.
     private func updateArmed(_ value: Bool) {
         guard value != armed else { return }
-        if value && settings.haptics { Haptics.tick() }
+        if value { Haptics.tick() }
         armed = value
     }
 
-    private func dragEnded(_ t: CGSize, predicted: CGSize, _ k: Kanji) {
+    private func dragEnded(_ t: CGSize, velocity: CGSize, _ k: Kanji) {
         guard !leaving else { return }
         let locked = axis ?? .vertical
         axis = nil
         let wasArmed = armed
         armed = false
+        if frozen {
+            withAnimation(Motion.flick) {
+                dragY = 0
+                dragX = 0
+            }
+            return
+        }
         if locked == .vertical {
-            let goesUp = t.height < -ReelPage.threshold || predicted.height < -ReelPage.flingThreshold
-            let goesDown = t.height > ReelPage.threshold || predicted.height > ReelPage.flingThreshold
+            let projected = t.height + Motion.project(velocity.height)
+            let goesUp = projected < -pageSize.height * 0.3 && velocity.height < 250
+            let goesDown = projected > pageSize.height * 0.3 && velocity.height > -250
             if goesUp && canAdvance {
-                advance(k)
-            } else if goesDown && model.canUndo {
-                goBack()
+                advance(k, velocity: velocity.height)
+            } else if goesDown {
+                if model.canUndo {
+                    goBack(velocity: velocity.height)
+                } else {
+                    pullAway(velocity: velocity.height)
+                }
             } else {
-                if (goesUp || goesDown) && settings.haptics { Haptics.rigid() }
-                withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) { dragY = 0 }
+                if goesUp { Haptics.rigid() }
+                withAnimation(Motion.flick) { dragY = 0 }
             }
         } else {
-            if wasArmed && !isContext { setMarked(t.width < 0, k) }
-            withAnimation(.spring(response: 0.35, dampingFraction: 0.75)) { dragX = 0 }
+            if wasArmed {
+                if t.width < 0 {
+                    toggleSave(k)
+                } else {
+                    setMarked(!marked, k)
+                }
+            }
+            withAnimation(Motion.flick) { dragX = 0 }
         }
     }
 
     // MARK: Actions
 
-    private func appear() {
-        guard live else { return }
+    private func appear(_ k: Kanji) {
         shownAt = Date()
+        if item.kind == .teach {
+            // The first page waits for the cover to finish rising.
+            let delay = model.canUndo ? 0.2 : 0.55
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
+                if !leaving { playStrokes(k, deliberate: false) }
+            }
+        }
         if typing {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { fieldFocused = true }
         }
-        if !reduceMotion && settings.coachSwipes < 3 {
-            withAnimation(.easeInOut(duration: 0.6).repeatForever(autoreverses: true)) { bounce = true }
-        }
     }
 
-    private func primaryAction(_ k: Kanji) {
-        if !revealed && !isContext {
+    /// Space, Return and ↑: reveal first, then move on.
+    private func primary(_ k: Kanji) {
+        if isCard && !revealed {
             if typing { fieldFocused = true } else { reveal(k) }
         } else {
             advance(k)
@@ -4773,29 +5295,76 @@ struct ReelPage: View {
 
     private func tap(_ k: Kanji) {
         guard !leaving else { return }
-        if isContext {
+        switch item.kind {
+        case .context:
             listen(k)
-        } else if !revealed {
-            if typing { fieldFocused = true } else { reveal(k) }
-        } else {
+        case .teach:
+            playStrokes(k, deliberate: true)
+        case .card:
+            if !revealed {
+                if typing { fieldFocused = true } else { reveal(k) }
+            } else {
+                listen(k)
+            }
+        }
+    }
+
+    private func doubleTap(_ k: Kanji) {
+        guard !leaving else { return }
+        switch item.kind {
+        case .teach:
+            knowAlready()
+        case .card:
+            if !revealed { reveal(k) }
+            let nowEasy = !easy
+            withAnimation(Motion.flick) {
+                easy = nowEasy
+                if nowEasy { marked = false }
+            }
+            if nowEasy { celebrate() } else { Haptics.tap() }
+        case .context:
             listen(k)
         }
     }
 
-    private func reveal(_ k: Kanji) {
-        guard !revealed, !isContext else { return }
+    /// "I already know this" on a lesson page: a heart, then the kanji and
+    /// its quiz questions dissolve away; a spaced check verifies it later.
+    private func knowAlready() {
+        leaving = true
+        celebrate()
+        let glyph = item.glyph
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            withAnimation(Motion.settle) {
+                model.skipKnown(glyph, store: store)
+            }
+        }
+    }
+
+    private func celebrate() {
+        heartToken += 1
+        let token = heartToken
+        showHeart = true
+        Haptics.heart()
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.9) {
+            if heartToken == token { showHeart = false }
+        }
+    }
+
+    private func reveal(_ k: Kanji, autoplay: Bool = true) {
+        guard !revealed, isCard else { return }
         answerMs = Int(Date().timeIntervalSince(shownAt) * 1000)
-        let animation: Animation = reduceMotion
-            ? .easeOut(duration: 0.15)
-            : .spring(response: 0.4, dampingFraction: 0.85)
-        withAnimation(animation) { revealed = true }
-        if settings.haptics { Haptics.tap() }
-        if item.facet == .writing { playStrokesOnce(k) }
-        if settings.autoSpeak { speak(k, deliberate: false) }
+        withAnimation(reduceMotion ? Animation.easeOut(duration: 0.15) : Motion.reveal) { revealed = true }
+        Haptics.soft()
+        guard autoplay else { return }
+        if item.facet == .writing {
+            playStrokes(k, deliberate: false)
+        } else if settings.autoSpeak {
+            speak(k, deliberate: false)
+        }
     }
 
     private func listen(_ k: Kanji) {
-        if isContext {
+        if item.kind == .context {
             Speaker.shared.say(Ruby.spoken(k.sentence))
         } else {
             speak(k, deliberate: true)
@@ -4808,92 +5377,130 @@ struct ReelPage: View {
         }
     }
 
-    /// Marking Forgot (swipe ←, the rail, or ← key) also reveals the answer;
-    /// clearing it (swipe →) is how a typed slip counts as known.
-    private func setMarked(_ forgot: Bool, _ k: Kanji) {
-        guard !isContext, !leaving else { return }
-        if forgot && !revealed { reveal(k) }
-        guard forgot != marked else { return }
-        withAnimation(.easeOut(duration: 0.2)) { marked = forgot }
-        if settings.haptics {
-            if forgot { Haptics.rigid() } else { Haptics.tap() }
-        }
-    }
-
-    private func toggleSave(_ k: Kanji) {
-        guard !leaving, !isContext else { return }
-        store.toggleSaved(k.glyph)
-        if settings.haptics { Haptics.medium() }
-        if !settings.coachTips { store.data.settings.coachTips = true }
-        burst = true
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.75) {
-            withAnimation(.easeOut(duration: 0.2)) { burst = false }
-        }
-    }
-
+    /// Hold: the strokes draw, a soft touch marks each one, and the word is
+    /// spoken — sight, touch and sound starting on the same frame.
     private func startHold(_ k: Kanji) {
-        guard !leaving, !isContext else { return }
-        let glyphVisible = item.facet == .meaning || revealed
-        guard glyphVisible, !k.strokePaths.isEmpty else {
-            if settings.haptics { Haptics.rigid() }
+        guard !leaving else { return }
+        if item.kind == .context {
+            listen(k)
             return
         }
-        holding = true
-        if settings.haptics { Haptics.tick() }
+        if isCard && item.facet != .meaning && !revealed { reveal(k, autoplay: false) }
+        speak(k, deliberate: true)
         if !settings.coachTips { store.data.settings.coachTips = true }
+        guard !k.strokePaths.isEmpty else { return }
+        holding = true
+        Haptics.strokes(count: k.strokePaths.count, interval: StrokeOrderView.perStroke)
     }
 
-    private func playStrokesOnce(_ k: Kanji) {
+    private func endHold() {
+        guard holding else { return }
+        holding = false
+        Haptics.stop()
+    }
+
+    private func playStrokes(_ k: Kanji, deliberate: Bool) {
+        if deliberate || settings.autoSpeak { speak(k, deliberate: deliberate) }
         guard !k.strokePaths.isEmpty else { return }
-        if item.facet == .reading && !revealed { reveal(k) }
         autoStrokes = true
+        Haptics.strokes(count: k.strokePaths.count, interval: StrokeOrderView.perStroke)
         DispatchQueue.main.asyncAfter(deadline: .now() + StrokeOrderView.duration(for: k.strokePaths.count)) {
             autoStrokes = false
         }
     }
 
-    /// Slides this page up and the next one in, then records the answer.
-    /// The feed is reset without animation in the same transaction, so the
-    /// page that slid in simply becomes the live page.
-    private func advance(_ k: Kanji) {
-        guard !leaving, canAdvance else { return }
-        leaving = true
-        fieldFocused = false
-        if settings.haptics {
-            if marked { Haptics.rigid() } else { Haptics.soft() }
+    /// Swipe right (or →): marking Forgot also reveals the answer; marking
+    /// it again clears it — which is how a typed slip still counts.
+    private func setMarked(_ forgot: Bool, _ k: Kanji) {
+        guard isCard, !leaving else { return }
+        if forgot && !revealed { reveal(k) }
+        guard forgot != marked else { return }
+        withAnimation(Motion.flick) {
+            marked = forgot
+            if forgot { easy = false }
         }
-        let height = pageSize.height
-        withAnimation(.easeOut(duration: 0.24)) {
-            dragY = -height
-        } completion: {
-            var transaction = Transaction()
-            transaction.disablesAnimations = true
-            withTransaction(transaction) {
-                dragY = 0
-                if isContext {
-                    model.dismissContext()
-                } else {
-                    grade(marked ? .again : .good)
-                }
+        if forgot { Haptics.forgot() } else { Haptics.tap() }
+    }
+
+    private func toggleSave(_ k: Kanji) {
+        guard !leaving, item.kind != .context else { return }
+        withAnimation(Motion.flick) { store.toggleSaved(k.glyph) }
+        Haptics.saved()
+        saveToken += 1
+        let token = saveToken
+        showSaveBurst = true
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
+            if saveToken == token {
+                withAnimation(.easeOut(duration: 0.2)) { showSaveBurst = false }
             }
         }
     }
 
-    private func goBack() {
+    // MARK: Page turns
+
+    private func advance(_ k: Kanji, velocity: CGFloat = 0) {
+        guard !leaving, canAdvance else { return }
+        leaving = true
+        fieldFocused = false
+        Speaker.shared.stop()
+        Haptics.stop()
+        slide(to: -pageSize.height, velocity: velocity) {
+            finishAdvance()
+        }
+    }
+
+    private func goBack(velocity: CGFloat = 0) {
         guard !leaving, model.canUndo else { return }
         leaving = true
         fieldFocused = false
-        if settings.haptics { Haptics.tap() }
-        let height = pageSize.height
-        withAnimation(.easeOut(duration: 0.24)) {
-            dragY = height
+        Speaker.shared.stop()
+        Haptics.stop()
+        slide(to: pageSize.height, velocity: velocity) {
+            model.undo(store: store)
+        }
+    }
+
+    /// Finishes a page turn as a spring that starts at the finger's speed,
+    /// then swaps pages in one unanimated transaction so the page that slid
+    /// in simply becomes the live one.
+    private func slide(to target: CGFloat, velocity: CGFloat, then action: @escaping () -> Void) {
+        let remaining = target - dragY
+        let relative = remaining == 0 ? 0 : Double(velocity / remaining)
+        withAnimation(Motion.page(velocity: max(relative, 0))) {
+            dragY = target
         } completion: {
+            Haptics.snap()
             var transaction = Transaction()
             transaction.disablesAnimations = true
             withTransaction(transaction) {
                 dragY = 0
-                model.undo(store: store)
+                action()
             }
+        }
+    }
+
+    /// Pulling the first page down carries it off the bottom of the screen,
+    /// uncovering Home, and the session closes behind it.
+    private func pullAway(velocity: CGFloat) {
+        leaving = true
+        fieldFocused = false
+        let target = pageSize.height
+        let remaining = target - dragY
+        let relative = remaining <= 0 ? 0 : Double(velocity / remaining)
+        withAnimation(Motion.page(velocity: max(relative, 0))) {
+            dragY = target
+        } completion: {
+            onClose(false)
+        }
+    }
+
+    private func finishAdvance() {
+        switch item.kind {
+        case .card:
+            if settings.coachStep < 5 { store.data.settings.coachStep += 1 }
+            grade(marked ? .again : (easy ? .easy : .good))
+        case .teach, .context:
+            model.advancePage(store: store)
         }
     }
 
@@ -4907,46 +5514,76 @@ struct ReelPage: View {
             case .writing: miss = nil
             }
         }
-        if settings.coachSwipes < 3 { store.data.settings.coachSwipes += 1 }
         model.commit(rating, ms: ms, miss: miss, store: store)
-        if rating != .again && [5, 10, 20, 50, 100].contains(model.combo) && settings.haptics {
+        if rating != .again && [5, 10, 20, 50, 100].contains(model.combo) {
             Haptics.success()
         }
     }
 
     // MARK: Keyboard and VoiceOver
 
-    /// Hidden keys for hardware keyboards: Space reveals then moves on,
-    /// Return or ↑ next, ↓ previous, ← forgot, → clear, S save.
-    private func hiddenShortcuts(_ k: Kanji) -> some View {
+    /// Space or Return reveals, then moves on; ↑ next, ↓ back, → forgot,
+    /// ← save, E easy, P strokes and sound.
+    private func hiddenKeys(_ k: Kanji) -> some View {
         ZStack {
-            Button("") { primaryAction(k) }
+            Button("") { primary(k) }
                 .keyboardShortcut(.space, modifiers: [])
-            Button("") { primaryAction(k) }
+            Button("") { primary(k) }
                 .keyboardShortcut(.return, modifiers: [])
-            Button("") { primaryAction(k) }
+            Button("") { primary(k) }
                 .keyboardShortcut(.upArrow, modifiers: [])
             Button("") { goBack() }
                 .keyboardShortcut(.downArrow, modifiers: [])
-            Button("") { setMarked(true, k) }
-                .keyboardShortcut(.leftArrow, modifiers: [])
-            Button("") { setMarked(false, k) }
+            Button("") { setMarked(!marked, k) }
                 .keyboardShortcut(.rightArrow, modifiers: [])
             Button("") { toggleSave(k) }
-                .keyboardShortcut("s", modifiers: [])
+                .keyboardShortcut(.leftArrow, modifiers: [])
+            Button("") { doubleTap(k) }
+                .keyboardShortcut("e", modifiers: [])
+            Button("") { playStrokes(k, deliberate: true) }
+                .keyboardShortcut("p", modifiers: [])
         }
         .opacity(0)
         .accessibilityHidden(true)
         .disabled(typing && verdict == nil)
     }
 
+    private var accessibilityHintText: String {
+        if isCard && !revealed { return "Reveals the answer" }
+        return "Swipe up or down with one finger for actions"
+    }
+
+    private var forgotActionName: String { marked ? "Clear forgot" : "Forgot" }
+    private var easyActionName: String { easy ? "Clear easy" : "Easy" }
+    private var saveActionName: String { store.isSaved(item.glyph) ? "Remove from saved" : "Save" }
+
+    private func withAccessibility<Content: View>(_ content: Content, _ k: Kanji) -> some View {
+        content
+            .accessibilityElement(children: typing ? .contain : .combine)
+            .accessibilityAddTraits(.isButton)
+            .accessibilityHint(Text(accessibilityHintText))
+            .accessibilityAction { tap(k) }
+            .accessibilityActions {
+                accessibilityButtons(k)
+            }
+    }
+
     @ViewBuilder
     private func accessibilityButtons(_ k: Kanji) -> some View {
         Button("Next") { advance(k) }
-        Button(marked ? "Clear forgot" : "Forgot") { setMarked(!marked, k) }
-        Button("Previous card") { goBack() }
-        Button(store.isSaved(k.glyph) ? "Remove from saved" : "Save") { toggleSave(k) }
-        Button("Play stroke order") { playStrokesOnce(k) }
+        if isCard {
+            Button(forgotActionName) { setMarked(!marked, k) }
+            Button(easyActionName) { doubleTap(k) }
+        }
+        if item.kind == .teach {
+            Button("I already know this") { doubleTap(k) }
+        }
+        if item.kind != .context {
+            Button(saveActionName) { toggleSave(k) }
+        }
+        Button("Play stroke order and sound") { playStrokes(k, deliberate: true) }
+        Button("Previous") { goBack() }
+        Button("Close") { onClose(true) }
     }
 
     // MARK: Typed readings
@@ -4963,10 +5600,10 @@ struct ReelPage: View {
         }
         if !usedHint, let message = nearMissHint(answer, targets: targets, kanji: k) {
             usedHint = true
-            withAnimation(.easeOut(duration: 0.2)) { hint = message }
+            withAnimation(Motion.settle) { hint = message }
             typed = ""
             withAnimation(.default) { shakes += 1 }
-            if settings.haptics { Haptics.tap() }
+            Haptics.warning()
             return
         }
         if inferredMiss == nil { inferredMiss = .reading }
@@ -4978,10 +5615,8 @@ struct ReelPage: View {
         hint = nil
         verdict = correct
         reveal(k)
-        withAnimation(.easeOut(duration: 0.2)) { marked = !correct }
-        if settings.haptics {
-            if correct { Haptics.success() } else { Haptics.error() }
-        }
+        withAnimation(Motion.flick) { marked = !correct }
+        if correct { Haptics.success() } else { Haptics.forgot() }
     }
 
     /// One free retry for answers that are almost right, pointing at exactly
@@ -5016,83 +5651,22 @@ struct ReelPage: View {
     }
 }
 
-// MARK: Drawing
-
-/// Writing practice on a pad (finger or Apple Pencil), kept in its own sheet
-/// so drawing never fights the feed's swipes.
-struct DrawSheet: View {
-    @EnvironmentObject var store: Store
-    @Environment(\.dismiss) private var dismiss
-    let kanji: Kanji
-    let onGrade: (Rating) -> Void
-    @State private var clearToken = 0
-    @State private var hasInk = false
-    @State private var revealed = false
-
-    var body: some View {
-        NavigationStack {
-            VStack(spacing: Space.l) {
-                VStack(spacing: Space.xxs) {
-                    Text(kanji.meaningList.capitalizedFirst)
-                        .font(.title2.weight(.semibold))
-                        .multilineTextAlignment(.center)
-                    Text(readingLine(kanji))
-                        .font(.jp(17, relativeTo: .body))
-                        .foregroundStyle(Palette.ink2)
-                }
-                ZStack {
-                    WritingPad(clearToken: clearToken, hasInk: $hasInk,
-                               guide: revealed && kanji.strokePaths.isEmpty ? kanji.glyph : nil,
-                               guideOpacity: 0.3, face: store.data.settings.face)
-                    if revealed && !kanji.strokePaths.isEmpty {
-                        StrokeOrderView(paths: kanji.strokePaths, playing: true, loops: false)
-                            .padding(Space.l)
-                            .opacity(0.6)
-                            .allowsHitTesting(false)
-                    }
-                }
-                .aspectRatio(1, contentMode: .fit)
-                .frame(maxWidth: 380)
-                Spacer(minLength: 0)
-                HStack(spacing: Space.s) {
-                    if revealed {
-                        ActionButton(title: "Again", kind: .secondary) { finish(.again) }
-                        ActionButton(title: "Knew it") { finish(.good) }
-                    } else {
-                        ActionButton(title: "Clear", kind: .secondary) { clearToken += 1 }
-                            .disabled(!hasInk)
-                        ActionButton(title: "Check") {
-                            withAnimation(.easeOut(duration: 0.2)) { revealed = true }
-                        }
-                    }
-                }
-                .actionColumn()
-            }
-            .padding(Space.l)
-            .navigationTitle("Draw")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }
-                }
-            }
-        }
-    }
-
-    private func finish(_ rating: Rating) {
-        dismiss()
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { onGrade(rating) }
-    }
-}
-
 // MARK: Recap
 
+/// The end of a session: a seal, one line, and the same gesture that began
+/// it. Swiping up lifts the page away to uncover Home.
 struct RecapView: View {
     @EnvironmentObject var store: Store
     @ObservedObject var model: SessionModel
     let previousBest: Int
-    let onDone: () -> Void
+    let onDone: (Bool) -> Void
     @State private var offerReminder = false
+    @State private var lift: CGFloat = 0
+    @State private var height: CGFloat = 900
+    @State private var appeared = false
+    @State private var leaving = false
+    @State private var gone = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var title: String {
         switch model.mode {
@@ -5103,12 +5677,13 @@ struct RecapView: View {
     }
 
     private var detail: String {
-        let accuracy = model.total == 0 ? 1 : Double(model.result.firstTry) / Double(model.total)
+        let graded = max(model.result.answered, 1)
+        let accuracy = min(Double(model.result.firstTry) / Double(graded), 1)
         switch model.mode {
         case .lesson:
             return "They'll come back in a few hours, while still fresh."
         case .review:
-            return "\(model.total) \(model.total == 1 ? "card" : "cards") · \(Format.percent(accuracy)) on the first try"
+            return "\(model.result.answered) answered · \(Format.percent(accuracy)) on the first try"
         case .practice:
             return "Practice doesn't change your schedule."
         }
@@ -5124,6 +5699,32 @@ struct RecapView: View {
     var body: some View {
         VStack(spacing: Space.xl) {
             Spacer()
+            summary
+            Spacer()
+            footer
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Palette.paper)
+        .background {
+            GeometryReader { geo in
+                Color.clear.onAppear { height = geo.size.height }
+            }
+        }
+        .contentShape(Rectangle())
+        .offset(y: lift)
+        .opacity(gone ? 0 : 1)
+        .gesture(finishGesture)
+        .background(finishKey)
+        .onAppear {
+            if model.mode != .practice { Haptics.success() }
+            withAnimation(Motion.reveal.delay(0.15)) { appeared = true }
+            // Ask about reminders once, in context, after a real session.
+            offerReminder = model.mode != .practice && !store.data.settings.askedReminder && !store.data.settings.reminder
+        }
+    }
+
+    private var summary: some View {
+        VStack(spacing: Space.l) {
             Hanko(glyph: model.mode == .lesson ? "学" : "済")
             VStack(spacing: Space.xs) {
                 Text(title)
@@ -5139,32 +5740,74 @@ struct RecapView: View {
                 }
             }
             .padding(.horizontal, Space.l)
-            Spacer()
-            VStack(spacing: Space.s) {
-                if offerReminder {
-                    ActionButton(title: "Remind me daily", kind: .secondary) {
-                        Reminders.enable(store) { _ in }
-                        offerReminder = false
-                    }
-                }
-                ActionButton(title: "Done") { finish() }
-                    .keyboardShortcut(.defaultAction)
-            }
-            .padding(.horizontal, Space.l)
-            .padding(.bottom, Space.l)
-            .actionColumn()
+            .modifier(BlurFade(amount: appeared || reduceMotion ? 0 : 8))
         }
-        .frame(maxWidth: .infinity)
-        .onAppear {
-            if store.data.settings.haptics && model.mode != .practice { Haptics.success() }
-            // Ask about reminders once, in context, after a real session.
-            offerReminder = model.mode != .practice && !store.data.settings.askedReminder && !store.data.settings.reminder
-        }
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(.isButton)
+        .accessibilityHint(Text("Finishes the session"))
+        .accessibilityAction { finish() }
     }
 
-    private func finish() {
+    private var footer: some View {
+        VStack(spacing: Space.l) {
+            if offerReminder {
+                Button("Remind me daily") {
+                    Reminders.enable(store) { _ in }
+                    offerReminder = false
+                }
+                .font(.subheadline)
+                .buttonStyle(.borderless)
+                .frame(minHeight: Metrics.minTap)
+            }
+            ShimmerText(text: "Swipe up to finish")
+                .accessibilityHidden(true)
+        }
+        .padding(.bottom, Space.xl)
+        .opacity(appeared ? 1 : 0)
+    }
+
+    private var finishGesture: some Gesture {
+        DragGesture(minimumDistance: 10)
+            .onChanged { value in
+                guard !leaving else { return }
+                let t = value.translation.height
+                lift = t < 0 ? t : Motion.rubberband(t, dimension: height)
+            }
+            .onEnded { value in
+                guard !leaving else { return }
+                let projected = value.translation.height + Motion.project(value.velocity.height)
+                if projected < -height * 0.25 && value.velocity.height < 300 {
+                    finish(velocity: value.velocity.height)
+                } else {
+                    withAnimation(Motion.flick) { lift = 0 }
+                }
+            }
+    }
+
+    private var finishKey: some View {
+        Button("") { finish() }
+            .keyboardShortcut(.return, modifiers: [])
+            .opacity(0)
+            .accessibilityHidden(true)
+    }
+
+    private func finish(velocity: CGFloat = 0) {
+        guard !leaving else { return }
+        leaving = true
         if offerReminder { store.data.settings.askedReminder = true }
-        onDone()
+        Haptics.snap()
+        if reduceMotion {
+            withAnimation(.easeOut(duration: 0.25)) { gone = true } completion: { onDone(false) }
+            return
+        }
+        let target = -(height * 1.2)
+        let remaining = target - lift
+        let relative = remaining == 0 ? 0 : Double(velocity / remaining)
+        withAnimation(Motion.page(velocity: max(relative, 0))) {
+            lift = target
+        } completion: {
+            onDone(false)
+        }
     }
 }
 
