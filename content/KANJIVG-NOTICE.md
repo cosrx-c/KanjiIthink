@@ -1,7 +1,8 @@
 # KanjiVG stroke data
 
 The `strokePaths` arrays in `content/core-n5.json` — and the copy embedded in
-`Sumi.swiftpm/Sources/ContentView.swift` — are derived from **KanjiVG**
+`Sumi.swiftpm/Sources/ContentView.swift` — and the `sumiMarkPaths` array for
+the app's 墨 mark (also in `ContentView.swift`) are derived from **KanjiVG**
 (<https://kanjivg.tagaini.net>, <https://github.com/KanjiVG/kanjivg>),
 © Ulrich Apel and contributors.
 

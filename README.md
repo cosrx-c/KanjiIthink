@@ -15,10 +15,10 @@ already move through short-video feeds.
 
 **Study: one full-screen feed, no buttons**
 
-Each card fills the screen, edge to edge. Drag up and the next card slides
-over this one while this one recedes — smaller, dimmer, its corners
-rounding — the way a sheet pushes back what's beneath it. Lessons use the
-same feed: a page for each new kanji, then its quiz.
+The cards are a deck of paper: the one in your hand on top, the next two
+peeking out beneath it. Drag up and the top card lifts away while the deck
+rises to meet your finger; drag down and the previous card drops back on
+top. Lessons use the same deck: a card for each new kanji, then its quiz.
 
 | Gesture | Action | Borrowed from |
 |---|---|---|
@@ -39,6 +39,23 @@ what's marked (Forgot, Easy, Saved). The first five cards each teach one
 gesture in a single line of text, then the hints are gone for good.
 Hardware keys (Space, Return, ↑ ↓ ← →, E, P, Esc) and VoiceOver actions
 cover every gesture.
+
+**The look: ink on washi**
+
+- *Paper:* warm off-white by day, true black by night. Cards are sheets
+  with a faint grain, a hairline edge and two soft shadows; a slow ink
+  wash drifts behind everything (a mesh gradient on iOS 18).
+- *Depth:* the study deck is 2.5D. Cards lean a few degrees as you move the
+  phone and a sheen slides across them, and a soft light follows your
+  finger. On iPad, the pointer lifts and highlights what it's over.
+- *Type:* San Francisco for text, New York (Apple's serif) for a few
+  display lines, SF Rounded for numbers, Hiragino for Japanese. Everything
+  scales with Dynamic Type and keeps at least 4.5:1 contrast.
+- *Story:* onboarding is four pages you swipe up through: the 墨 mark writes
+  itself, a forgetting curve draws as its page arrives, the gestures
+  arrive one by one, and you set your daily pace on a 3D number wheel.
+- *Settings* looks like the Settings app, with colored icon tiles and a new
+  Appearance option (Automatic, Light or Dark).
 
 **Built to feel like it belongs on iOS**
 
@@ -72,10 +89,10 @@ lives, no leaderboards.
 
 | Screen | Contents |
 |---|---|
-| **Home** | One number (reviews waiting) or one glyph (the next new kanji), and "Swipe up to review/learn". When you're done: when the next review is, plus quiet links (read a text, practice saved, learn more). |
-| **Library** | Kanji, Saved and Texts. Each glyph's ink deepens as you learn it — faint when new, full black once known. Search takes kanji, English, kana or romaji. |
-| **Kanji page** | The glyph (hold for strokes and sound, double-tap to save), meaning, readings, a memory hook (or your own), words and a sentence — tap any to hear it. |
-| **Settings** | Daily pace, writing, type readings, furigana, typeface, audio, voice, haptics, a daily reminder, import/export, privacy. |
+| **Home** | The cards waiting for you as a small deck, how many there are and roughly how long they'll take, and "Swipe up to review/learn". When you're done: a hanko seal, when the next review is, and quiet glass buttons (read a text, practice saved, learn more). |
+| **Library** | Kanji, Saved and Texts. Each glyph sits on a tile whose ink deepens as you learn it — faint when new, full black once known — and each level shows how much of it you know. Search takes kanji, English, kana or romaji. |
+| **Kanji page** | The glyph on a sheet of practice paper (hold for strokes and sound, double-tap to save), its level, stroke count and type, the meaning, on and kun readings, a memory hook (or your own), words and a sentence — tap any of them to hear it. |
+| **Settings** | Daily pace, writing, type readings, appearance, typeface, furigana, audio, voice, haptics, a daily reminder, import/export, privacy. |
 
 **What happens behind it**
 

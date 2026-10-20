@@ -8,6 +8,84 @@ questions that only testing with real learners can answer.
 
 ---
 
+## 0c. Revision 5 — the look: ink on washi
+
+Revision 4 settled how the app moves. Revision 5 is about how it looks. The
+brief asked for a much more visual, modern Apple aesthetic, with ideas from
+immersive websites (2.5D stacked cards, pointer effects, WebGL light,
+scroll storytelling, 3D carousels, an animated logo). Each idea is
+translated into what iOS does natively, and kept only where it serves the
+task.
+
+**One material idea, everywhere.** Everything is paper. The page is washi:
+warm off-white `#F6F3EC` by day and true black by night. Cards, tiles and
+sheets are a lighter sheet `#FFFEFB` lying on it, each with a faint grain,
+a one-pixel edge (a shadow line by day, a lit edge by night) and two
+shadows: a tight contact shadow and a wide ambient one. Gestalt does the
+rest: *common region* groups what belongs together on one sheet;
+*figure–ground* is a sheet on the page; the stack's *continuity* tells you
+there's more beneath.
+
+| Website idea | What it became on iPhone | Where |
+|---|---|---|
+| 2.5D stackable cards | The study feed is a deck: the next two cards peek out beneath the top one, and the deck rises as the top card lifts away | Study |
+| 3D tilt and light tracing | Cards lean up to 3.5° with the phone (Core Motion, measured from how you hold it) and a sheen slides across them | Study, Home, kanji page |
+| Cursor glow and hover states | A soft light follows the finger on a card; on iPad the pointer gets lift and highlight hover effects | Study, Library, kanji page |
+| WebGL ambient background | A slow ink wash: a mesh gradient on iOS 18, hand-drawn radial clouds before, both still under Reduce Motion | Home, study, recap, onboarding |
+| Scroll storytelling | Onboarding is four pages you swipe up through: 墨 writes itself, a forgetting curve draws as its page arrives, the gestures arrive one by one | Onboarding |
+| Scroll-triggered reveals | Library tiles rise and sharpen as they scroll in (`scrollTransition`); the kanji page's hero recedes as you scroll past it (`visualEffect`) | Library, kanji page |
+| 3D carousel with ramps | Daily pace is a horizontal wheel: the centred number is chosen, the rest turn away in 3D, shrink and blur | Onboarding |
+| Animated logo | The 墨 mark writes itself stroke by stroke from KanjiVG paths, the wet stroke in indigo with a bloom | Onboarding, Settings, About |
+| Glassmorphism | Liquid Glass (iOS 26) for chips, pills and swipe badges only; before iOS 26 a frosted material with a lit edge | Floating controls |
+| Skeuomorphism | Restrained: paper grain, the 田 practice grid, a hanko seal. No leather, no stitching | Throughout |
+| Neumorphism, Bauhaus | Not used. Neumorphism's low-contrast edges fail accessibility; a Bauhaus grid fights the quiet, centred study screen | — |
+| WebGL 3D room, custom cursors | Not used. No iPhone equivalent that helps a learner, and a 3D room would compete with the one thing on screen | — |
+
+**Typography.** San Francisco for text, so Dynamic Type, optical sizes and
+tracking come from the system. New York (Apple's serif) for a few display
+lines — the meaning of a kanji, page headlines, the recap — gives an
+editorial voice that suits ink and paper. SF Pro Rounded for numbers you
+read at a glance (the review count, combo, stats) — the same mix Apple uses
+in Fitness and Books. Japanese stays in Hiragino, with looser leading
+wherever furigana can appear. Captions are small caps with tracking that
+opens as they get small. Every long line has a line limit with
+`minimumScaleFactor`, and the study card's content is capped at
+accessibility size 2 so it can never spill off the card.
+
+**Color.** Warm greys instead of neutral ones, so text sits *in* the paper.
+Every text pair keeps at least 4.5:1 contrast (WCAG AA), and Increase
+Contrast deepens all of them. Indigo marks what can be acted on, vermilion
+only means Forgot, matcha only Right, sakura only Easy. Dark mode is true
+black (OLED, and calm at night), with cards one step up so the deck stays
+visible.
+
+**Layout and scanning.** Study cards are centred on a vertical axis: the
+eye lands on the glyph, drops to the answer, and finds the gesture hint at
+the bottom. Reference pages (the kanji page, reading texts) are
+leading-aligned for top-to-bottom scanning: label, value, label, value.
+Corner radii are concentric with the display's corners (WWDC25, *Get to
+know the new design system*), and every tappable element is at least 44 pt.
+
+**Settings looks like Settings.** Grouped sections with colored icon tiles,
+an account-style header with the mark and your progress, and a footer that
+explains each section. A new Appearance option offers Automatic, Light or
+Dark.
+
+**Motion for the new pieces.** Sheets materialize from a blur rather than
+just fading. Numbers roll (`numericText`) and symbols bounce or swap
+(`symbolEffect`). The swipe badges fill with color at the commit point, the
+heart pops with a spreading ring, and the hanko stamps. All of it uses the
+same springs as revision 4, and Reduce Motion replaces it with fades.
+
+**Performance.** Grain is rendered once into a small tile that repeats.
+Device tilt runs only while a tilting view is on screen. The ink wash is
+capped at 30 fps. Home works out what's due once per minute and redraws
+only the deck while you drag.
+
+**Known limits.** The mesh-gradient wash needs iOS 18, and Liquid Glass
+needs iOS 26 and a Swift 6.2 toolchain; both fall back automatically. None
+of this has been compiled yet (see Verification status in the README).
+
 ## 0b. Revision 4 — no buttons, and an Apple feel
 
 Revision 3 put a Reels-style rail of buttons beside every card. Revision 4
@@ -511,3 +589,10 @@ motivation and habit questions (Hall; Marsh).
 - Apple — Meet Liquid Glass (WWDC25). https://developer.apple.com/videos/play/wwdc2025/219/
 - Apple — Applying Liquid Glass to custom views. https://developer.apple.com/documentation/swiftui/applying-liquid-glass-to-custom-views
 - Apple Developer Documentation — AVSpeechSynthesisVoice and voice quality. https://developer.apple.com/documentation/avfaudio/avspeechsynthesisvoice
+- Apple Design Resources. https://developer.apple.com/design/resources/
+- Apple Developer Documentation — SwiftUI animations. https://developer.apple.com/documentation/swiftui/animations
+- Apple — Beyond scroll views (WWDC23): `scrollTransition`, `visualEffect`, `scrollTargetBehavior`. https://developer.apple.com/videos/play/wwdc2023/10159/
+- Apple — Create custom visual effects with SwiftUI (WWDC24): mesh gradients and visual effects. https://developer.apple.com/videos/play/wwdc2024/10151/
+- Apple — Get to know the new design system (WWDC25): concentric shapes and Liquid Glass hierarchy. https://developer.apple.com/videos/play/wwdc2025/356/
+- Apple Human Interface Guidelines — Color, Dark Mode, Typography, Motion, Pointing devices. https://developer.apple.com/design/human-interface-guidelines/color · https://developer.apple.com/design/human-interface-guidelines/dark-mode · https://developer.apple.com/design/human-interface-guidelines/typography · https://developer.apple.com/design/human-interface-guidelines/motion · https://developer.apple.com/design/human-interface-guidelines/pointing-devices
+- W3C — WCAG 2.2, contrast (minimum). https://www.w3.org/TR/WCAG22/#contrast-minimum
