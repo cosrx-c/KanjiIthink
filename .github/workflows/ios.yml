@@ -135,6 +135,8 @@ jobs:
             --repo "$GITHUB_REPOSITORY" \
             --title "Sumi — latest build" \
             --notes "Unsigned iPhone build of commit ${GITHUB_SHA::7}. Sign and install it with Sideloadly (see the README)."
+          # The pictures of a try build have done their job once it's published.
+          gh release delete try-screens --repo "$GITHUB_REPOSITORY" --yes --cleanup-tag 2>/dev/null || true
 
       - name: Attach the full build log
         if: always()
@@ -143,3 +145,136 @@ jobs:
           name: build-log
           path: build.log
           if-no-files-found: ignore
+
+  # On a try/… branch the app is also run in a simulator and each screen is
+  # photographed, so a change can be looked at — not just compiled — before
+  # it replaces the published app. The app opens on a given screen with
+  # sample progress when SUMI_SCENE is set (see "Showcase" in
+  # ContentView.swift); nothing else drives it. The pictures are attached
+  # to a prerelease called "try-screens", which the next build of main
+  # removes.
+  screens:
+    name: Photograph the screens
+    if: startsWith(github.ref, 'refs/heads/try/')
+    runs-on: macos-15
+    timeout-minutes: 45
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Use the newest released Xcode on this machine
+        run: |
+          XCODE=$(ls -d /Applications/Xcode_*.app | grep -vi beta | sort -V | tail -n 1)
+          echo "Using $XCODE"
+          sudo xcode-select -s "$XCODE"
+          xcodebuild -version
+
+      - name: Build for the simulator
+        working-directory: Sumi.swiftpm
+        run: |
+          set -o pipefail
+          xcodebuild -scheme Sumi \
+            -configuration Debug \
+            -sdk iphonesimulator \
+            -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath ../build-sim \
+            CODE_SIGNING_ALLOWED=NO \
+            build 2>&1 | tee ../build-sim.log | grep -E 'error:|\*\* BUILD' || true
+          grep -q '\*\* BUILD SUCCEEDED \*\*' ../build-sim.log
+
+      - name: Boot an iPhone
+        run: |
+          xcrun simctl list runtimes
+          UDID=$(python3 - <<'PY'
+          import json, re, subprocess, sys
+
+          listing = subprocess.check_output(["xcrun", "simctl", "list", "devices", "available", "-j"])
+          devices = json.loads(listing)["devices"]
+
+          def version(runtime):
+              return [int(n) for n in re.findall(r"\d+", runtime.split("SimRuntime.")[-1])]
+
+          for runtime in sorted((r for r in devices if "iOS" in r), key=version, reverse=True):
+              phones = [d for d in devices[runtime] if d["name"].startswith("iPhone")]
+              if not phones:
+                  continue
+              plain_pro = [d for d in phones if "Pro" in d["name"] and "Max" not in d["name"]]
+              choice = (plain_pro or phones)[-1]
+              print(runtime, choice["name"], file=sys.stderr)
+              print(choice["udid"])
+              break
+          PY
+          )
+          test -n "$UDID" || { echo "::error::No iPhone simulator is installed for this Xcode"; exit 1; }
+          echo "UDID=$UDID" >> "$GITHUB_ENV"
+          xcrun simctl boot "$UDID"
+          xcrun simctl bootstatus "$UDID" -b
+
+      - name: Photograph each screen
+        run: |
+          APP=$(find build-sim/Build/Products -type d -name 'Sumi.app' | head -n 1)
+          test -n "$APP" || { echo "Sumi.app not found"; exit 1; }
+          xcrun simctl install "$UDID" "$APP"
+          xcrun simctl status_bar "$UDID" override --time "9:41" --batteryState charged --batteryLevel 100 --wifiBars 3 --cellularBars 4 || true
+          mkdir -p shots
+
+          # shoot <file> <scene> <hour> <light|dark> [seconds to wait]
+          shoot() {
+            xcrun simctl ui "$UDID" appearance "$4"
+            xcrun simctl terminate "$UDID" com.cosrx.sumi 2>/dev/null || true
+            SIMCTL_CHILD_SUMI_SCENE="$2" SIMCTL_CHILD_SUMI_HOUR="$3" xcrun simctl launch "$UDID" com.cosrx.sumi
+            sleep "${5:-6}"
+            xcrun simctl io "$UDID" screenshot "shots/$1.png"
+          }
+
+          shoot 01-onboarding      onboarding     9  light 9
+          shoot 02-today-dawn      today          7  light
+          shoot 03-today-day       today          13 light
+          shoot 04-today-dusk      today          18 light
+          shoot 05-today-night     today          22 light
+          shoot 06-today-learn     learn          13 light
+          shoot 07-today-rest      rest           18 light
+          shoot 08-kanji           kanji          13 light
+          shoot 09-kanji-compact   kanji-compact  13 light
+          shoot 10-page            page           13 light 8
+          shoot 11-page-peek       page-peek      13 light 8
+          shoot 12-read            read           13 light
+          shoot 13-text            text           13 light 7
+          shoot 14-text-english    text-english   13 light 7
+          shoot 15-menu            menu           13 light 7
+          shoot 16-study           study          13 light 7
+          shoot 17-answer          answer         13 light 7
+          shoot 18-lesson          lesson         13 light 9
+          shoot 21-today-dark      today          22 dark
+          shoot 22-rest-dark       rest           22 dark
+          shoot 23-kanji-dark      kanji          22 dark
+          shoot 24-page-dark       page           22 dark 8
+          shoot 25-read-dark       read           22 dark
+          shoot 26-text-dark       text           22 dark 7
+          shoot 27-menu-dark       menu           22 dark 7
+          shoot 28-answer-dark     answer         22 dark 7
+
+          for f in shots/*.png; do
+            sips -s format jpeg -s formatOptions 74 -Z 1500 "$f" --out "${f%.png}.jpg" >/dev/null
+          done
+          rm shots/*.png
+          ls -la shots
+
+      - name: Attach the pictures to this run
+        uses: actions/upload-artifact@v4
+        with:
+          name: screens
+          path: shots
+          if-no-files-found: error
+
+      - name: Publish the pictures as the "try-screens" prerelease
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete try-screens --repo "$GITHUB_REPOSITORY" --yes --cleanup-tag 2>/dev/null || true
+          gh release create try-screens shots/*.jpg \
+            --repo "$GITHUB_REPOSITORY" \
+            --prerelease \
+            --target "$GITHUB_SHA" \
+            --title "Screens of the latest try build" \
+            --notes "Simulator screenshots of commit ${GITHUB_SHA::7} (${GITHUB_REF_NAME}), for looking a change over before it is published. Replaced by every try build; removed when main is built."

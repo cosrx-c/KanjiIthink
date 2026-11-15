@@ -3436,6 +3436,15 @@ final class Store: ObservableObject {
     private var pendingSave: DispatchWorkItem?
 
     init() {
+        if Showcase.isOn {
+            // A simulator asked for a screen to look at: sample progress in
+            // a scratch file, so a real save is never read or written.
+            let pack = BuiltIn.pack
+            fileURL = FileManager.default.temporaryDirectory.appendingPathComponent("sumi-showcase.json")
+            data = Showcase.sample(kanji: pack.kanji)
+            library = ContentLibrary(packs: [pack])
+            return
+        }
         let directory = (try? FileManager.default.url(for: .applicationSupportDirectory, in: .userDomainMask,
                                                       appropriateFor: nil, create: true))
             ?? FileManager.default.temporaryDirectory
@@ -4513,6 +4522,7 @@ struct ContentView: View {
                 }
             }
             .onAppear(perform: applyPreferences)
+            .onAppear { Showcase.open(router, store) }
             .onChange(of: store.data.settings) { _, _ in applyPreferences() }
             .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { _ in
                 router.keyboardUp = true
@@ -4610,6 +4620,116 @@ struct ContentView: View {
 struct ContentView_Previews: PreviewProvider {
     static var previews: some View {
         ContentView()
+    }
+}
+
+// MARK: Showcase
+//
+// A way for a simulator to open the app on a given screen with sample
+// progress, so that every build can be looked at before it is installed:
+// the try/… builds on GitHub photograph each screen this way. It is driven
+// by environment variables that only a simulator launch can set (SUMI_SCENE,
+// SUMI_HOUR). On a device they are never set, none of this runs, and
+// nothing is seeded.
+
+enum Showcase {
+    /// The screen asked for, if any.
+    static let scene: String? = ProcessInfo.processInfo.environment["SUMI_SCENE"]
+
+    static var isOn: Bool { scene != nil }
+
+    /// A fixed hour of today, so each of the day's washes can be looked at.
+    static var now: Date? {
+        guard isOn, let raw = ProcessInfo.processInfo.environment["SUMI_HOUR"], let hour = Int(raw) else { return nil }
+        return Calendar.current.date(bySettingHour: min(max(hour, 0), 23), minute: 41, second: 0, of: Date())
+    }
+
+    /// Progress a few weeks in: some kanji known, some settling, some
+    /// due — or nothing due at all, for the scenes that show a finished day.
+    static func sample(kanji: [Kanji]) -> SaveFile {
+        var file = SaveFile()
+        let name = scene ?? ""
+        file.onboarded = name != "onboarding"
+        guard file.onboarded else { return file }
+        let now = Date()
+        let day: TimeInterval = 86_400
+        let quiet = name == "rest" || name == "learn"
+        for (index, k) in kanji.prefix(30).enumerated() {
+            for facet in [Facet.meaning, Facet.reading] {
+                if facet == .reading && k.words.isEmpty { continue }
+                var card = Card(glyph: k.glyph, facet: facet, due: now)
+                card.reps = 4
+                card.difficulty = 4
+                card.lastReview = now.addingTimeInterval(-3 * day)
+                if index < 14 {
+                    card.phase = .review
+                    card.stability = 60
+                    card.due = now.addingTimeInterval(Double(6 + index) * day)
+                } else if index < 24 {
+                    card.phase = .review
+                    card.stability = 9
+                    let dueNow = index < 20 && !quiet
+                    card.due = now.addingTimeInterval(dueNow ? -3_600 : Double(index - 12) * day)
+                } else {
+                    card.phase = .learning
+                    card.stability = 0.4
+                    card.due = now.addingTimeInterval(2 * day)
+                }
+                file.cards[card.id] = card
+            }
+        }
+        var today = DayStat()
+        today.reviews = name == "rest" ? 34 : 18
+        today.correct = today.reviews - 3
+        today.learned = name == "rest" ? file.settings.newPerDay : 0
+        today.seconds = 260
+        file.days[StudyClock(dayStartHour: file.settings.dayStartHour).key(now)] = today
+        let glyphs = kanji.prefix(30).map(\.glyph)
+        file.saved = [1, 6, 15].filter { $0 < glyphs.count }.map { glyphs[$0] }
+        file.bestCombo = 8
+        file.settings.coachStep = 5
+        file.settings.coachTips = true
+        file.settings.askedReminder = true
+        file.settings.autoSpeak = false
+        return file
+    }
+
+    /// Goes to the screen asked for, once the first screen is up.
+    static func open(_ router: Router, _ store: Store) {
+        guard let scene = scene else { return }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+            switch scene {
+            case "kanji":
+                router.tab = .kanji
+            case "kanji-compact":
+                router.tab = .kanji
+                router.compact = true
+            case "page", "page-peek":
+                router.tab = .kanji
+                if let glyph = store.library.kanji.first(where: { store.isStarted($0.glyph) && $0.strokes > 3 })?.glyph {
+                    router.kanjiPath = [.kanji(glyph)]
+                }
+                if scene == "page-peek" {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { router.peek = true }
+                }
+            case "read":
+                router.tab = .read
+            case "text", "text-english":
+                router.tab = .read
+                if let passage = store.library.passages.first {
+                    router.readPath = [.passage(passage.id)]
+                }
+                router.translation = scene == "text-english"
+            case "menu":
+                router.menuOpen = true
+            case "study", "answer":
+                router.session = store.reviewLaunch()
+            case "lesson":
+                router.session = store.lessonLaunch(extra: true)
+            default:
+                break
+            }
+        }
     }
 }
 
@@ -5085,7 +5205,7 @@ struct HomeView: View {
 
     var body: some View {
         TimelineView(.everyMinute) { context in
-            HomeScreen(state: store.homeState, preview: store.duePreview(limit: 3), now: context.date)
+            HomeScreen(state: store.homeState, preview: store.duePreview(limit: 3), now: Showcase.now ?? context.date)
         }
         .toolbar(.hidden, for: .navigationBar)
     }
@@ -5194,22 +5314,24 @@ struct HomeScreen: View {
         case .rest(let next, _, _):
             if let next = next {
                 return Text("All done · next review \(next, format: .relative(presentation: .named))")
-                    .font(.title3)
+                    .font(.body)
                     .foregroundColor(Palette.ink2)
             }
             return quiet("Nothing left to learn — add more kanji from the menu.")
         }
     }
 
+    /// Body size, so the whole sentence sits on one line under the
+    /// greeting on every iPhone; the number alone is in ink.
     private func figure(_ value: Int) -> Text {
         Text("\(value)")
-            .font(.figure(.title3, weight: .bold))
+            .font(.figure(.body, weight: .bold))
             .foregroundColor(Palette.ink)
     }
 
     private func quiet(_ string: String) -> Text {
         Text(string)
-            .font(.title3)
+            .font(.body)
             .foregroundColor(Palette.ink2)
     }
 
@@ -9762,6 +9884,7 @@ struct ReelPage: View {
 
     private func appear(_ k: Kanji) {
         shownAt = Date()
+        if Showcase.scene == "answer" { reveal(k, autoplay: false) }
         if item.kind == .teach {
             // The first card waits for the cover to finish rising.
             let delay = model.canUndo ? 0.2 : 0.55
