@@ -8,6 +8,110 @@ questions that only testing with real learners can answer.
 
 ---
 
+## 0e. Revision 7 — navigation people already know, cards worth looking at
+
+Device testing after revision 6 found four things: saved and liked cards
+showed only a vague translucent blob at the top; sideways swipes rarely
+registered; the app was hard to find your way around; and the cards, the
+animations and the settings screen didn't look like one app. This revision
+takes each back to first principles.
+
+### Navigation: the task flows, then the structure
+
+A casual learner has four tasks, in this order of frequency: do today's
+cards; look a kanji up; read something; revisit the kanji they've kept.
+The previous structure hid two of them behind a grid icon on Home and a
+third inside a segmented control inside that, and offered the first only
+as a gesture on a line of text. Measured against the usual guides:
+
+| Principle | Source | What was wrong | What changed |
+|---|---|---|---|
+| Jakob's law — people spend most of their time in other apps and expect yours to work the same | Nielsen | A grid icon for "Library", a gesture for "start" | A bottom tab bar — Today · Kanji · Read — the one iOS navigation every user already knows (HIG, *Tab bars*) |
+| Recognition over recall | Nielsen heuristic 6 | Sections had to be remembered | Every top-level place is always visible, named and iconed |
+| Fitts's law and reachability | HIG, *Layout* | Primary actions at the top, or nowhere | Tabs and the one primary button (Review / Learn / Done / Begin) sit in the thumb's zone at the bottom |
+| Hick's law — decision time grows with choices | — | Library mixed kanji, saved and texts | Three tabs, each with one job; Saved is a filter inside Kanji |
+| Visibility of system status | Nielsen heuristic 1 | A bare progress line | "12/23" beside the line, the combo in its place when there is one, a ring on Today that fills as the day is done |
+| User control and freedom | Nielsen heuristic 3; HIG, *Modality* | Study could only be left by pinch or pull | A visible ✕ on the study screen; pinch and pull remain as shortcuts |
+| One primary action per screen | HIG, *Designing for iOS* | A shimmering text line as the only affordance | A filled pill button; the swipe-up and the tappable deck stay for people who'd rather not aim |
+| Consistency and standards | Nielsen heuristic 4 | Settings used system grey, Home used paper | Every screen shares the same paper, sheets, type and controls (below) |
+
+Study stays a full-screen modal — the HIG's reserved case for a focused
+task that shouldn't be interrupted — and the cards stay button-free; a
+dismiss control is navigation, not an action on the card.
+
+### Why the sideways swipes failed
+
+The swipe locked to an axis on its very first sample, about ten points in.
+A thumb beginning a sideways swipe moves in an arc, so that first sample
+was often more vertical than horizontal and the swipe became a short
+vertical drag. The lock now waits until the finger has moved fourteen
+points and judges the direction then — the same hysteresis UIScrollView
+uses for its directional lock.
+
+### What a saved or marked card shows
+
+Translucent chips over a card read as smudges; they carried no metaphor.
+Each state now has a signifier with a real-world referent:
+
+- **Saved** — a bookmark ribbon hangs from the card's top edge, as a
+  ribbon hangs from a page. It slides down when a card is saved and
+  withdraws when it isn't.
+- **Forgot** / **Easy** — a small tinted badge top right ("Forgot" in
+  vermilion, "Easy" in sakura), the way iOS marks state on a list row.
+- **The action behind the card** — pushing the card right uncovers a
+  vermilion panel with the Forgot icon; pushing it left uncovers an indigo
+  Save panel, as in Mail. The icon grows and the colour deepens at the
+  commit point, and a tick confirms it.
+
+### The card, rebuilt
+
+The card is now a clean sheet — card colour, a hairline edge, two soft
+shadows — with nothing drawn on it that isn't information. Grain, tilt,
+sheen and the finger glow were removed from study cards: textures compete
+with ideographs, and a card that leans while you read it is a distraction.
+The layout follows the reading order a learner needs:
+
+```
+MEANING ·························· [Forgot]   ← what's asked / what's marked (12 pt caps, tracked)
+                                   ⌐ ribbon
+              日                              ← the kanji, optical centre (≤ 200 pt)
+            Day, sun                           ← New York, title (28 pt), semibold
+           ニチ・ジツ　ひ                        ← Hiragino 17 pt, secondary
+   A hook, one or two lines, line height 1.4   ← callout 16 pt, secondary
+                                 Swipe up for next   ← footnote 13 pt, tertiary
+```
+
+Groups are separated by 24 pt and lines within a group by 8 pt (proximity
+tells the eye what belongs together); the column is centred and capped at
+380 pt so lines stay around 35 characters; each level of the hierarchy is
+one step down in size *and* one step quieter in colour (ink, ink2), never
+both bold and large at once. Every line has a limit and a minimum scale,
+and the card's content is capped at accessibility size 2, so nothing can
+spill. Writing cards are gone: they slowed the flow for everyone and the
+stroke animation already shows the strokes.
+
+### Animation
+
+- Page turns: the spring's starting velocity is the finger's, relative to
+  the distance left, capped at 6 — a card released near the edge used to
+  shoot. The turn runs 0.42 s, critically damped.
+- The deck: a fourth, invisible card now fades in from below as the deck
+  rises, so a new card never pops into the bottom of the stack.
+- Settle and flick springs keep 0 and 0.15 bounce; controls answer a touch
+  in 0.22 s with no overshoot.
+- Reveal: the answer materializes from a blur; the glyph eases to 66 % and
+  up in the same spring, so the two motions read as one.
+- Reduce Motion: every slide becomes a crossfade, as before.
+
+### One system for every screen
+
+Paper (`#F6F3EC` / black) everywhere; sheets in card colour with a
+hairline edge; captions as tracked small caps; New York for display lines,
+San Francisco for everything else, SF Rounded for numbers; the same pill
+buttons; separators and fills from the same warm palette. Settings moved
+from the system grouped grey to the same paper and sheets, lost its icon
+tiles (nothing else in the app has them), and gained plain row titles.
+
 ## 0d. Revision 6 — touch that works, a lesson that makes sense, a ring to close
 
 Testing on the device showed the gestures failing most of the time, and
@@ -689,3 +793,7 @@ motivation and habit questions (Hall; Marsh).
 - Apple Developer Documentation — UIGestureRecognizer and coordinating multiple gesture recognizers. https://developer.apple.com/documentation/uikit/uigesturerecognizer · https://developer.apple.com/documentation/uikit/touches_presses_and_gestures/coordinating_multiple_gesture_recognizers
 - Karpicke & Roediger (2007). Expanding retrieval practice promotes short-term retention, but equally spaced retrieval enhances long-term retention. *Journal of Experimental Psychology: Learning, Memory, and Cognition* 33(4).
 - Butler, Godbole & Marsh (2013). Explanation feedback is better than correct answer feedback for promoting transfer of learning. *Journal of Educational Psychology* 105(2).
+- Apple Human Interface Guidelines — Tab bars, Modality, Layout, Navigation bars. https://developer.apple.com/design/human-interface-guidelines/tab-bars · https://developer.apple.com/design/human-interface-guidelines/modality · https://developer.apple.com/design/human-interface-guidelines/layout
+- Nielsen (1994). 10 Usability Heuristics for User Interface Design. https://www.nngroup.com/articles/ten-usability-heuristics/
+- Nielsen Norman Group — Jakob's Law of Internet User Experience; Fitts's law; Hick's law. https://www.nngroup.com/videos/jakobs-law-internet-ux/ · https://www.nngroup.com/articles/fitts-law/
+- Yablonski, *Laws of UX*. https://lawsofux.com

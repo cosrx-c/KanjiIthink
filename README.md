@@ -13,7 +13,13 @@ offers one thing to do; everything else happens out of sight. Study has no
 buttons at all: the page is the control, and it moves the way people
 already move through short-video feeds.
 
-**Study: one full-screen feed, no buttons**
+**Three places.** A tab bar — **Today**, **Kanji**, **Read** — the one
+navigation every iPhone user already knows. Today shows the cards waiting
+for you as a small deck and one button; Kanji is the library (all, or only
+what you've saved); Read holds the short texts, the most readable first.
+Settings is behind the gear on Today.
+
+**Study: one full-screen deck, no buttons on the cards**
 
 The cards are a deck of paper: the one in your hand on top, the next two
 peeking out beneath it. Drag up and the top card lifts away while the deck
@@ -27,6 +33,7 @@ in between — so the first recall comes while it's fresh and the gaps grow.
 | Tap | Reveal the answer (tap again: hear it) | Tap to play |
 | Swipe ↑ | Next — counts as "knew it" unless marked | Next reel |
 | Swipe ↓ | Previous card, its answer undone (first card: close) | Previous reel; pulling a photo down to close it |
+| ✕ | Close (pinching works too) | Every full-screen view on iOS |
 | Swipe → | Forgot | Mail-style swipe action |
 | Swipe ← | Save for later | Mail-style swipe action |
 | Double-tap | Easy — a heart pops (on a new kanji: "I already know this") | Liking a post |
@@ -34,15 +41,17 @@ in between — so the first recall comes while it's fresh and the gaps grow.
 | Pinch | Close | Pinching a photo closed |
 
 Touch is recognized by UIKit's gesture recognizers, so a tap is never
-swallowed by a swipe and a hold is never cut short by a tap. Swiping up on
-a hidden answer reveals it as the card moves, so you always see what
-you're confirming. Swiping sideways uncovers the action behind
-the page, and a tick of haptics marks the point where letting go commits.
-Directions that do nothing rubber-band. Small glass chips at the top show
-what's marked (Forgot, Easy, Saved). The first five cards each teach one
-gesture in a single line of text, then the hints are gone for good.
-Hardware keys (Space, Return, ↑ ↓ ← →, E, P, Esc) and VoiceOver actions
-cover every gesture.
+swallowed by a swipe and a hold is never cut short by a tap; a swipe locks
+to its direction only after the finger has clearly chosen one. Swiping up
+on a hidden answer reveals it as the card moves, so you always see what
+you're confirming. Swiping sideways uncovers the action behind the card —
+a vermilion Forgot panel or an indigo Save panel, as in Mail — and a tick
+marks the point where letting go commits. A saved card wears a bookmark
+ribbon on its top edge; a marked card carries a small Forgot or Easy badge.
+The first five cards each teach one gesture in a single line of text, then
+the hints are gone for good. A ✕ closes the session; so do pinching and
+pulling the first card down. Hardware keys (Space, Return, ↑ ↓ ← →, E, P,
+Esc) and VoiceOver actions cover every gesture.
 
 **The look: ink on washi**
 
@@ -94,10 +103,11 @@ collection you can practice. There are no streaks, lives or leaderboards.
 
 | Screen | Contents |
 |---|---|
-| **Home** | The cards waiting for you as a small deck, how many there are and roughly how long they'll take, and "Swipe up to review/learn". When you're done: a hanko seal, when the next review is, and quiet glass buttons (read a text, practice saved, learn more). |
-| **Library** | Kanji, Saved and Texts. Each glyph sits on a tile whose ink deepens as you learn it — faint when new, full black once known — and each level shows how much of it you know. Search takes kanji, English, kana or romaji. |
+| **Today** | The cards waiting for you as a small deck, how many there are and roughly how long they'll take, a ring that fills as the day is done, and one button: Review or Learn (the deck lifts under a swipe up too). When you're done: a hanko seal, when the next review is, and quiet buttons (read a text, practice saved, learn more). |
+| **Kanji** | The library: all kanji by level, or only the ones you've saved. Each glyph sits on a tile whose ink deepens as you learn it — faint when new, full black once known — and each level shows how much of it you know. Search takes kanji, English, kana or romaji. |
+| **Read** | Short texts with furigana only above kanji you haven't learned, the most readable first, each with a ring showing how much of it you can already read. Tap any word to look it up. |
 | **Kanji page** | The glyph on a sheet of practice paper (hold for strokes and sound, double-tap to save), its level, stroke count and type, the meaning, on and kun readings, a memory hook (or your own), words and a sentence — tap any of them to hear it. |
-| **Settings** | Daily pace, writing, type readings, appearance, typeface, furigana, audio, voice, haptics, a daily reminder, import/export, privacy. |
+| **Settings** | Daily pace, type readings, appearance, typeface, furigana, audio, voice, haptics, a daily reminder, import/export, privacy — on the same paper and sheets as every other screen. |
 
 **What happens behind it**
 
@@ -105,10 +115,9 @@ collection you can practice. There are no streaks, lives or leaderboards.
 - **Pacing:** reviews always come before new kanji; after a long break,
   reviews arrive 50 at a time, most-at-risk first, and new lessons pause.
 - **Order:** parts are taught before the kanji that contain them.
-- **Three skills per kanji:** meaning; reading inside a real word (said in
-  your head and checked by ear, or typed in kana/romaji with *Type
-  readings*); and writing — in the air or on paper — which unlocks once
-  recognition is stable and ends with the stroke order drawing itself.
+- **Two skills per kanji:** meaning, and the reading inside a real word
+  (said in your head and checked by ear, or typed in kana/romaji with
+  *Type readings*). Holding any card plays its stroke order.
 - **Context cards:** right after a miss, an ungraded sentence shows the
   kanji at work while the correction is fresh; one also follows every
   tenth first-try success.
