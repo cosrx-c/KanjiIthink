@@ -18,7 +18,9 @@ already move through short-video feeds.
 The cards are a deck of paper: the one in your hand on top, the next two
 peeking out beneath it. Drag up and the top card lifts away while the deck
 rises to meet your finger; drag down and the previous card drops back on
-top. Lessons use the same deck: a card for each new kanji, then its quiz.
+top. Lessons use the same deck: each new kanji gets a page, and you're
+asked about it one page later, then again a little later, with other kanji
+in between — so the first recall comes while it's fresh and the gaps grow.
 
 | Gesture | Action | Borrowed from |
 |---|---|---|
@@ -31,8 +33,10 @@ top. Lessons use the same deck: a card for each new kanji, then its quiz.
 | Hold | Stroke order and sound together, a soft tap on every stroke | Pressing a Live Photo |
 | Pinch | Close | Pinching a photo closed |
 
-Swiping up on a hidden answer reveals it as the card moves, so you always
-see what you're confirming. Swiping sideways uncovers the action behind
+Touch is recognized by UIKit's gesture recognizers, so a tap is never
+swallowed by a swipe and a hold is never cut short by a tap. Swiping up on
+a hidden answer reveals it as the card moves, so you always see what
+you're confirming. Swiping sideways uncovers the action behind
 the page, and a tick of haptics marks the point where letting go commits.
 Directions that do nothing rubber-band. Small glass chips at the top show
 what's marked (Forgot, Easy, Saved). The first five cards each teach one
@@ -79,11 +83,12 @@ cover every gesture.
 - *Materials:* Liquid Glass (iOS 26) for the floating chips only — never
   for content — with a thin material on earlier systems.
 
-**Light gamification, no anxiety.** A combo chip (×3, ×4…) counts first-try
-answers and quietly resets on a miss; milestones get a haptic, the recap
-notes your best run, and a hanko stamp closes each session. Saved kanji
-form a collection you can practice. There are no streaks to lose, no
-lives, no leaderboards.
+**Light gamification, no anxiety.** A small ring beside the date fills as
+the day's cards are done — a goal to close, like the Activity rings, never
+a streak to lose. A combo chip (×3, ×4…) counts first-try answers and
+quietly resets on a miss; milestones get a haptic, the recap notes your
+best run, and a hanko stamp closes each session. Saved kanji form a
+collection you can practice. There are no streaks, lives or leaderboards.
 
 **Screens**
 
@@ -104,8 +109,9 @@ lives, no leaderboards.
   your head and checked by ear, or typed in kana/romaji with *Type
   readings*); and writing — in the air or on paper — which unlocks once
   recognition is stable and ends with the stroke order drawing itself.
-- **Context cards:** every seventh first-try success is followed by an
-  ungraded sentence that shows the kanji at work.
+- **Context cards:** right after a miss, an ungraded sentence shows the
+  kanji at work while the correction is fresh; one also follows every
+  tenth first-try success.
 - **Mistakes are noticed for you:** typed near misses (small っ, long
   vowels, ゛ marks, a valid reading the word doesn't use) get a hint and a
   free retry; the type of slip is logged silently; the memory hook and

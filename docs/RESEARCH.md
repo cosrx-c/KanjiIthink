@@ -8,6 +8,96 @@ questions that only testing with real learners can answer.
 
 ---
 
+## 0d. Revision 6 — touch that works, a lesson that makes sense, a ring to close
+
+Testing on the device showed the gestures failing most of the time, and
+the flow of a lesson feeling arbitrary. This revision fixes the first at
+its root, straightens the second against the research in sections 2–3, and
+adds the one piece of gamification that was still missing.
+
+### Why the gestures failed
+
+The card stacked five SwiftUI gesture modifiers on one view: a zero-distance
+drag for the finger glow, the page drag, a double-tap, a single tap and a
+long press. SwiftUI arbitrates such a stack by position and precedence
+rather than by intent, and the result is fragile: a drag that recognizes at
+zero distance can claim the touch before a tap or a hold has a chance, a
+double-tap can delay or swallow the single tap, and the behaviour has
+changed between iOS releases. The fix is to recognize touch the way the
+system's own apps do — with UIKit's gesture recognizers, whose
+disambiguation is explicit and deterministic (`GestureSurface`):
+
+| Gesture | Recognizer | Rule |
+|---|---|---|
+| Tap | `UITapGestureRecognizer` (1) | Acts immediately — no waiting for a possible double-tap, as in Instagram, where a single tap never lags |
+| Double-tap | `UITapGestureRecognizer` (2) | Allowed to recognize *together* with the single tap; the second tap of a double is filtered out by time, so the first tap has already revealed and the double marks Easy |
+| Hold | `UILongPressGestureRecognizer` | 0.3 s within 12 pt; once it begins, a pan can't start (hold wins), and lifting ends it |
+| Swipe | `UIPanGestureRecognizer` | One finger, the system's 10 pt hysteresis, then locked to an axis; once it begins, taps and the hold fail |
+| Pinch | `UIPinchGestureRecognizer` | May run alongside a pan; the pan then yields |
+| Pointer | `UIHoverGestureRecognizer` | Lights the card under the iPad pointer, never blocks |
+| Press | raw touches | Finger down/up for the card's own feedback, whatever the touch becomes |
+
+Translation and velocity are measured on screen rather than in the card,
+so a card moving 1:1 with the finger doesn't zero its own drag. The surface
+is a clear view over the card; it reports what the fingers did, and SwiftUI
+decides what it means. Home uses the same surface; onboarding, the recap
+and the kanji page keep SwiftUI's own gestures, which are simple enough
+there (one drag, or a double-tap and a hold).
+
+The tilt is also switched off while a finger is on a card, so a hold is
+never jogged by the card moving under it, and motion updates run only for
+the card on top.
+
+### The lesson, as expanding retrieval
+
+Before, a lesson taught all five kanji and then quizzed them, so the first
+retrieval of the first kanji came five pages later and often failed — the
+opposite of what the testing-effect literature recommends (an early,
+*successful* retrieval, then growing gaps; Karpicke & Roediger 2007;
+Roediger & Karpicke 2006). The session now weaves pages and checks:
+
+```
+New 日 · New 月 · Check 日 · New 火 · Check 月 · Check 日(reading) ·
+New 水 · Check 火 · Check 月(reading) · New 金 · Check 水 · Check 火(reading) ·
+Check 金 · Check 水(reading) · Check 金(reading)
+```
+
+Each kanji is recalled one page after it's shown (meaning), then again a
+little later (reading), with other kanji in between (interleaving, Rohrer &
+Taylor 2007). Checks are labelled *Check · Meaning*, so a card about a
+kanji seen a moment ago reads as what it is. The scheduler's learning steps
+are unchanged: a check passed in the lesson comes back after about four
+hours, then FSRS takes over.
+
+### Context as feedback
+
+Reviews used to insert a sentence page after every seventh card. Now the
+sentence appears *right after a miss* — the kanji at work, while the
+correction is fresh (elaborative feedback; Butler, Godbole & Marsh 2013) —
+with the card itself returning a few cards later, and otherwise only after
+a run of ten first-try successes, for variety and input. Each kanji's
+sentence appears at most once per session.
+
+### The ring
+
+Sailer & Homner (2020) find that what helps learning is feedback and
+visible competence; what learners resent is loss (streaks, lives). Apple's
+Activity rings are the clearest example of the first without the second:
+a goal to close, nothing to lose. Home now carries a small ring beside the
+date that fills as the day's cards are done (`todayProgress`), and the rest
+state says what the day held — "23 answered · 5 new kanji today". The
+recap's closing line becomes "That's everything for today." when nothing
+is left. The combo, the heart and the saved collection stay; there are
+still no streaks, lives or leaderboards.
+
+### For power users and for everyone
+
+The same surface serves both: a general user taps and swipes up, and the
+first five cards teach one gesture each; a power user double-taps for
+Easy, swipes left to build a collection, types readings, picks a voice,
+and drives everything from a hardware keyboard. Nothing is added to the
+screen for either.
+
 ## 0c. Revision 5 — the look: ink on washi
 
 Revision 4 settled how the app moves. Revision 5 is about how it looks. The
@@ -596,3 +686,6 @@ motivation and habit questions (Hall; Marsh).
 - Apple — Get to know the new design system (WWDC25): concentric shapes and Liquid Glass hierarchy. https://developer.apple.com/videos/play/wwdc2025/356/
 - Apple Human Interface Guidelines — Color, Dark Mode, Typography, Motion, Pointing devices. https://developer.apple.com/design/human-interface-guidelines/color · https://developer.apple.com/design/human-interface-guidelines/dark-mode · https://developer.apple.com/design/human-interface-guidelines/typography · https://developer.apple.com/design/human-interface-guidelines/motion · https://developer.apple.com/design/human-interface-guidelines/pointing-devices
 - W3C — WCAG 2.2, contrast (minimum). https://www.w3.org/TR/WCAG22/#contrast-minimum
+- Apple Developer Documentation — UIGestureRecognizer and coordinating multiple gesture recognizers. https://developer.apple.com/documentation/uikit/uigesturerecognizer · https://developer.apple.com/documentation/uikit/touches_presses_and_gestures/coordinating_multiple_gesture_recognizers
+- Karpicke & Roediger (2007). Expanding retrieval practice promotes short-term retention, but equally spaced retrieval enhances long-term retention. *Journal of Experimental Psychology: Learning, Memory, and Cognition* 33(4).
+- Butler, Godbole & Marsh (2013). Explanation feedback is better than correct answer feedback for promoting transfer of learning. *Journal of Educational Psychology* 105(2).

@@ -9,9 +9,11 @@
 //  Interaction: study is one full-screen vertical feed with no buttons —
 //  tap reveals, swipe up for next, down for back, right for Forgot, left to
 //  save, double-tap for Easy, hold for stroke order and sound, pinch to
-//  close. Motion uses springs that inherit the finger's velocity; haptics
-//  and speech land on the same frame as the visual they belong to. Every
-//  gesture also has a keyboard key and a VoiceOver action.
+//  close. Touch is recognized by UIKit's gesture recognizers (GestureSurface),
+//  so taps, holds and swipes never fight; motion uses springs that inherit
+//  the finger's velocity; haptics and speech land on the same frame as the
+//  visual they belong to. Every gesture also has a keyboard key and a
+//  VoiceOver action.
 //
 //  Look: sumi ink on washi. Cards are sheets of paper with grain, a lit
 //  edge and two shadows, stacked in a 2.5D deck that leans with the phone;
@@ -901,16 +903,28 @@ struct DeviceTilt: ViewModifier {
             .rotation3DEffect(.degrees(Double(ty) * 3.5), axis: (x: 1, y: 0, z: 0), perspective: 0.5)
             .rotation3DEffect(.degrees(Double(-tx) * 3.5), axis: (x: 0, y: 1, z: 0), perspective: 0.5)
             .animation(Motion.settle, value: active)
-            .onAppear {
-                guard !reduceMotion, !started else { return }
-                started = true
-                motion.start()
-            }
-            .onDisappear {
-                guard started else { return }
-                started = false
-                motion.stop()
-            }
+            .onAppear { sync() }
+            .onDisappear { release() }
+            .onChange(of: enabled) { _, _ in sync() }
+    }
+
+    /// Motion updates run only while this view wants them — not for cards
+    /// lower in the deck, and not while a finger is on the card, so a hold
+    /// is never jogged by the card moving under it.
+    private func sync() {
+        let wanted = enabled && !reduceMotion
+        if wanted && !started {
+            started = true
+            motion.start()
+        } else if !wanted {
+            release()
+        }
+    }
+
+    private func release() {
+        guard started else { return }
+        started = false
+        motion.stop()
     }
 
     private func sheen(_ tx: CGFloat, _ ty: CGFloat) -> some View {
@@ -1147,6 +1161,250 @@ let sumiMarkPaths: [String] = [
     "M53.14,68.77c0.79,0.79,1.07,2.23,1.07,3.75c0,10.62-0.07,7.66-0.07,21.7",
     "M20.24,96.64c2.77,0.99,6.13,0.93,9.01,0.66c15.72-1.49,37.08-2.69,51.25-3.34c3.26-0.15,6.36,0.08,9.52,0.75"
 ]
+
+// MARK: Touch
+
+/// Every gesture a card understands, recognized by UIKit.
+///
+/// SwiftUI's gesture modifiers fight one another once a view carries more
+/// than two or three: a drag that starts at zero distance swallows taps, a
+/// tap can cancel a hold, a double-tap delays or loses the single tap, and
+/// the outcome changes between iOS releases. UIKit's recognizers settle the
+/// same conflicts deterministically — the first gesture to commit wins, and
+/// the delegate says which pairs may run together — and they're what the
+/// system's own apps are built on. The surface is a clear view laid over
+/// the content: it reports what the fingers did, and SwiftUI decides what
+/// it means.
+///
+///   tap / double-tap   both recognize at once; the second tap of a double
+///                      is filtered out, so a single tap acts immediately
+///   hold               0.3 s within 12 pt; once it begins, a pan can't start
+///   pan                one finger, after the system's 10 pt hysteresis;
+///                      once it begins, taps and the hold fail
+///   pinch              may join a pan, which then yields
+///   hover              the iPad pointer, never blocking anything
+struct GestureSurface: UIViewRepresentable {
+    struct Handlers {
+        /// Touch down and up (or cancel), with the location in the surface.
+        var pressChanged: (Bool, CGPoint) -> Void = { _, _ in }
+        var tap: (CGPoint) -> Void = { _ in }
+        var doubleTap: (CGPoint) -> Void = { _ in }
+        var holdBegan: () -> Void = {}
+        var holdEnded: () -> Void = {}
+        /// Total translation (in points on screen) and the finger's location
+        /// in the surface.
+        var panChanged: (CGSize, CGPoint) -> Void = { _, _ in }
+        /// Total translation and velocity (points per second).
+        var panEnded: (CGSize, CGSize) -> Void = { _, _ in }
+        /// The pinch's scale, 1 meaning no change.
+        var pinchChanged: (CGFloat) -> Void = { _ in }
+        var pinchEnded: (CGFloat) -> Void = { _ in }
+        /// The pointer's location while it's over the surface, nil when it leaves.
+        var hover: (CGPoint?) -> Void = { _ in }
+    }
+
+    var handlers: Handlers
+    var pinches = true
+
+    func makeCoordinator() -> Coordinator { Coordinator(handlers: handlers) }
+
+    func makeUIView(context: Context) -> TouchView {
+        let view = TouchView()
+        view.backgroundColor = .clear
+        view.isMultipleTouchEnabled = true
+        view.isAccessibilityElement = false
+        view.accessibilityElementsHidden = true
+        context.coordinator.install(on: view, pinches: pinches)
+        return view
+    }
+
+    func updateUIView(_ uiView: TouchView, context: Context) {
+        context.coordinator.handlers = handlers
+    }
+
+    /// Reports the raw press — finger down, finger up — for the content's
+    /// own feedback, whatever gesture the touch turns into.
+    final class TouchView: UIView {
+        var pressChanged: ((Bool, CGPoint) -> Void)?
+        private var pressed = false
+
+        override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
+            super.touchesBegan(touches, with: event)
+            guard !pressed, let touch = touches.first else { return }
+            pressed = true
+            pressChanged?(true, touch.location(in: self))
+        }
+
+        override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent?) {
+            super.touchesEnded(touches, with: event)
+            release(touches, event)
+        }
+
+        override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent?) {
+            super.touchesCancelled(touches, with: event)
+            release(touches, event)
+        }
+
+        private func release(_ touches: Set<UITouch>, _ event: UIEvent?) {
+            guard pressed else { return }
+            let remaining = (event?.touches(for: self) ?? []).filter {
+                $0.phase != .ended && $0.phase != .cancelled
+            }
+            guard remaining.isEmpty else { return }
+            pressed = false
+            let point = touches.first?.location(in: self) ?? .zero
+            pressChanged?(false, point)
+        }
+    }
+
+    final class Coordinator: NSObject, UIGestureRecognizerDelegate {
+        var handlers: Handlers
+        private var lastTap = Date.distantPast
+
+        init(handlers: Handlers) {
+            self.handlers = handlers
+        }
+
+        func install(on view: TouchView, pinches: Bool) {
+            view.pressChanged = { [weak self] down, point in
+                self?.handlers.pressChanged(down, point)
+            }
+
+            let double = UITapGestureRecognizer(target: self, action: #selector(doubleTapped(_:)))
+            double.numberOfTapsRequired = 2
+            double.cancelsTouchesInView = false
+            double.delegate = self
+            view.addGestureRecognizer(double)
+
+            let single = UITapGestureRecognizer(target: self, action: #selector(tapped(_:)))
+            single.cancelsTouchesInView = false
+            single.delegate = self
+            view.addGestureRecognizer(single)
+
+            let hold = UILongPressGestureRecognizer(target: self, action: #selector(held(_:)))
+            hold.minimumPressDuration = 0.3
+            hold.allowableMovement = 12
+            hold.cancelsTouchesInView = false
+            hold.delegate = self
+            view.addGestureRecognizer(hold)
+
+            let pan = UIPanGestureRecognizer(target: self, action: #selector(panned(_:)))
+            pan.maximumNumberOfTouches = 1
+            pan.delegate = self
+            view.addGestureRecognizer(pan)
+
+            if pinches {
+                let pinch = UIPinchGestureRecognizer(target: self, action: #selector(pinched(_:)))
+                pinch.delegate = self
+                view.addGestureRecognizer(pinch)
+            }
+
+            let hover = UIHoverGestureRecognizer(target: self, action: #selector(hovered(_:)))
+            hover.delegate = self
+            view.addGestureRecognizer(hover)
+        }
+
+        @objc private func tapped(_ gesture: UITapGestureRecognizer) {
+            // The second tap of a double-tap arrives here too. It belongs to
+            // the double-tap, so it's dropped; the first tap already acted.
+            let now = Date()
+            let sinceLast = now.timeIntervalSince(lastTap)
+            lastTap = now
+            guard sinceLast > 0.3 else { return }
+            handlers.tap(gesture.location(in: gesture.view))
+        }
+
+        @objc private func doubleTapped(_ gesture: UITapGestureRecognizer) {
+            handlers.doubleTap(gesture.location(in: gesture.view))
+        }
+
+        @objc private func held(_ gesture: UILongPressGestureRecognizer) {
+            switch gesture.state {
+            case .began:
+                handlers.holdBegan()
+            case .ended, .cancelled, .failed:
+                handlers.holdEnded()
+            default:
+                break
+            }
+        }
+
+        // Translation and velocity are measured on screen, not in the
+        // surface, so a card that moves with the finger doesn't zero them.
+        @objc private func panned(_ gesture: UIPanGestureRecognizer) {
+            let t = gesture.translation(in: nil)
+            let translation = CGSize(width: t.x, height: t.y)
+            switch gesture.state {
+            case .began, .changed:
+                handlers.panChanged(translation, gesture.location(in: gesture.view))
+            case .ended, .cancelled, .failed:
+                let v = gesture.velocity(in: nil)
+                handlers.panEnded(translation, CGSize(width: v.x, height: v.y))
+            default:
+                break
+            }
+        }
+
+        @objc private func pinched(_ gesture: UIPinchGestureRecognizer) {
+            switch gesture.state {
+            case .began, .changed:
+                handlers.pinchChanged(gesture.scale)
+            case .ended, .cancelled, .failed:
+                handlers.pinchEnded(gesture.scale)
+            default:
+                break
+            }
+        }
+
+        @objc private func hovered(_ gesture: UIHoverGestureRecognizer) {
+            switch gesture.state {
+            case .began, .changed:
+                handlers.hover(gesture.location(in: gesture.view))
+            default:
+                handlers.hover(nil)
+            }
+        }
+
+        func gestureRecognizer(_ first: UIGestureRecognizer,
+                               shouldRecognizeSimultaneouslyWith second: UIGestureRecognizer) -> Bool {
+            if first is UIHoverGestureRecognizer || second is UIHoverGestureRecognizer { return true }
+            if first is UITapGestureRecognizer && second is UITapGestureRecognizer { return true }
+            if first is UIPinchGestureRecognizer && second is UIPanGestureRecognizer { return true }
+            if first is UIPanGestureRecognizer && second is UIPinchGestureRecognizer { return true }
+            return false
+        }
+    }
+}
+
+/// Today's ink: a ring that fills as the day's cards are done, the way the
+/// Activity rings do — a goal to close, never a streak to lose.
+struct InkRing: View {
+    let progress: Double
+    var size: CGFloat = 22
+
+    var body: some View {
+        let share = CGFloat(min(max(progress, 0), 1))
+        ZStack {
+            Circle()
+                .stroke(Palette.ink.opacity(0.1), lineWidth: size * 0.15)
+            Circle()
+                .trim(from: 0, to: share)
+                .stroke(Palette.accent.gradient, style: StrokeStyle(lineWidth: size * 0.15, lineCap: .round))
+                .rotationEffect(.degrees(-90))
+                .animation(Motion.settle, value: share)
+            if share >= 1 {
+                Image(systemName: "checkmark")
+                    .font(.system(size: size * 0.42, weight: .bold))
+                    .foregroundStyle(Palette.accent)
+                    .transition(.scale.combined(with: .opacity))
+            }
+        }
+        .frame(width: size, height: size)
+        .animation(Motion.flick, value: share >= 1)
+        .accessibilityElement()
+        .accessibilityLabel(share >= 1 ? "Today's ring is closed" : "Today \(Int((share * 100).rounded())) percent done")
+    }
+}
 
 // MARK: Shared pieces
 
@@ -2587,13 +2845,24 @@ final class Store: ObservableObject {
         return due.map { makeItem($0.glyph, $0.facet, reps: $0.reps) }
     }
 
+    /// A lesson's first retrievals — meaning, then reading, for each new
+    /// kanji. The session weaves them between the pages that teach them.
     func lessonItems(for kanji: [Kanji]) -> [StudyItem] {
         var items: [StudyItem] = []
         for k in kanji {
-            items.append(makeItem(k.glyph, .meaning, reps: 0))
-            if !k.words.isEmpty { items.append(makeItem(k.glyph, .reading, reps: 0)) }
+            items.append(makeItem(k.glyph, .meaning, reps: 0, check: true))
+            if !k.words.isEmpty { items.append(makeItem(k.glyph, .reading, reps: 0, check: true)) }
         }
-        return items.shuffled()
+        return items
+    }
+
+    /// Today's ink: the share of what's asked of you today that's done.
+    /// Full when nothing is waiting.
+    var todayProgress: Double {
+        let done = today.reviews
+        let remaining = dueCount + lessonsLeftToday * 2
+        guard done + remaining > 0 else { return 1 }
+        return Double(done) / Double(done + remaining)
     }
 
     /// Practice outside the schedule — answers here never change intervals.
@@ -2610,9 +2879,9 @@ final class Store: ObservableObject {
 
     /// Readings rotate through a kanji's words from one review to the next,
     /// so the reading is tied to vocabulary, not to one memorized pair.
-    private func makeItem(_ glyph: String, _ facet: Facet, reps: Int) -> StudyItem {
+    private func makeItem(_ glyph: String, _ facet: Facet, reps: Int, check: Bool = false) -> StudyItem {
         let count = library.byGlyph[glyph]?.words.count ?? 0
-        return StudyItem(glyph: glyph, facet: facet, wordIndex: count > 0 ? reps % count : 0)
+        return StudyItem(glyph: glyph, facet: facet, wordIndex: count > 0 ? reps % count : 0, check: check)
     }
 
     // MARK: Statistics
@@ -2791,6 +3060,8 @@ struct StudyItem: Identifiable, Hashable {
     let facet: Facet
     let wordIndex: Int
     var kind: Kind = .card
+    /// A first retrieval inside a lesson, soon after the kanji was shown.
+    var check = false
 }
 
 enum SessionMode: Hashable {
@@ -2802,8 +3073,8 @@ struct SessionLaunch: Identifiable, Hashable {
     var mode: SessionMode
     var items: [StudyItem]
     var lessonGlyphs: [String] = []
-    /// Kanji with an example sentence; reviews weave in a context page
-    /// after every seventh card for one of them.
+    /// Kanji with an example sentence. Reviews show the sentence right after
+    /// a miss, and now and then after a run of successes.
     var contextGlyphs: Set<String> = []
 }
 
@@ -2815,8 +3086,16 @@ struct SessionResult {
     var started = Date()
 }
 
-/// One vertical feed for everything: lesson pages, then their quiz, or a
-/// review run. Every move can be taken back with a swipe down.
+/// One vertical feed for everything: a lesson's pages and their checks, or
+/// a review run. Every move can be taken back with a swipe down.
+///
+/// The order inside a session follows what's known about memory:
+///   · retrieval, not re-reading — every card asks before it tells
+///   · expanding retrieval — a new kanji is recalled soon after it's shown,
+///     then again a little later, other kanji in between (interleaving)
+///   · a miss comes back a few cards later, while the correction is fresh,
+///     preceded by the kanji in a sentence (elaborative feedback)
+///   · the same kanji never appears twice in a row
 final class SessionModel: ObservableObject {
     let mode: SessionMode
     @Published private(set) var queue: [StudyItem]
@@ -2826,6 +3105,9 @@ final class SessionModel: ObservableObject {
     @Published private(set) var canUndo = false
     @Published private(set) var combo = 0
 
+    private let contextGlyphs: Set<String>
+    private var contextShown = Set<String>()
+    private var sinceContext = 0
     private var failed = Set<String>()
     private var history: [Snapshot] = []
 
@@ -2837,17 +3119,21 @@ final class SessionModel: ObservableObject {
         var result: SessionResult
         var failed: Set<String>
         var combo: Int
+        var contextShown: Set<String>
+        var sinceContext: Int
     }
 
     init(mode: SessionMode, items: [StudyItem], contextGlyphs: Set<String> = []) {
         self.mode = mode
+        self.contextGlyphs = contextGlyphs
         let teach = items.filter { $0.kind == .teach }
-        var cards = SessionModel.interleave(items.filter { $0.kind == .card })
-        if mode == .review && !contextGlyphs.isEmpty {
-            cards = SessionModel.weaveContext(into: cards, glyphs: contextGlyphs)
+        let cards = items.filter { $0.kind == .card }
+        if mode == .lesson && !teach.isEmpty {
+            self.queue = SessionModel.lessonWeave(teach: teach, cards: cards)
+        } else {
+            self.queue = SessionModel.interleave(cards)
         }
-        self.queue = teach + cards
-        self.total = teach.count + items.filter { $0.kind == .card }.count
+        self.total = teach.count + cards.count
     }
 
     var current: StudyItem? { queue.first }
@@ -2863,7 +3149,8 @@ final class SessionModel: ObservableObject {
 
     private func remember(_ store: Store) {
         history.append(Snapshot(save: store.data, queue: queue, completed: completed, total: total,
-                                result: result, failed: failed, combo: combo))
+                                result: result, failed: failed, combo: combo,
+                                contextShown: contextShown, sinceContext: sinceContext))
         if history.count > 60 { history.removeFirst() }
         canUndo = true
     }
@@ -2876,28 +3163,48 @@ final class SessionModel: ObservableObject {
         if mode != .practice {
             store.record(rating, glyph: item.glyph, facet: item.facet, ms: ms, miss: miss)
         }
-        var next = queue
-        next.removeFirst()
+        var next = Array(queue.dropFirst())
         var r = result
         r.answered += 1
         let key = SessionModel.key(item)
         if rating == .again {
             failed.insert(key)
             if !r.missed.contains(item.glyph) { r.missed.append(item.glyph) }
-            let position = min(next.count, Int.random(in: 3...6))
-            next.insert(StudyItem(glyph: item.glyph, facet: item.facet, wordIndex: item.wordIndex), at: position)
             combo = 0
+            // The sentence first — the kanji at work, while the miss is
+            // fresh — then the card itself again a few cards later.
+            if let context = contextPage(for: item) { next.insert(context, at: 0) }
+            let position = min(next.count, Int.random(in: 3...6))
+            next.insert(StudyItem(glyph: item.glyph, facet: item.facet, wordIndex: item.wordIndex,
+                                  check: item.check), at: position)
         } else {
             if !failed.contains(key) {
                 r.firstTry += 1
                 combo += 1
                 r.bestCombo = max(r.bestCombo, combo)
+                sinceContext += 1
+                // Now and then, a sentence for a kanji just recalled —
+                // variety for attention, context for meaning.
+                if sinceContext >= 10, let context = contextPage(for: item) {
+                    next.insert(context, at: 0)
+                }
             }
             completed += 1
         }
         result = r
         queue = next
         if store.data.bestCombo < r.bestCombo { store.data.bestCombo = r.bestCombo }
+    }
+
+    /// An ungraded sentence page for a kanji, once per session. Lessons
+    /// already show the sentence on the kanji's own page.
+    private func contextPage(for item: StudyItem) -> StudyItem? {
+        guard mode == .review, contextGlyphs.contains(item.glyph), !contextShown.contains(item.glyph) else {
+            return nil
+        }
+        contextShown.insert(item.glyph)
+        sinceContext = 0
+        return StudyItem(glyph: item.glyph, facet: item.facet, wordIndex: item.wordIndex, kind: .context)
     }
 
     /// Moves past a lesson page or a context page.
@@ -2911,7 +3218,7 @@ final class SessionModel: ObservableObject {
     }
 
     /// "I already know this one" on a lesson page: it's marked known and its
-    /// quiz questions disappear.
+    /// checks disappear.
     func skipKnown(_ glyph: String, store: Store) {
         remember(store)
         store.markKnown([glyph])
@@ -2931,6 +3238,8 @@ final class SessionModel: ObservableObject {
         result = last.result
         failed = last.failed
         combo = last.combo
+        contextShown = last.contextShown
+        sinceContext = last.sinceContext
         canUndo = !history.isEmpty
         return true
     }
@@ -2957,19 +3266,29 @@ final class SessionModel: ObservableObject {
         return out
     }
 
-    /// After every seventh card, an ungraded sentence page for the kanji just
-    /// seen — variety for attention, context for meaning.
-    static func weaveContext(into items: [StudyItem], glyphs: Set<String>) -> [StudyItem] {
+    /// A lesson as expanding retrieval. Each new kanji is recalled one page
+    /// after it's shown, then again a little later, with other kanji in
+    /// between; whatever is left is drained in rotation at the end.
+    ///
+    ///   New 日 · New 月 · Check 日 (meaning) · New 火 · Check 月 (meaning) ·
+    ///   Check 日 (reading) · New 水 · Check 火 · Check 月 (reading) …
+    static func lessonWeave(teach: [StudyItem], cards: [StudyItem]) -> [StudyItem] {
+        var lanes: [[StudyItem]] = teach.map { page in cards.filter { $0.glyph == page.glyph } }
         var out: [StudyItem] = []
-        var sinceLast = 0
-        for (index, item) in items.enumerated() {
-            out.append(item)
-            sinceLast += 1
-            if sinceLast >= 7 && glyphs.contains(item.glyph) && index < items.count - 1 {
-                out.append(StudyItem(glyph: item.glyph, facet: item.facet, wordIndex: item.wordIndex, kind: .context))
-                sinceLast = 0
-            }
+        func take(_ lane: Int) {
+            guard lanes.indices.contains(lane), !lanes[lane].isEmpty else { return }
+            out.append(lanes[lane].removeFirst())
         }
+        for (index, page) in teach.enumerated() {
+            out.append(page)
+            take(index - 1)
+            take(index - 2)
+        }
+        while lanes.contains(where: { !$0.isEmpty }) {
+            for lane in lanes.indices { take(lane) }
+        }
+        let taught = Set(teach.map(\.glyph))
+        out += cards.filter { !taught.contains($0.glyph) }
         return out
     }
 }
@@ -3333,15 +3652,13 @@ struct HomeScreen: View {
     var body: some View {
         screen(state, now: now)
             .background {
-                AmbientBackground(focus: finger)
+                AmbientBackground()
             }
     }
 
     private func screen(_ state: HomeState, now: Date) -> some View {
         VStack(spacing: 0) {
-            Caption(text: now.formatted(.dateTime.weekday(.wide).month(.wide).day()))
-                .padding(.top, Space.xs)
-                .accessibilityAddTraits(.isHeader)
+            dateLine(now)
             Spacer(minLength: Space.l)
             centerpiece(state)
                 .padding(.horizontal, Space.l)
@@ -3353,9 +3670,42 @@ struct HomeScreen: View {
                 .opacity(1 - Double(min(-lift / 120, 0.7)))
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .contentShape(Rectangle())
-        .gesture(startGesture(state))
+        .background {
+            fingerGlow
+        }
+        .overlay {
+            if canStart(state) {
+                GestureSurface(handlers: surfaceHandlers(state), pinches: false)
+            }
+        }
         .background(startKey(state))
+    }
+
+    /// The date, with today's ring beside it.
+    private func dateLine(_ now: Date) -> some View {
+        HStack(spacing: Space.xs) {
+            InkRing(progress: store.todayProgress)
+            Caption(text: now.formatted(.dateTime.weekday(.wide).month(.wide).day()))
+        }
+        .padding(.top, Space.xs)
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(.isHeader)
+    }
+
+    /// The soft light under the finger, in the screen's own coordinates.
+    private var fingerGlow: some View {
+        ZStack {
+            if let finger = finger {
+                RadialGradient(colors: [Palette.glow, Palette.glow.opacity(0)],
+                               center: .center, startRadius: 0, endRadius: 200)
+                    .frame(width: 400, height: 400)
+                    .position(finger)
+                    .transition(.opacity)
+            }
+        }
+        .animation(.easeOut(duration: 0.35), value: finger == nil)
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
     }
 
     @ViewBuilder
@@ -3364,7 +3714,6 @@ struct HomeScreen: View {
         case .review(let count):
             VStack(spacing: Space.xxl) {
                 HomeDeck(glyphs: preview, lift: lift)
-                    .onTapGesture { start(state) }
                 countBlock(count: count, unit: count == 1 ? "review" : "reviews",
                            estimate: Format.estimate(seconds: Double(count) * 8))
             }
@@ -3375,7 +3724,6 @@ struct HomeScreen: View {
         case .learn(let batch):
             VStack(spacing: Space.xxl) {
                 HomeDeck(glyphs: batch.map(\.glyph), lift: lift)
-                    .onTapGesture { start(state) }
                 countBlock(count: batch.count, unit: "new kanji",
                            estimate: Format.estimate(seconds: Double(batch.count) * 50))
             }
@@ -3426,9 +3774,25 @@ struct HomeScreen: View {
                 .font(.body)
                 .foregroundStyle(Palette.ink2)
                 .multilineTextAlignment(.center)
+                if let line = todayLine {
+                    Text(line)
+                        .font(.footnote.weight(.medium))
+                        .monospacedDigit()
+                        .foregroundStyle(Palette.ink2)
+                        .padding(.top, Space.xxs)
+                }
             }
         }
         .accessibilityElement(children: .combine)
+    }
+
+    /// What today held, in one quiet line.
+    private var todayLine: String? {
+        let today = store.today
+        guard today.reviews > 0 else { return nil }
+        var parts = ["\(today.reviews) answered"]
+        if today.learned > 0 { parts.append(today.learned == 1 ? "1 new kanji" : "\(today.learned) new kanji") }
+        return parts.joined(separator: " · ") + " today"
     }
 
     private func learnLabel(_ count: Int) -> String {
@@ -3454,8 +3818,6 @@ struct HomeScreen: View {
     private func startHint(_ text: String, label: String, state: HomeState) -> some View {
         ShimmerText(text: text)
             .frame(maxWidth: .infinity, minHeight: Metrics.buttonHeight)
-            .contentShape(Rectangle())
-            .onTapGesture { start(state) }
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(Text(label))
             .accessibilityAddTraits(.isButton)
@@ -3514,32 +3876,37 @@ struct HomeScreen: View {
         router.session = launch
     }
 
-    /// The deck follows the finger with resistance and the paper lights up
-    /// under it; a tick says "let go now", and momentum counts, so a quick
-    /// flick is enough.
-    private func startGesture(_ state: HomeState) -> some Gesture {
-        DragGesture(minimumDistance: 10, coordinateSpace: .global)
-            .onChanged { value in
-                guard canStart(state) else { return }
-                finger = value.location
-                let up = min(value.translation.height, 0)
-                lift = Motion.rubberband(up, dimension: 360)
-                let ready = up < -110
-                if ready != armed {
-                    if ready { Haptics.tick() }
-                    armed = ready
-                }
+    /// Tap the deck to begin, or swipe up: the deck follows the finger with
+    /// resistance and the paper lights up under it, a tick says "let go
+    /// now", and momentum counts, so a quick flick is enough.
+    private func surfaceHandlers(_ state: HomeState) -> GestureSurface.Handlers {
+        var h = GestureSurface.Handlers()
+        h.pressChanged = { down, point in
+            finger = down ? point : nil
+        }
+        h.tap = { _ in
+            start(state)
+        }
+        h.panChanged = { t, point in
+            finger = point
+            let up = min(t.height, 0)
+            lift = Motion.rubberband(up, dimension: 360)
+            let ready = up < -110
+            if ready != armed {
+                if ready { Haptics.tick() }
+                armed = ready
             }
-            .onEnded { value in
-                finger = nil
-                guard canStart(state) else { return }
-                let projected = value.translation.height + Motion.project(value.velocity.height)
-                if projected < -110 && value.velocity.height < 300 {
-                    start(state)
-                }
-                armed = false
-                withAnimation(Motion.flick) { lift = 0 }
+        }
+        h.panEnded = { t, v in
+            finger = nil
+            let projected = t.height + Motion.project(v.height)
+            if projected < -110 && v.height < 300 {
+                start(state)
             }
+            armed = false
+            withAnimation(Motion.flick) { lift = 0 }
+        }
+        return h
     }
 
     private func startKey(_ state: HomeState) -> some View {
@@ -6248,7 +6615,6 @@ struct ReelsFeed: View {
             deck(StackGeometry(size: geo.size, insets: geo.safeAreaInsets))
         }
         .ignoresSafeArea(.container)
-        .simultaneousGesture(pinchToClose)
         .background(escapeKey)
         .accessibilityAction(.escape) { onClose(true) }
     }
@@ -6310,7 +6676,8 @@ struct ReelsFeed: View {
         let beyond: Double = s > 2 ? Double(max(0, 3 - s)) : 1
         let shut: Double = Double(1 - closeAmount(travel))
         return ReelPage(model: model, item: item, live: false, dragY: .constant(0), pageSize: g.cardSize,
-                        cornerRadius: g.cornerRadius, travel: g.size.height, frozen: true, onClose: { _ in })
+                        cornerRadius: g.cornerRadius, travel: g.size.height, frozen: true,
+                        onClose: { _ in }, onPinch: { _, _ in })
             .overlay {
                 RoundedRectangle(cornerRadius: g.cornerRadius, style: .continuous)
                     .fill(Color.black.opacity(shade))
@@ -6330,14 +6697,14 @@ struct ReelsFeed: View {
         let fade: Double = vanishing ? 0 : (reduceMotion && dragY < 0 ? Double(1 - travel) : 1)
         let shade: Double = Double(recede) * 0.05
         return ReelPage(model: model, item: item, live: true, dragY: $dragY, pageSize: g.cardSize,
-                        cornerRadius: g.cornerRadius, travel: g.size.height, frozen: pinching, onClose: onClose)
+                        cornerRadius: g.cornerRadius, travel: g.size.height, frozen: pinching,
+                        onClose: onClose, onPinch: pinchChanged)
             .id(item.id)
             .overlay {
                 RoundedRectangle(cornerRadius: g.cornerRadius, style: .continuous)
                     .fill(Color.black.opacity(shade))
                     .allowsHitTesting(false)
             }
-            .modifier(DeviceTilt(enabled: dragY == 0 && !pinching, cornerRadius: g.cornerRadius))
             .scaleEffect(scale, anchor: returning ? .bottom : .center)
             .offset(y: g.top + rise + (follows ? dragY : 0))
             .opacity(fade)
@@ -6347,7 +6714,8 @@ struct ReelsFeed: View {
         let drop: CGFloat = reduceMotion ? 0 : dragY - g.size.height
         let fade: Double = reduceMotion ? Double(travel) : 1
         return ReelPage(model: model, item: item, live: false, dragY: .constant(0), pageSize: g.cardSize,
-                        cornerRadius: g.cornerRadius, travel: g.size.height, frozen: true, onClose: { _ in })
+                        cornerRadius: g.cornerRadius, travel: g.size.height, frozen: true,
+                        onClose: { _ in }, onPinch: { _, _ in })
             .offset(y: g.top + drop)
             .opacity(fade)
     }
@@ -6382,21 +6750,17 @@ struct ReelsFeed: View {
 
     /// Pinching shrinks the card under the fingers, as when closing a
     /// photo; let go small enough and it's gone.
-    private var pinchToClose: some Gesture {
-        MagnifyGesture()
-            .onChanged { value in
-                guard !vanishing, model.current != nil else { return }
-                let m = value.magnification
-                pinch = m < 1 ? max(m, 0.4) : 1
+    private func pinchChanged(_ scale: CGFloat, ended: Bool) {
+        guard !vanishing, model.current != nil else { return }
+        if ended {
+            if scale < 0.8 {
+                vanish()
+            } else {
+                withAnimation(Motion.flick) { pinch = 1 }
             }
-            .onEnded { value in
-                guard !vanishing, model.current != nil else { return }
-                if value.magnification < 0.8 {
-                    vanish()
-                } else {
-                    withAnimation(Motion.flick) { pinch = 1 }
-                }
-            }
+        } else {
+            pinch = scale < 1 ? max(scale, 0.4) : 1
+        }
     }
 
     private func vanish() {
@@ -6474,6 +6838,8 @@ struct ReelPage: View {
     /// True while a pinch is in progress; swipes wait.
     let frozen: Bool
     let onClose: (Bool) -> Void
+    /// The pinch's scale, and whether it has ended.
+    let onPinch: (CGFloat, Bool) -> Void
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     @State private var revealed = false
@@ -6545,9 +6911,17 @@ struct ReelPage: View {
     // MARK: Layout
 
     private func livePage(_ k: Kanji) -> some View {
-        withAccessibility(withGestures(pageContent(k), k), k)
+        withAccessibility(pageContent(k), k)
+            .overlay {
+                GestureSurface(handlers: surfaceHandlers(k))
+            }
             .background(hiddenKeys(k))
             .onAppear { appear(k) }
+    }
+
+    /// The card leans with the phone while it's at rest and untouched.
+    private var tiltEnabled: Bool {
+        live && !pressing && !holding && !leaving && !frozen && dragX == 0 && dragY == 0
     }
 
     /// The card, with the actions a sideways swipe will take waiting
@@ -6590,6 +6964,7 @@ struct ReelPage: View {
             shape.fill(Palette.card)
                 .elevation(1)
         }
+        .modifier(DeviceTilt(enabled: tiltEnabled, cornerRadius: cornerRadius))
     }
 
     private var cardFill: some View {
@@ -6732,12 +7107,16 @@ struct ReelPage: View {
         }
     }
 
+    /// What the card asks. A lesson's first retrievals are labelled as
+    /// checks, so a card about a kanji seen a moment ago makes sense.
     private var facetLabel: String {
+        let ask: String
         switch item.facet {
-        case .meaning: return "Meaning"
-        case .reading: return typing ? "Type the reading" : "Say the reading"
-        case .writing: return "Write it in the air"
+        case .meaning: ask = "Meaning"
+        case .reading: ask = typing ? "Type the reading" : "Say the reading"
+        case .writing: ask = "Write it in the air"
         }
+        return item.check ? "Check · " + ask : ask
     }
 
     @ViewBuilder
@@ -6970,7 +7349,7 @@ struct ReelPage: View {
         let step = settings.coachStep
         switch item.kind {
         case .teach:
-            return step == 0 ? "Swipe up for next · double-tap if you know it" : nil
+            return step == 0 ? "Swipe up for next · double-tap if you already know it" : nil
         case .context:
             return step < 5 ? "Swipe up to continue" : nil
         case .card:
@@ -7052,55 +7431,50 @@ struct ReelPage: View {
 
     // MARK: Gestures
 
-    private func withGestures<Content: View>(_ content: Content, _ k: Kanji) -> some View {
-        content
-            .contentShape(Rectangle())
-            .simultaneousGesture(lightTracking)
-            .gesture(pageDrag(k))
-            .onTapGesture(count: 2) { doubleTap(k) }
-            .onTapGesture { tap(k) }
-            .onLongPressGesture(minimumDuration: 0.3, maximumDistance: 12, perform: {
-                startHold(k)
-            }, onPressingChanged: { isPressing in
-                pressing = isPressing
-                if !isPressing { endHold() }
-            })
-            .onContinuousHover { phase in
-                switch phase {
-                case .active(let location):
-                    touch = location
-                case .ended:
-                    touch = nil
-                }
-            }
-    }
-
-    /// The glow under the finger; it never claims the touch.
-    private var lightTracking: some Gesture {
-        DragGesture(minimumDistance: 0)
-            .onChanged { value in
-                if axis == nil { touch = value.location }
-            }
-            .onEnded { _ in
-                touch = nil
-            }
-    }
-
-    private func pageDrag(_ k: Kanji) -> some Gesture {
-        DragGesture(minimumDistance: 10)
-            .onChanged { value in
-                dragChanged(value.translation, k)
-            }
-            .onEnded { value in
-                dragEnded(value.translation, velocity: value.velocity, k)
-            }
+    /// What each gesture means on this card (see GestureSurface for how
+    /// they're told apart).
+    private func surfaceHandlers(_ k: Kanji) -> GestureSurface.Handlers {
+        var h = GestureSurface.Handlers()
+        h.pressChanged = { down, point in
+            pressing = down
+            touch = down ? point : nil
+        }
+        h.tap = { _ in
+            tap(k)
+        }
+        h.doubleTap = { _ in
+            doubleTap(k)
+        }
+        h.holdBegan = {
+            startHold(k)
+        }
+        h.holdEnded = {
+            endHold()
+        }
+        h.panChanged = { t, point in
+            touch = point
+            dragChanged(t, k)
+        }
+        h.panEnded = { t, v in
+            touch = nil
+            dragEnded(t, velocity: v, k)
+        }
+        h.pinchChanged = { scale in
+            onPinch(scale, false)
+        }
+        h.pinchEnded = { scale in
+            onPinch(scale, true)
+        }
+        h.hover = { point in
+            if !pressing { touch = point }
+        }
+        return h
     }
 
     private func dragChanged(_ t: CGSize, _ k: Kanji) {
         guard !leaving, !holding, !frozen else { return }
         if axis == nil {
             axis = abs(t.height) >= abs(t.width) ? .vertical : .horizontal
-            touch = nil
         }
         if axis == .vertical {
             let up = t.height < 0
@@ -7588,6 +7962,9 @@ struct RecapView: View {
     }
 
     private var detail: String {
+        if model.mode != .practice && store.dueCount == 0 && store.lessonsLeftToday == 0 {
+            return "That's everything for today."
+        }
         switch model.mode {
         case .lesson: return "They'll come back in a few hours, while still fresh."
         case .review: return "Each one returns just before you'd forget it."
