@@ -208,6 +208,35 @@ Notes:
   `name` fields in `Package.swift`; then update the path in
   `tools/embed_content.py`.
 
+### On an iPhone, without a Mac
+
+Swift Playgrounds can only run the app inside itself, on the iPad. To put
+Sumi on an iPhone the build has to come out of Xcode, so the repository
+builds itself on GitHub's macOS machines instead
+([.github/workflows/ios.yml](.github/workflows/ios.yml)):
+
+1. Every push to `main` that touches `Sumi.swiftpm` runs the **iOS build**
+   workflow (or start one by hand under **Actions → iOS build → Run
+   workflow**). It takes a few minutes.
+2. Open the finished run and download the **Sumi-unsigned-ipa** artifact; it
+   unzips to `Sumi-unsigned.ipa`. If the run failed, the **build-log**
+   artifact has the compiler's output.
+3. On a Windows PC, install [Sideloadly](https://sideloadly.io) and Apple's
+   own iTunes (from apple.com, not the Microsoft Store build). Plug the
+   iPhone in, open Sideloadly, drag the `.ipa` onto it, enter your Apple ID,
+   and press **Start**. Sideloadly signs the app with your Apple ID and
+   installs it.
+4. On the iPhone: turn on **Settings → Privacy & Security → Developer
+   Mode**, then trust your Apple ID under **Settings → General → VPN &
+   Device Management**.
+
+With a free Apple ID the app expires after 7 days (install it again to
+renew; progress is kept) and you can have three sideloaded apps at once. A
+paid Apple Developer membership removes both limits and opens the door to
+TestFlight. Private repositories get 2,000 free Actions minutes a month,
+and macOS minutes count ten times over, so that's roughly 25–40 builds;
+public repositories are unlimited.
+
 ## Adding content
 
 The starter pack covers 59 N5 + 5 N4 kanji and 5 passages so the whole app

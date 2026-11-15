@@ -16,7 +16,7 @@ let package = Package(
         .iOSApplication(
             name: "Sumi",
             targets: ["AppModule"],
-            bundleIdentifier: "com.example.sumi",
+            bundleIdentifier: "com.cosrx.sumi",
             displayVersion: "1.0",
             bundleVersion: "1",
             appIcon: .placeholder(icon: .pencil),
