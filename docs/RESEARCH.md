@@ -8,6 +8,252 @@ questions that only testing with real learners can answer.
 
 ---
 
+## 0g. Revision 9 — ink, light and water: one bar, a menu, washes of colour and lines that draw themselves
+
+The brief for this revision asked for the look to go much further — more
+creative, more alive, "as if the whole thing were talking to you" — while
+staying minimal and keeping to Apple's guidelines: line animations, soft
+pastels, scroll-triggered detail, small toggles that make learning more
+immersive, a clean pop-up menu, a pill-shaped navigation bar that offers
+only what the moment needs, simple page transitions, and every effect
+(glass, shadows, inner shadows, bloom, strokes) used with intent.
+
+Revision 8 gave the app *light* — one ladder of surfaces. This one adds
+*water*: things flow. The whole design is one sentence:
+
+> Every screen is a sheet of washi with a wash of soft colour behind it;
+> whatever is alive is written in ink; whatever floats is glass.
+
+### Sources
+
+Read for this revision, in addition to the books listed in §0f:
+
+| Source | What it says | What it changed |
+|---|---|---|
+| Apple, [*Adopting Liquid Glass*](https://developer.apple.com/documentation/technologyoverviews/adopting-liquid-glass) and [*Applying Liquid Glass to custom views*](https://developer.apple.com/documentation/swiftui/applying-liquid-glass-to-custom-views) | Glass is the functional layer above content; use it sparingly, on "the most important functional elements"; put custom glass shapes in one container so they render and morph together; half-height sheets are glass and inset; remove custom backgrounds from bars and sheets. | Glass appears in four places only (the bar, the menu, the ✕, the pill buttons). The bar's shapes share one `GlassEffectContainer`. The menu sets no background of its own on iOS 26. |
+| HIG — [*Tab bars*](https://developer.apple.com/design/human-interface-guidelines/tab-bars) | "Use a tab bar to support navigation, not to provide actions"; keep labels; a tab bar can minimize as people scroll, with its accessory moving inline. | The places are always labelled and never hidden behind a menu. A screen's own controls appear only where the HIG puts a toolbar — on a pushed screen — and in the shape iOS 26 gives a minimized tab bar and its accessory. |
+| HIG — [*Materials*](https://developer.apple.com/design/human-interface-guidelines/materials), [*Color*](https://developer.apple.com/design/human-interface-guidelines/color) | "Don't use Liquid Glass in the content layer." Colour on glass sparingly, for a primary action's background; "avoid using similar colors in control labels if your app has a colorful background"; never rely on colour alone. | Cards, tiles and rows stay paper. Only the one primary action in the bar is tinted. The washes are kept within a few percent of paper so ink and the indigo accent always read against them, and a level is always written as well as coloured. |
+| HIG — [*Motion*](https://developer.apple.com/design/human-interface-guidelines/motion) | Motion with a purpose; brief; cancelable; "avoid adding motion to UI interactions that occur frequently"; never the only carrier of information. | Arrival animations run once per screen, never on a return visit; switching places is instant; every scroll effect is tied 1:1 to the finger, so it can be stopped or scrubbed back; Reduce Motion removes all of it. |
+| HIG — [*Sheets*](https://developer.apple.com/design/human-interface-guidelines/sheets), [*Layout*](https://developer.apple.com/design/human-interface-guidelines/layout) | Support the medium detent "to allow progressive disclosure of the sheet's content"; include a grabber; one sheet at a time; order by importance, group, align. | The menu opens at half height with the three things most often changed and expands into the rest. |
+| WWDC25 — *Meet Liquid Glass* (219), *Get to know the new design system* (356), *Build a SwiftUI app with the new design* (323) | Concentric shapes; capsules for controls near the edge of an iPhone; surfaces "emerge from their source"; a sheet can morph out of the button that presents it; primary actions separate and tinted; don't mix text and symbols in one group. | Capsules throughout the bar, the thumb concentric with its capsule (29 − 5 = 24 pt). The menu grows out of the 三 button (`matchedTransitionSource` + zoom). Save/Write share a capsule; Practice has its own, in the accent. |
+| WWDC18 — *Designing Fluid Interfaces* | Motion starts from the current value, inherits velocity, can be interrupted; bounce only when a gesture carried momentum. | The bar and the switch use a spring with a little overshoot (`Motion.liquid`, 0.5 s, bounce 0.2) because glass that changes shape should read as a drop; everything else stays critically damped. |
+| Nielsen Norman Group, [*Hamburger Menus and Hidden Navigation Hurt UX Metrics*](https://www.nngroup.com/articles/hamburger-menus/) (179 participants, 6 sites) | Hidden navigation cut discoverability by more than 20 %, was used in 57 % of mobile cases against 86 % for visible-plus-hidden, and made tasks 15 % slower on mobile. With four or fewer top-level links, show them. | The three places stay visible. The 三 button holds only what is secondary — settings, data, how it works — which is the case the study allows. |
+| [Laws of UX](https://lawsofux.com) | Fitts, Hick, Jakob, Tesler, Von Restorff, goal-gradient, Zeigarnik, peak–end, Doherty threshold, common region, proximity, uniform connectedness, aesthetic–usability. | Mapped below, one decision each. |
+| Valdez & Mehrabian (1994), *Effects of color on emotions*, J. Exp. Psych.: General 123(4) | Pleasure rises with brightness and (less) with saturation; arousal rises with saturation and falls with brightness. | Washes are bright and barely saturated — pleasant, low arousal. The only saturated colours left are vermilion ("forgot", the seal) and the accent, where attention is wanted. |
+| Bar & Neta (2006), *Humans prefer curved visual objects*, Psych. Science 17(8); a 2025 *Journal of User Experience* study of rounded corners in a mobile app | Curved contours are preferred and read as safer; rounded interfaces are rated more attractive (the journal notes earlier work confounded curvature with other attributes). | Continuous corners everywhere, capsules for everything that floats; no sharp corner in the app. |
+| Kurosu & Kashimura (1995); Tractinsky, Katz & Ikar (2000) | The aesthetic–usability effect: what looks good is judged easier to use — and forgiven more. | A reason to polish, and a warning: a beautiful screen can hide a usability problem from its own designer. Hence the tests at the end of this section. |
+| Kivetz, Urminsky & Zheng (2006); Kahneman et al. (1993) | Effort increases as a goal nears (goal-gradient); an experience is remembered by its peak and its end. | The day seal and each level's rule show the distance left. The end of a session is designed: the seal, the amber light, the numbers rolling up. |
+| [Colordic — 日本の伝統色](https://www.colordic.org/w) | The traditional palette with reference values: 桜 `#FEF4F4`, 洗柿 `#F2C9AC`, 月白 `#EAF4FC`, 白群 `#83CCD2`, 鳥の子 `#FFF1CF`, 藤 `#BBBCDE`, 白緑 `#D6E9CA`. | The washes are these hues thinned with paper (below). |
+
+And from the books, the ideas that decided something this time:
+
+- **Cooper, *About Face*** — *excise* is work that doesn't serve the goal.
+  Reaching to the top corner for Save, or opening a menu to hear a text,
+  was excise; those controls now sit where the thumb already is. Feedback
+  stays modeless: the bar changes, nothing interrupts.
+- **Colborne, *Simple and Usable*** — remove, organise, hide, displace.
+  *Removed:* search on Read (five texts), the Save button in the kanji
+  toolbar, the count block under the deck. *Organised:* the menu's rows
+  by how often they're changed. *Hidden:* everything rare, one level down
+  (the menu's lower half, the ellipsis). *Displaced:* a screen's controls
+  into the bar.
+- **Tidwell, Brewer & Valencia, *Designing Interfaces*** — Center Stage
+  (one focal object), Visual Framework (one header, one rule, one bar on
+  every screen), Titled Sections, Bottom Navigation, Touch Tools (controls
+  that appear when their object is on screen), Filmstrip (the stroke-order
+  strip), Responsive Disclosure, Hairlines, Few Hues Many Values.
+- **Norman, *The Design of Everyday Things* / *Emotional Design*** —
+  signifiers and mapping: nothing in the bar is an unlabelled icon, and a
+  control sits next to what it changes. Visceral, behavioural, reflective:
+  the wash and the paper; the springs and the bar that follows you; the
+  seal, the ring and a library that visibly fills with ink.
+- **Krug, *Don't Make Me Think*** — the trunk test: on any screen, where
+  am I, where can I go, how do I get back? The title, the labelled bar and
+  the back gesture answer all three; the level's colour answers the first
+  a second way.
+- **Johnson, *Designing with the Mind in Mind*** — we notice change in the
+  periphery and read structure before words: the bar's change of shape is
+  seen without being looked at, and sections are told apart by a numeral, a
+  caption and a rule before a word of them is read. Responsiveness: 0.1 s
+  for cause and effect — every control answers on touch-down.
+- **Evans, *Bottlenecks*** — attention is the first bottleneck: one moving
+  thing at a time. A screen never has an arrival, a scroll effect and a
+  drifting wash competing; reading screens hold the wash still.
+- **Weinschenk, *100 Things*** — people process information best as a
+  story, and are moved by progress and mastery more than by reward. The
+  kanji page is told in order — meet it, mean it, remember it, write it,
+  use it, read it — and progress is shown as ink, not points.
+- **Schwartz, *The Paradox of Choice*** — the menu's top half is three
+  choices; Today is still one button.
+- **Rosenberg, *UX Magic*** — design from the objects and the actions on
+  them. The bar is literally that grammar: an object on screen (a kanji, a
+  text), and beside it the verbs that apply to it.
+- **Hall; Travis & Hodgson; Marsh; Buley; Gothelf & Seiden; Krug, *Rocket
+  Surgery*; T. & D. Kelley** — decisions made by reasoning are hypotheses
+  until five people have tried them. The ones this revision adds are at the
+  end.
+
+### What a UI element says before it's read
+
+The brief asked for an analysis of the emotion each kind of element
+carries. This is the reading the app is built on, with the evidence where
+there is some and "practice" where there isn't.
+
+| Element | What it communicates | Basis | In Sumi |
+|---|---|---|---|
+| Corner radius, capsules | Safe, soft, touchable; sharp corners read as hard and a little threatening | Bar & Neta 2006; JUX 2025 | Continuous corners on every surface; capsules for everything that floats |
+| Light, unsaturated colour | Calm, pleasant, low arousal | Valdez & Mehrabian 1994 | The washes |
+| Saturated warm colour | Urgency, attention | same | Vermilion only for "forgot" and the seal |
+| One accent among neutrals | "This one is different — act on it" | Von Restorff | Indigo only on what can be acted on, and on what is alive |
+| Soft, warm, top-lit shadow | A real object, lying there, liftable — trust | Norman (visceral); one light source (Evans) | Sheets; a pressed sheet's shadow tightens |
+| Inner shadow | A recess: put something in | Norman (signifier) | Fields, the switch's track, tiles not yet started |
+| Translucent glass | Light, floating, provisional — "above" rather than "part of" | HIG Materials | The bar and the menu only; text on it never lighter than ink2 |
+| A line drawing itself | Something is being made, now, for you; anticipation | Gestalt continuity and common fate; practice | Rules, rings, the progress line, kanji |
+| Spring with overshoot | Alive, elastic, playful | WWDC18; practice (little controlled evidence) | Only glass changing shape and things that were thrown |
+| Critically damped motion | Calm, exact, dependable | same | Everything else |
+| Slow drift | Stillness with life — a room, not a picture | practice; HIG warns against sustained oscillation, so it never repeats | The wash, 30 fps, a few percent of travel |
+| Serif display type | Literary, warm, considered | practice | New York for titles and greetings |
+| Rounded numerals | Friendly, approximate, countable | practice | SF Rounded for every count |
+| A ring or bar filling | Nearness to a goal; pulls effort forward | goal-gradient; Zeigarnik | The day seal; a level's rule |
+| A stamp at the end | Closure; "this is finished and it counted" | peak–end rule | The hanko |
+| A labelled symbol | Certainty | Norman; HIG | Every item in the bar |
+| A switch that slides | Control: immediate, visible, reversible | direct manipulation (About Face) | One sliding switch for every either-or |
+
+### The bar
+
+One floating bar holds only what the moment needs.
+
+| Where you are | Leading | Trailing |
+|---|---|---|
+| The top of a place | The three places — symbol over label, the current one on an accent-tinted thumb | 三, the menu |
+| Scrolled down, reading | The current place, as one circle | 三, as one circle |
+| A kanji's page | The current place, as one circle (tap: the places return) | Save · Write in one capsule; Practice (or Learn next) in the accent |
+| A text | The current place, as one circle | Listen · Furigana · English |
+| Studying, onboarding, typing | Nothing — the bar is gone | |
+
+- It is the *same object* in every state: the leading capsule narrows to a
+  circle while the trailing one widens, on one spring, so the eye follows
+  a change of shape instead of a swap (uniform connectedness, common
+  fate). On iOS 26 both are Liquid Glass in one container; before, frosted
+  material with a lit rim.
+- Scroll direction is read with hysteresis — 22 pt of travel, and nothing
+  within 28 pt of the top — so it never flickers under a resting thumb.
+- Every item is a symbol *over* a label (HIG: include tab labels; Norman:
+  signifiers), and each offers the system's large-content viewer, since a
+  10-pt label can't grow with Dynamic Type.
+- The menu button is three strokes of unequal length — the kanji 三,
+  "three" — which even out under a finger.
+- The system's own tab bar is still there underneath, hidden; the places
+  keep their own navigation stacks, and tapping the current place goes
+  back to its first screen, as a tab bar does.
+- It sits 20 pt above the bottom edge, where iOS 26 puts its own, and
+  leaves when the keyboard arrives.
+
+### The menu
+
+The pop-up behind 三 is a sheet at half height. Its top half is what is
+changed in the middle of a session — appearance, furigana, typeface, sound
+— and it scrolls or pulls up into pace, reminders, data, how Sumi works,
+privacy and reset. Rows are plain titles on a tint of ink (no icon tiles,
+as before); a group's footer explains it. On iOS 26 it is the system's
+glass sheet and grows out of its button; earlier it is a sheet of the
+app's own paper.
+
+### Colour that means something
+
+Colour is ambient, and it means one of two things, never both:
+
+| Wash | When | Tints (thinned with paper) |
+|---|---|---|
+| dawn / day / dusk / night | Today, by the hour (5, 10, 16, 20) | persimmon and cherry over moon-white; pale blue and eggshell; amber falling to wisteria; wisteria and plum |
+| focus | Studying | indigo mist gathering at the top |
+| done | The day finished; a session's recap | amber settling at the bottom |
+| read | The Read place | parchment |
+| level | A level's kanji and texts; the library takes the level you're working on | N5 pale blue 白群 · N4 pale green 白緑 · N3 eggshell 鳥の子 · N2 cherry 桜 · N1 wisteria 藤 |
+
+Every tint keeps a luminance above 0.8, so ink2 (the quietest text that
+carries meaning) stays at 4.9:1 or better against the deepest of them and
+the accent at 6.4:1. By night the same hues sit a few percent above black.
+A change of wash is eased channel by channel over about two seconds
+(`WashDriver`), so the hour turning, a session starting or a day ending is
+a ramp and never a cut. A level is never *only* a colour: its chip always
+carries its name.
+
+### Lines that draw themselves
+
+The subject of the app is writing, so the motif is the line being drawn.
+
+| Line | When it draws |
+|---|---|
+| The top card of the deck on Today | Once for each new kanji that lands there |
+| The glyph on a kanji's page | Once, in silence, when the page first opens (sound and haptics stay opt-in: Write, or hold) |
+| The stroke-order strip (筆順) | A new section: the kanji built up one stroke per cell, the newest in the accent with a dot where the brush lands |
+| A section's rule | From its leading edge, when its screen arrives and again as it scrolls into view |
+| A level's rule | The same line is its progress: the known part in the accent |
+| The day seal, coverage rings | Round, as they arrive |
+| The session's progress line | Dry ink behind, a wet accent tip where the brush is |
+| The line between question and answer | From its centre, on reveal |
+| The forgetting curve in *How Sumi works* | Scrubbed by the scroll itself: forward as the page moves up, back as it moves down |
+
+Sections on a kanji's page are numbered in kanji — 一 二 三 四 五 六 — and
+the day seal carries the day's own kanji (日 月 火 水 木 金 土): seven of
+the first characters anyone learns, met in use.
+
+### Transitions
+
+- A tile opens *into* its kanji and a row into its text, and each folds
+  back to where it came from (the system's zoom transition, iOS 18 and
+  later; a plain push before). One transition for every way in.
+- Places switch instantly. Sheets and the study cover keep the system's
+  own motion.
+- Holding a library tile lifts a glance at the kanji out of it — glyph,
+  meaning, readings, level — with the two things most often done to one
+  (save; practice or learn next). It is the touch screen's hover: a look
+  without a commitment, and the system's own context menu.
+- The first time a screen appears its pieces settle in order, 80 ms apart,
+  out of a 6-pt blur (`Arrive`). Never again on a return visit.
+
+### The effects, re-budgeted
+
+| Effect | Job | Where | Never |
+|---|---|---|---|
+| Liquid Glass / frosted glass | The floating layer | The bar, the menu, the ✕, the pill buttons | Content; glass on glass |
+| Pastel wash | The hour, or the level | Behind every screen | Text, controls, sheets |
+| A drawn line | "This is being written" | The table above | Decoration with no referent |
+| Bloom | "This is alive" | The seal as it closes, the prominent button, wet ink (a stroke, the progress tip) | Anything static |
+| Scroll reveal (rise out of a blur) | Arrival of a small thing | Rows, tiles, note lines, strip cells | A whole section — a tall block dimmed until it is fully on screen reads as a fault |
+| Arrival stagger | First meeting | Today, the menu | Return visits; tab switches |
+| Two-layer shadow, lit edge, inner shadow, grain, vignette, tilt | As in §0f | As in §0f | As in §0f |
+
+### How it is checked
+
+The code is written without a Mac, so a change is pushed to a `try/…`
+branch first. There the workflow compiles it for the device and also runs
+it in an iPhone simulator, opening it on each screen in turn with sample
+progress (`Showcase`, driven by an environment variable only a simulator
+can set) and photographing it in light and dark. Layout, colour and
+legibility can be judged on those pictures; motion, haptics and sound
+cannot be, and are the first things to look at on a device. The palette
+itself was checked by rendering every wash, light and dark, with sample
+ink, a sheet and the bar on top.
+
+### What only testing can settle
+
+- **H4 — finding the places again.** From a kanji's page, five people are
+  asked to go to Read. If fewer than four tap the circle within five
+  seconds, the places stay visible on pushed screens and the controls move
+  above them.
+- **H5 — 三 as a menu.** A first-click test: "change the appearance". If
+  the first tap isn't the three strokes for four of five, it becomes the
+  conventional three equal lines.
+- **H6 — the washes.** As H2: asked afterwards, people shouldn't be able
+  to say the colour changed, but should rate a session started at dusk and
+  one started at noon as equally easy to read.
+- **H7 — kanji numerals.** Beginners shouldn't mistake 一 二 三 for content
+  to learn. If anyone asks what they are, they become plain numerals.
+- **H8 — the strip.** Do people run a finger along the stroke-order strip,
+  or is Write enough? If it goes unused in five sessions, it is removed.
+
 ## 0f. Revision 8 — one ladder of light: colour, space, hierarchy and the effects, budgeted
 
 The brief for this revision was the look itself: the best colours and

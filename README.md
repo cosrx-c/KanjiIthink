@@ -13,11 +13,23 @@ offers one thing to do; everything else happens out of sight. Study has no
 buttons at all: the page is the control, and it moves the way people
 already move through short-video feeds.
 
-**Three places.** A tab bar — **Today**, **Kanji**, **Read** — the one
-navigation every iPhone user already knows. Today shows the cards waiting
-for you as a small deck and one button; Kanji is the library (all, or only
-what you've saved); Read holds the short texts, the most readable first.
-Settings is behind the gear on Today.
+**Three places, one bar.** **Today**, **Kanji**, **Read** — always
+visible, always labelled, in a single glass bar that floats in the thumb's
+reach and holds only what the moment needs. At the top of a place it is
+the three places and the menu. Scroll down to read and it steps back to
+two small circles; scroll up and it returns. Open a kanji and the places
+fold into one circle while that kanji's own controls unfold beside it —
+Save, Write, Practice; open a text and they are Listen, Furigana, English.
+Study covers it entirely. Today greets you, says what is waiting in one
+line and shows it as a small deck with one button; Kanji is the library
+(all, or only what you've saved); Read holds the short texts, the most
+readable first.
+
+**The menu.** The three-stroke button at the end of the bar — which is
+also the kanji 三 — opens a sheet at half height with what is worth
+changing mid-session (appearance, furigana, typeface, sound) and pulls up
+into the rest: pace, reminders, your data, how Sumi works. On iOS 26 it is
+Liquid Glass and grows out of its button.
 
 **Study: one full-screen deck, no buttons on the cards**
 
@@ -53,15 +65,35 @@ the hints are gone for good. A ✕ closes the session; so do pinching and
 pulling the first card down. Hardware keys (Space, Return, ↑ ↓ ← →, E, P,
 Esc) and VoiceOver actions cover every gesture.
 
-**The look: ink on washi**
+**The look: ink, light and water**
+
+Every screen is a sheet of washi with a wash of soft colour behind it;
+whatever is alive is written in ink; whatever floats is glass.
 
 - *Paper:* warm off-white by day, true black by night. Every surface is a
   step on one ladder of light — the page, a sheet lying on it, a well
   pressed into it — told apart by lightness, never by a border. Sheets
   catch light along their top edge and cast two warm shadows; wells hold
-  a soft inner shadow; the page is faintly vignetted and a slow ink wash
-  drifts behind everything (a mesh gradient on iOS 18), turning a few
-  percent cooler while you study and warmer when the day is done.
+  a soft inner shadow; the page is faintly vignetted.
+- *Colour:* behind everything a wash of pastel drifts like pigment in
+  water (a mesh gradient on iOS 18) — tints from the traditional palette,
+  thinned with paper until ink always reads on them. It means one of two
+  things: the time (Today follows the hour — dawn, day, dusk, night;
+  study gathers a cool light; a finished day settles into amber) or the
+  level a kanji or text belongs to (N5 pale blue, N4 pale green, N3
+  eggshell, N2 cherry, N1 wisteria). A change of colour is a ramp of a
+  second or two, never a cut. Text and controls stay ink and one indigo.
+- *Line:* the app is about writing, so its lines are drawn. The top card
+  on Today and the glyph on a kanji's page are written as you arrive;
+  every section's rule draws itself as it scrolls into view; a level's
+  rule is also its progress; rings draw round; the session's progress is
+  a line of ink with a wet tip; the forgetting curve in *How Sumi works*
+  is drawn by the scroll itself. A kanji's page has a stroke-order strip
+  (筆順), its sections are numbered 一 二 三, and the day's ring carries
+  the day's own kanji — 日 月 火 水 木 金 土 (tap it to hear the day).
+- *Transitions:* a tile opens into its kanji and a row into its text, and
+  each folds back where it came from (iOS 18 and later). Holding a tile
+  lifts a glance at the kanji out of it.
 - *Depth:* the deck on Today and the glyph on a kanji page lean a few
   degrees as you move the phone and a sheen slides across them; a soft
   light follows your finger. On iPad, the pointer lifts and highlights
@@ -72,9 +104,11 @@ Esc) and VoiceOver actions cover every gesture.
   scales with Dynamic Type and keeps at least 4.5:1 contrast.
 - *Story:* onboarding is four pages you swipe up through: the 墨 mark writes
   itself, a forgetting curve draws as its page arrives, the gestures
-  arrive one by one, and you set your daily pace on a 3D number wheel.
-- *Settings* sits on the same paper and sheets as every other screen,
-  with an Appearance option (Automatic, Light or Dark).
+  arrive one by one, and you set your daily pace on a 3D number wheel —
+  while the light moves through a day, dawn to night.
+- *One switch:* every either-or — All or Saved, Automatic, Light or Dark,
+  when to show furigana — is the same small sliding switch: a well with a
+  sheet of paper for a thumb.
 
 **Built to feel like it belongs on iOS**
 
@@ -95,16 +129,17 @@ Esc) and VoiceOver actions cover every gesture.
   the one you pick in Settings. Automatic speech follows the Ring/Silent
   switch and mixes with your music; anything you ask for (tap, hold)
   plays and briefly ducks it.
-- *Materials:* Liquid Glass (iOS 26) for the floating controls only —
-  the ✕ and the pill buttons, the prominent one tinted indigo — never for
-  content. Before iOS 26 the prominent button is lit from above and
-  blooms softly onto the page. Bloom appears in exactly three places (the
-  ring as it closes, the prominent button, the stroke being written) so
-  it still means "alive".
+- *Materials:* Liquid Glass (iOS 26) for the floating layer only — the
+  bar, the menu, the ✕ and the pill buttons, the one primary action
+  tinted indigo — never for content. Before iOS 26 the bar is frosted
+  glass with a lit rim and the prominent button is lit from above and
+  blooms softly onto the page. Bloom appears only where something is
+  alive (the day's ring as it closes, the prominent button, wet ink) so
+  it still means something.
 
-**Light gamification, no anxiety.** A small ring beside the date fills as
-the day's cards are done — a goal to close, like the Activity rings, never
-a streak to lose. A combo chip (×3, ×4…) counts first-try answers and
+**Light gamification, no anxiety.** The day's seal — a ring round the
+day's kanji — fills as the day's cards are done: a goal to close, like
+the Activity rings, never a streak to lose. A combo chip (×3, ×4…) counts first-try answers and
 quietly resets on a miss; milestones get a haptic, the recap notes your
 best run, and a hanko stamp closes each session. Saved kanji form a
 collection you can practice. There are no streaks, lives or leaderboards.
@@ -113,11 +148,11 @@ collection you can practice. There are no streaks, lives or leaderboards.
 
 | Screen | Contents |
 |---|---|
-| **Today** | The cards waiting for you as a small deck, how many there are and roughly how long they'll take, a ring that fills as the day is done, and one button: Review or Learn (the deck lifts under a swipe up too). When you're done: a hanko seal, when the next review is, and quiet buttons (read a text, practice saved, learn more). |
-| **Kanji** | The library: all kanji by level, or only the ones you've saved. A kanji you haven't started sits pressed into the paper; once started, its tile lies on top, and its ink deepens as you learn it — faint at first, full black once known. Each level shows how much of it you know. Search takes kanji, English, kana or romaji. |
-| **Read** | Short texts with furigana only above kanji you haven't learned, the most readable first, each with a ring showing how much of it you can already read. Tap any word to look it up. |
-| **Kanji page** | The glyph on a sheet of practice paper (hold for strokes and sound, double-tap to save), its level, stroke count and type, the meaning, on and kun readings, a memory hook (or your own), words and a sentence — tap any of them to hear it. |
-| **Settings** | Daily pace, type readings, appearance, typeface, furigana, audio, voice, haptics, a daily reminder, import/export, privacy — on the same paper and sheets as every other screen. |
+| **Today** | A greeting (and the same in kana), what is waiting in one line, the day's seal, the cards as a small deck whose top card is written as you arrive, and one button: Review or Learn (the deck lifts under a swipe up too). The light follows the hour. When you're done: a hanko seal, when the next review is, and quiet buttons (read a text, practice saved, learn more). |
+| **Kanji** | The library: all kanji by level, or only the ones you've saved. Each level has its own pastel and a rule that is also its progress. A kanji you haven't started sits pressed into the paper; once started, its tile lies on top, and its ink deepens as you learn it — faint at first, full black once known. Search takes kanji, English, kana or romaji; hold a tile for a glance. |
+| **Read** | Short texts with furigana only above kanji you haven't learned. The one to read next is set large with its opening line; the rest follow, each with a ring showing how much of it you can already read. Tap any word to look it up; Listen, Furigana and English are in the bar. |
+| **Kanji page** | The glyph on a sheet of practice paper, written as you arrive (hold for strokes and sound, double-tap to save), then numbered sections: meaning and readings, a memory hook (or your own), a stroke-order strip, words and a sentence — tap any of them to hear it. Save, Write and Practice are in the bar. |
+| **Menu** | Appearance, furigana, typeface, audio, voice, haptics; then pace, type readings, a daily reminder, import/export, how Sumi works, privacy, reset. |
 
 **What happens behind it**
 
@@ -231,8 +266,9 @@ builds itself on GitHub's macOS machines instead
 2. When it's done, the build is published as the release called **latest**:
    <https://github.com/cosrx-c/KanjiIthink/releases/latest> — download
    `Sumi-unsigned.ipa` from there (no GitHub login needed). The same file
-   is also attached to the run as an artifact, and if the run failed, the
-   **build-log** artifact has the compiler's output.
+   is also attached to the run as an artifact. If the run failed, each
+   compile error is listed on the run's page as an annotation, and the
+   **build-log** artifact has the compiler's full output.
 3. On a Windows PC, install [Sideloadly](https://sideloadly.io) and Apple's
    own iTunes (from apple.com, not the Microsoft Store build). Plug the
    iPhone in, open Sideloadly, drag the `.ipa` onto it, enter your Apple ID,
@@ -249,13 +285,31 @@ TestFlight. Private repositories get 2,000 free Actions minutes a month,
 and macOS minutes count ten times over, so that's roughly 25–40 builds;
 public repositories are unlimited.
 
+### Looking at a change before it's published
+
+A push to a branch named `try/…` (for example `try/new-home`) is compiled
+the same way but **not** published. Instead the app is also run in an
+iPhone simulator and each screen is photographed, in light and dark; the
+pictures are attached to the run and to a prerelease called
+[`try-screens`](https://github.com/cosrx-c/KanjiIthink/releases/tag/try-screens).
+When they look right, merge the branch into `main` to publish; that build
+removes the pictures again.
+
+The app can be opened on a given screen with sample progress by setting
+`SUMI_SCENE` (`today`, `learn`, `rest`, `kanji`, `page`, `read`, `text`,
+`menu`, `study`, `answer`, `lesson`, `onboarding`) and optionally
+`SUMI_HOUR` when launching it in a simulator — see *Showcase* in
+`ContentView.swift`. Nothing on a device can set these, so none of it runs
+there.
+
 ## Adding content
 
 The starter pack covers 59 N5 + 5 N4 kanji and 5 passages so the whole app
 can be exercised. To add more, write a JSON pack (schema and examples in
 [docs/CONTENT_SCHEMA.md](docs/CONTENT_SCHEMA.md)) and either:
 
-- import it in the app: **Settings → Import** — no rebuild; or
+- import it in the app: **the menu → Import a content pack or backup** —
+  no rebuild; or
 - add it to `content/core-n5.json`, fetch stroke order for any new kanji,
   then validate and re-embed:
 
@@ -286,12 +340,16 @@ The code is written on a Windows machine without Xcode. Every push to
 `main` is compiled for iPhone by the GitHub Actions workflow in
 `.github/workflows/ios.yml` (Xcode 26.3, iOS 26 SDK, unsigned), so a green
 run means the whole app builds; the result is published as the `latest`
-release. What is checked before each push: bracket/string structure of
-the Swift file, the starter content (every kanji annotated with furigana,
-readings in the right script, every word containing its kanji, passage
-answers in range), and that the content tools round-trip the embedded JSON
-exactly. What still needs a person: running it on a device and looking at
-it — the layout, the motion and the feel can only be judged there.
+release. What is checked before each push: the Swift file's syntax (parsed
+with tree-sitter) and bracket/string structure, the starter content (every
+kanji annotated with furigana, readings in the right script, every word
+containing its kanji, passage answers in range), and that the content
+tools round-trip the embedded JSON exactly. A change can first be pushed to
+a `try/…` branch, where the workflow also runs the app in an iPhone
+simulator and photographs each screen in light and dark, so the layout
+can be looked at before it is published. What still needs a person:
+using it on a device — motion, haptics, sound, and the feel of the
+gestures can only be judged there.
 
 ## Roadmap
 
