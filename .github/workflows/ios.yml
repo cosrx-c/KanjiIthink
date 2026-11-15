@@ -51,45 +51,59 @@ jobs:
 
       # The log needs a GitHub login to read; annotations don't. Every
       # compile error becomes one, so a failed build explains itself on
-      # the run's page (and through the public API).
-      - name: Report compile errors
-        if: failure()
+      # the run's page (and through the public API); a build that passes
+      # lists the compiler's warnings about the app's own sources.
+      - name: Report what the compiler said
+        if: always()
         run: |
           python3 - <<'PY'
           import os, re
 
           root = os.environ.get("GITHUB_WORKSPACE", "") + "/"
+          if not os.path.exists("build.log"):
+              raise SystemExit(0)
           lines = open("build.log", errors="replace").read().splitlines()
-          seen, errors = set(), []
-          for line in lines:
-              if ": error: " not in line and not line.startswith("error: "):
-                  continue
-              line = line.replace(root, "")
-              if line not in seen:
-                  seen.add(line)
-                  errors.append(line)
+          passed = any("** BUILD SUCCEEDED **" in line for line in lines)
+
+          def unique(marker):
+              seen, found = set(), []
+              for line in lines:
+                  if marker not in line:
+                      continue
+                  line = line.replace(root, "")
+                  if line not in seen:
+                      seen.add(line)
+                      found.append(line)
+              return found
 
           def esc(text):
               return text.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
 
-          for line in errors[:9]:
-              match = re.match(r"(.+?):(\d+):(\d+): error: (.*)", line)
-              if match:
-                  print(f"::error file={match.group(1)},line={match.group(2)},col={match.group(3)}::{esc(match.group(4))}")
-              else:
-                  print(f"::error::{esc(line)}")
-
-          rows = [e.replace("Sumi.swiftpm/Sources/", "") for e in errors] or lines[-60:]
-          chunks, chunk = [], ""
-          for row in rows:
-              if len(chunk) + len(row) > 3000:
+          def notices(title, rows):
+              chunks, chunk = [], ""
+              for row in rows:
+                  if len(chunk) + len(row) > 3000:
+                      chunks.append(chunk)
+                      chunk = ""
+                  chunk += row + "\n"
+              if chunk:
                   chunks.append(chunk)
-                  chunk = ""
-              chunk += row + "\n"
-          if chunk:
-              chunks.append(chunk)
-          for index, chunk in enumerate(chunks[:10]):
-              print(f"::notice title=Build errors {index + 1} of {len(chunks)}::{esc(chunk)}")
+              for index, chunk in enumerate(chunks[:10]):
+                  print(f"::notice title={title} {index + 1} of {len(chunks)}::{esc(chunk)}")
+
+          if passed:
+              warnings = [w.replace("Sumi.swiftpm/Sources/", "") for w in unique(": warning: ") if "Sumi.swiftpm" in w]
+              if warnings:
+                  notices("Build warnings", warnings)
+          else:
+              errors = unique(": error: ")
+              for line in errors[:9]:
+                  match = re.match(r"(.+?):(\d+):(\d+): error: (.*)", line)
+                  if match:
+                      print(f"::error file={match.group(1)},line={match.group(2)},col={match.group(3)}::{esc(match.group(4))}")
+                  else:
+                      print(f"::error::{esc(line)}")
+              notices("Build errors", [e.replace("Sumi.swiftpm/Sources/", "") for e in errors] or lines[-60:])
           PY
 
       - name: Package as .ipa

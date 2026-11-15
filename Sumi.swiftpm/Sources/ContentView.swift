@@ -2212,6 +2212,7 @@ struct Hanko: View {
     var glyph = "済"
     var size: CGFloat = 96
     @State private var stamped = false
+    @State private var pressed = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
@@ -2225,9 +2226,19 @@ struct Hanko: View {
         .rotationEffect(.degrees(-8))
         .scaleEffect(stamped || reduceMotion ? 1 : 1.5)
         .opacity(stamped ? 1 : 0)
+        .background {
+            // The press of the stamp: a ring of ink spreading into the paper.
+            Circle()
+                .stroke(Palette.shu.opacity(pressed ? 0 : 0.32), lineWidth: pressed ? 1 : size * 0.05)
+                .scaleEffect(pressed ? 1.85 : 0.9)
+                .opacity(reduceMotion || !stamped ? 0 : 1)
+        }
         .onAppear {
             withAnimation(reduceMotion ? .easeOut(duration: 0.2) : .spring(response: 0.35, dampingFraction: 0.55)) {
                 stamped = true
+            }
+            withAnimation(.easeOut(duration: 0.85).delay(0.2)) {
+                pressed = true
             }
         }
         .accessibilityHidden(true)
@@ -4908,7 +4919,7 @@ struct NavBar: View {
         let saved: Bool = store.isSaved(glyph)
         let started: Bool = store.isStarted(glyph)
         let queued: Bool = store.data.priority.first == glyph
-        let next: String = started ? "Practice" : (queued ? "Next in line" : "Learn next")
+        let next: String = started ? "Practice" : (queued ? "Queued" : "Learn next")
         return HStack(spacing: NavMetrics.gap) {
             HStack(spacing: 0) {
                 Button {
@@ -4947,8 +4958,8 @@ struct NavBar: View {
                     .font(.headline)
                     .foregroundStyle(Palette.onAccent)
                     .lineLimit(1)
-                    .minimumScaleFactor(0.75)
-                    .padding(.horizontal, Space.s)
+                    .minimumScaleFactor(0.7)
+                    .padding(.horizontal, Space.xs)
                     .frame(maxWidth: .infinity)
                     .frame(height: NavMetrics.height)
                     .contentShape(Capsule())
@@ -5164,18 +5175,27 @@ struct HomeScreen: View {
     /// Everything between the header and the button, under one touch
     /// surface: tap the deck or swipe it up to begin.
     private var stage: some View {
-        centerpiece
-            .padding(.horizontal, Space.l)
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background {
-                fingerGlow
+        GeometryReader { geo in
+            centerpiece
+                .scaleEffect(fit(geo.size.height))
+                .frame(width: geo.size.width, height: geo.size.height)
+        }
+        .background {
+            fingerGlow
+        }
+        .overlay {
+            if canStart {
+                GestureSurface(handlers: surfaceHandlers, pinches: false)
             }
-            .overlay {
-                if canStart {
-                    GestureSurface(handlers: surfaceHandlers, pinches: false)
-                }
-            }
-            .modifier(Arrive(shown: arrived, order: 1))
+        }
+        .modifier(Arrive(shown: arrived, order: 1))
+    }
+
+    /// The centrepiece shrinks to the room it has — a phone on its side,
+    /// or very large type in the header — instead of spilling out of it.
+    private func fit(_ height: CGFloat) -> CGFloat {
+        let wanted: CGFloat = canStart ? 300 : 190
+        return min(1, max(0.4, height / wanted))
     }
 
     /// The soft light under the finger, in the stage's own coordinates.
