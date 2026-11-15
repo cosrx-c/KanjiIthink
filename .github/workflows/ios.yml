@@ -3,9 +3,11 @@
 # Sideloadly (see README: "On an iPhone, without a Mac").
 name: iOS build
 
+# Pushes to main build and publish. Pushes to a try/… branch only build,
+# so a change can be compiled before it replaces the published app.
 on:
   push:
-    branches: [main]
+    branches: [main, "try/**"]
     paths:
       - "Sumi.swiftpm/**"
       - ".github/workflows/ios.yml"
@@ -47,6 +49,49 @@ jobs:
             build 2>&1 | tee ../build.log | grep -E 'error:|\*\* BUILD' || true
           grep -q '\*\* BUILD SUCCEEDED \*\*' ../build.log
 
+      # The log needs a GitHub login to read; annotations don't. Every
+      # compile error becomes one, so a failed build explains itself on
+      # the run's page (and through the public API).
+      - name: Report compile errors
+        if: failure()
+        run: |
+          python3 - <<'PY'
+          import os, re
+
+          root = os.environ.get("GITHUB_WORKSPACE", "") + "/"
+          lines = open("build.log", errors="replace").read().splitlines()
+          seen, errors = set(), []
+          for line in lines:
+              if ": error: " not in line and not line.startswith("error: "):
+                  continue
+              line = line.replace(root, "")
+              if line not in seen:
+                  seen.add(line)
+                  errors.append(line)
+
+          def esc(text):
+              return text.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
+
+          for line in errors[:9]:
+              match = re.match(r"(.+?):(\d+):(\d+): error: (.*)", line)
+              if match:
+                  print(f"::error file={match.group(1)},line={match.group(2)},col={match.group(3)}::{esc(match.group(4))}")
+              else:
+                  print(f"::error::{esc(line)}")
+
+          rows = [e.replace("Sumi.swiftpm/Sources/", "") for e in errors] or lines[-60:]
+          chunks, chunk = [], ""
+          for row in rows:
+              if len(chunk) + len(row) > 3000:
+                  chunks.append(chunk)
+                  chunk = ""
+              chunk += row + "\n"
+          if chunk:
+              chunks.append(chunk)
+          for index, chunk in enumerate(chunks[:10]):
+              print(f"::notice title=Build errors {index + 1} of {len(chunks)}::{esc(chunk)}")
+          PY
+
       - name: Package as .ipa
         run: |
           APP=$(find build/Build/Products -type d -name 'Sumi.app' | head -n 1)
@@ -65,8 +110,9 @@ jobs:
 
       # Artifacts need a GitHub login to download; a release asset is a
       # plain link that works from any device. "latest" is replaced on
-      # every successful build.
+      # every successful build of main.
       - name: Publish as the "latest" release
+        if: github.ref == 'refs/heads/main'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
