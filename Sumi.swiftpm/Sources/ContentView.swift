@@ -15,10 +15,13 @@
 //  visual they belong to. Every gesture also has a keyboard key and a
 //  VoiceOver action.
 //
-//  Look: sumi ink on washi. Cards are sheets of paper with grain, a lit
-//  edge and two shadows, stacked in a 2.5D deck that leans with the phone;
-//  a slow ink wash drifts behind everything; Liquid Glass is kept for the
-//  floating controls. Dark mode is true black.
+//  Look: sumi ink on washi. Every surface sits on one ladder — the page,
+//  a sheet lying on it, a well pressed into it — told apart by light, not
+//  by borders: sheets catch light along their top edge and cast two warm
+//  shadows, wells hold a soft inner shadow, and the one accent blooms where
+//  something is alive. A slow ink wash drifts behind everything; Liquid
+//  Glass is kept for the floating controls. Dark mode is true black, with
+//  surfaces lightening as they rise.
 //
 //  Everything lives in this file so it syncs cleanly through Swift
 //  Playgrounds and GitHub:
@@ -68,9 +71,18 @@ enum Space {
 enum Radius {
     static let chip: CGFloat = 10
     static let control: CGFloat = 14
+    static let well: CGFloat = 16
     static let tile: CGFloat = 18
     static let card: CGFloat = 24
     static let sheet: CGFloat = 32
+}
+
+/// Tracking is set per size, as Apple sets it: large display text closes
+/// up, small capitals open out, body text is left alone.
+enum Tracking {
+    static let display: CGFloat = -0.7
+    static let title: CGFloat = -0.3
+    static let caption: CGFloat = 1.1
 }
 
 enum Metrics {
@@ -121,24 +133,44 @@ extension Color {
     }
 }
 
-/// Ink and paper. Text colors are warm greys rather than pure neutrals so
-/// they sit in the paper instead of on it; every pair keeps at least 4.5:1
-/// contrast for text, and Increase Contrast deepens them further.
+/// Ink and paper, on one ladder of light.
+///
+/// Every surface is a step on it: the page, a sheet lying on the page, a
+/// well pressed into whatever it sits on. By day the steps are warm
+/// off-whites a few percent apart in lightness — just enough for the eye
+/// to read "lying on" and "pressed in" without a border. By night the
+/// ladder inverts, as it does for real objects under a lamp: the page is
+/// black, and a surface lightens as it rises. Text is warm grey rather
+/// than pure neutral so it sits in the paper instead of on it; every pair
+/// keeps at least 4.5:1 contrast, and Increase Contrast deepens them.
 enum Palette {
     /// The page: washi by day, true black by night (OLED, and calm).
     static let paper = Color.dynamic(0xF6F3EC, 0x000000, highLight: 0xFFFFFF, highDark: 0x000000)
-    /// A sheet lying on the page — cards, tiles, sheets.
-    static let card = Color.dynamic(0xFFFEFB, 0x171615, highLight: 0xFFFFFF, highDark: 0x232220)
-    /// A quieter surface: wells, fields, the space beneath a pushed card.
-    static let surface = Color.dynamic(0xEEEAE1, 0x1D1C1A, highLight: 0xE4DED2, highDark: 0x2B2A27)
-    static let sunken = Color.dynamic(0xE8E3D9, 0x0E0E0D, highLight: 0xDCD5C8, highDark: 0x1B1B1A)
-    static let hairline = Color.dynamic(0xE1DCD2, 0x2C2B29, highLight: 0xB7B0A3, highDark: 0x4B4946)
-    /// The thin edge of a sheet: a shadow line by day, a lit edge by night.
-    static let edge = Color.translucent(light: 0x000000, lightAlpha: 0.07, dark: 0xFFFFFF, darkAlpha: 0.09)
+    /// A sheet lying on the page — cards, tiles, rows.
+    static let card = Color.dynamic(0xFFFEFB, 0x1B1A18, highLight: 0xFFFFFF, highDark: 0x272624)
+    /// A raised control surface: chips and pills that sit on the page.
+    static let surface = Color.dynamic(0xF0ECE3, 0x262523, highLight: 0xE6E0D4, highDark: 0x33312E)
+    /// A recess in whatever it sits on: fields, wells, the unlearned tile.
+    static let well = Color.dynamic(0xEFEBE2, 0x0F0F0E, highLight: 0xE2DCCF, highDark: 0x080808)
+    static let sunken = Color.dynamic(0xE8E3D9, 0x0C0C0B, highLight: 0xDCD5C8, highDark: 0x161615)
+    /// Ink at a few percent: a fill that works on any surface, the way the
+    /// system's own fills are translucent.
+    static let fill = Color.translucent(light: 0x2A2118, lightAlpha: 0.06, dark: 0xFFFFFF, darkAlpha: 0.08)
+    static let fill2 = Color.translucent(light: 0x2A2118, lightAlpha: 0.1, dark: 0xFFFFFF, darkAlpha: 0.13)
+    static let hairline = Color.dynamic(0xE3DED4, 0x2E2D2A, highLight: 0xB7B0A3, highDark: 0x4B4946)
+    /// The thin edge of a sheet: a shadow line by day, a lit line by night.
+    static let edge = Color.translucent(light: 0x2A2118, lightAlpha: 0.08, dark: 0xFFFFFF, darkAlpha: 0.1)
+    /// Light catching the top edge of a sheet.
+    static let edgeLight = Color.translucent(light: 0xFFFFFF, lightAlpha: 0.9, dark: 0xFFFFFF, darkAlpha: 0.14)
+    /// Shadows carry the paper's warmth by day; by night they are black.
+    static let shadow = Color.dynamic(0x3A2C1C, 0x000000)
     static let ink = Color.dynamic(0x1E1C19, 0xF3F0E9, highLight: 0x000000, highDark: 0xFFFFFF)
-    static let ink2 = Color.dynamic(0x67625A, 0xA7A298, highLight: 0x433F38, highDark: 0xD2CDC3)
-    static let ink3 = Color.dynamic(0x968F83, 0x716D66, highLight: 0x67625A, highDark: 0x9C978D)
-    static let accent = Color.dynamic(0x2D4F9E, 0x93ABEB, highLight: 0x1E3A7A, highDark: 0xB4C6F5)
+    static let ink2 = Color.dynamic(0x67625A, 0xA8A399, highLight: 0x433F38, highDark: 0xD2CDC3)
+    static let ink3 = Color.dynamic(0x968F83, 0x7A766F, highLight: 0x67625A, highDark: 0x9C978D)
+    /// 藍 — the one colour that means "you can act on this".
+    static let accent = Color.dynamic(0x2D4F9E, 0x9DB3EE, highLight: 0x1E3A7A, highDark: 0xB9CAF6)
+    /// The deeper end of the accent, for the bottom of a filled control.
+    static let accentDeep = Color.dynamic(0x24418A, 0x7D97DC, highLight: 0x172F68, highDark: 0x9DB3EE)
     static let onAccent = Color.dynamic(0xFFFFFF, 0x0D1530)
     static let shu = Color.dynamic(0xC2412D, 0xF08A74, highLight: 0x9C2E1D, highDark: 0xF6A897)
     static let matcha = Color.dynamic(0x3F7A3A, 0x94C98A, highLight: 0x2C5E28, highDark: 0xB5DDAD)
@@ -226,9 +258,35 @@ struct Caption: View {
     var body: some View {
         Text(text.uppercased())
             .font(.caption.weight(.semibold))
-            .tracking(1.1)
+            .tracking(Tracking.caption)
             .foregroundStyle(color)
             .lineLimit(1)
+    }
+}
+
+/// The one way a section is introduced anywhere in the app: a caption on
+/// the left, and sometimes a quiet count on the right, on the same
+/// baseline. Same place, same size, same colour on every screen, so the
+/// eye learns it once.
+struct SectionHeader: View {
+    let title: String
+    var trailing: String? = nil
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline) {
+            Caption(text: title)
+            Spacer(minLength: Space.s)
+            if let trailing = trailing {
+                Text(trailing)
+                    .font(.footnote.weight(.medium))
+                    .monospacedDigit()
+                    .foregroundStyle(Palette.ink2)
+                    .lineLimit(1)
+            }
+        }
+        .padding(.leading, Space.xxs)
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(.isHeader)
     }
 }
 
@@ -539,18 +597,114 @@ struct FrostedGlass<S: Shape>: ViewModifier {
 }
 
 /// Two shadows, as real paper has: a tight contact shadow and a wide, soft
-/// ambient one. Deeper in dark mode, where shadows need more to read.
+/// ambient one, both in the warm tone of the paper so they never go
+/// muddy. Deeper in dark mode, where shadows need more to read.
 struct Elevation: ViewModifier {
     var level: CGFloat = 1
     @Environment(\.colorScheme) private var scheme
 
     func body(content: Content) -> some View {
         let dark = scheme == .dark
-        let contact: Double = (dark ? 0.5 : 0.05) * Double(level)
-        let ambient: Double = (dark ? 0.55 : 0.07) * Double(level)
+        let contact: Double = (dark ? 0.55 : 0.06) * Double(level)
+        let ambient: Double = (dark ? 0.6 : 0.08) * Double(level)
         return content
-            .shadow(color: Color.black.opacity(contact), radius: 1, x: 0, y: 1)
-            .shadow(color: Color.black.opacity(ambient), radius: 22 * level, x: 0, y: 10 * level)
+            .shadow(color: Palette.shadow.opacity(contact), radius: 1, x: 0, y: 1)
+            .shadow(color: Palette.shadow.opacity(ambient), radius: 22 * level, x: 0, y: 10 * level)
+    }
+}
+
+/// Light along the top edge of a sheet, as on paper under a lamp: a
+/// bright line at the top that fades out by a third of the way down, over
+/// a hairline all the way round. It is what makes a sheet read as lying on
+/// the page rather than drawn on it.
+struct LitEdge<S: InsettableShape>: ViewModifier {
+    let shape: S
+    var strength: Double = 1
+
+    func body(content: Content) -> some View {
+        content
+            .overlay {
+                shape.strokeBorder(Palette.edge, lineWidth: 1)
+                    .allowsHitTesting(false)
+            }
+            .overlay {
+                shape.strokeBorder(LinearGradient(colors: [Palette.edgeLight.opacity(strength), Color.clear],
+                                                  startPoint: .top, endPoint: UnitPoint(x: 0.5, y: 0.4)),
+                                   lineWidth: 1)
+                    .allowsHitTesting(false)
+            }
+    }
+}
+
+/// A sheet of paper on the page: card colour, optional grain, a lit top
+/// edge and two warm shadows. Rows, tiles, panels and cards are all this
+/// one thing at different sizes.
+struct SheetSurface: ViewModifier {
+    var radius: CGFloat = Radius.card
+    var level: CGFloat = 0.5
+    var grain = false
+
+    func body(content: Content) -> some View {
+        let shape = RoundedRectangle(cornerRadius: radius, style: .continuous)
+        return content
+            .background {
+                if grain {
+                    PaperGrain(strength: 0.7)
+                        .clipShape(shape)
+                }
+            }
+            .background {
+                shape.fill(Palette.card)
+                    .elevation(level)
+            }
+            .modifier(LitEdge(shape: shape))
+    }
+}
+
+/// A well pressed into whatever it sits on: a shade darker, with a soft
+/// inner shadow at the top where the surface turns down, and a hairline
+/// rim. Fields, the word list on a lesson card, tiles not yet learned.
+struct WellSurface<S: InsettableShape>: ViewModifier {
+    let shape: S
+    @Environment(\.colorScheme) private var scheme
+
+    func body(content: Content) -> some View {
+        let dark = scheme == .dark
+        return content
+            .background {
+                shape.fill(Palette.well.shadow(.inner(color: Palette.shadow.opacity(dark ? 0.7 : 0.09),
+                                                      radius: 4, x: 0, y: 2)))
+            }
+            .overlay {
+                shape.strokeBorder(Palette.edge, lineWidth: 1)
+                    .allowsHitTesting(false)
+            }
+    }
+}
+
+extension View {
+    /// Lays the view on a sheet of paper (see `SheetSurface`).
+    func paperSheet(radius: CGFloat = Radius.card, level: CGFloat = 0.5, grain: Bool = false) -> some View {
+        modifier(SheetSurface(radius: radius, level: level, grain: grain))
+    }
+
+    /// Presses the view into a well of the given shape (see `WellSurface`).
+    func well<S: InsettableShape>(_ shape: S) -> some View {
+        modifier(WellSurface(shape: shape))
+    }
+
+    func well(radius: CGFloat = Radius.well) -> some View {
+        modifier(WellSurface(shape: RoundedRectangle(cornerRadius: radius, style: .continuous)))
+    }
+
+    /// Light along the top edge, over a hairline (see `LitEdge`).
+    func litEdge<S: InsettableShape>(_ shape: S, strength: Double = 1) -> some View {
+        modifier(LitEdge(shape: shape, strength: strength))
+    }
+
+    /// A soft glow in a colour: the bloom around something alive.
+    func bloom(_ color: Color, strength: Double = 0.35, radius: CGFloat = 16) -> some View {
+        shadow(color: color.opacity(strength), radius: radius, x: 0, y: radius / 2)
     }
 }
 
@@ -571,7 +725,10 @@ struct PressableStyle: ButtonStyle {
 }
 
 /// The app's buttons: a quiet pill on a sheet for secondary actions, and
-/// a filled accent pill for the one action that matters on a screen. Both
+/// a filled accent pill for the one action that matters on a screen. On
+/// iOS 26 both are Liquid Glass — the prominent one tinted with the
+/// accent — and before that, paper and ink: the prominent pill is lit from
+/// above, deepens toward its base and blooms softly onto the page. Both
 /// sink slightly on touch and spring back.
 struct PillStyle: ButtonStyle {
     var prominent = false
@@ -587,27 +744,84 @@ struct PillStyle: ButtonStyle {
     @ViewBuilder
     private func pill(_ label: Configuration.Label) -> some View {
         if prominent {
-            label
-                .font(.headline)
-                .foregroundStyle(Palette.onAccent)
-                .lineLimit(1)
-                .padding(.horizontal, Space.xl)
-                .frame(maxWidth: .infinity)
-                .frame(height: Metrics.buttonHeight + 2)
-                .background(Palette.accent, in: Capsule())
+            prominentPill(label)
         } else {
-            label
-                .font(.subheadline.weight(.semibold))
-                .foregroundStyle(Palette.ink)
-                .lineLimit(1)
-                .padding(.horizontal, Space.l)
-                .frame(minHeight: Metrics.minTap)
-                .background(Palette.card, in: Capsule())
-                .overlay {
-                    Capsule().stroke(Palette.edge, lineWidth: 1)
-                }
-                .modifier(Elevation(level: 0.4))
+            quietPill(label)
         }
+    }
+
+    @ViewBuilder
+    private func prominentPill(_ label: Configuration.Label) -> some View {
+        let face = label
+            .font(.headline)
+            .foregroundStyle(Palette.onAccent)
+            .lineLimit(1)
+            .padding(.horizontal, Space.xl)
+            .frame(maxWidth: .infinity)
+            .frame(height: Metrics.buttonHeight + 2)
+        #if compiler(>=6.2)
+        if #available(iOS 26.0, *) {
+            face.glassEffect(Glass.regular.tint(Palette.accent).interactive(), in: Capsule())
+        } else {
+            face.modifier(ProminentFill())
+        }
+        #else
+        face.modifier(ProminentFill())
+        #endif
+    }
+
+    @ViewBuilder
+    private func quietPill(_ label: Configuration.Label) -> some View {
+        let face = label
+            .font(.subheadline.weight(.semibold))
+            .foregroundStyle(Palette.ink)
+            .lineLimit(1)
+            .padding(.horizontal, Space.l)
+            .frame(minHeight: Metrics.minTap)
+        #if compiler(>=6.2)
+        if #available(iOS 26.0, *) {
+            face.glassEffect(Glass.regular.interactive(), in: Capsule())
+        } else {
+            face.modifier(QuietFill())
+        }
+        #else
+        face.modifier(QuietFill())
+        #endif
+    }
+}
+
+/// The prominent pill before Liquid Glass: accent deepening toward the
+/// base, a lit top edge, a contact shadow and a bloom of its own colour.
+struct ProminentFill: ViewModifier {
+    @Environment(\.colorScheme) private var scheme
+
+    func body(content: Content) -> some View {
+        let dark = scheme == .dark
+        return content
+            .background {
+                Capsule()
+                    .fill(LinearGradient(colors: [Palette.accent, Palette.accentDeep],
+                                         startPoint: .top, endPoint: .bottom))
+            }
+            .overlay {
+                Capsule()
+                    .strokeBorder(LinearGradient(colors: [Color.white.opacity(dark ? 0.25 : 0.4), Color.clear],
+                                                 startPoint: .top, endPoint: UnitPoint(x: 0.5, y: 0.5)),
+                                  lineWidth: 1)
+                    .allowsHitTesting(false)
+            }
+            .shadow(color: Palette.shadow.opacity(dark ? 0.5 : 0.1), radius: 1, x: 0, y: 1)
+            .bloom(Palette.accent, strength: dark ? 0.3 : 0.28, radius: 14)
+    }
+}
+
+/// The quiet pill before Liquid Glass: a small sheet of paper.
+struct QuietFill: ViewModifier {
+    func body(content: Content) -> some View {
+        content
+            .background(Palette.card, in: Capsule())
+            .litEdge(Capsule())
+            .modifier(Elevation(level: 0.4))
     }
 }
 
@@ -760,12 +974,20 @@ enum InkWash {
     }
 }
 
-/// The paper everything is printed on: grain, a slow wash of ink, and a
-/// soft light under the finger. Still with Reduce Motion.
+/// The paper everything is printed on: grain, a slow wash of ink, a faint
+/// vignette that keeps the eye in the middle, and a soft light under the
+/// finger. Its mood shifts a few percent with what's happening — cooler
+/// while studying, warmer when the day is done — over a slow ramp, so it
+/// is felt rather than seen. Still with Reduce Motion.
 struct AmbientBackground: View {
+    enum Mood {
+        case calm, focus, done
+    }
+
     /// A point (in global coordinates) to light up, such as a finger.
     var focus: CGPoint? = nil
     var animated = true
+    var mood: Mood = .calm
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.colorScheme) private var scheme
 
@@ -777,6 +999,8 @@ struct AmbientBackground: View {
             TimelineView(.animation(minimumInterval: 1.0 / 30, paused: !moving)) { timeline in
                 wash(time: moving ? timeline.date.timeIntervalSinceReferenceDate : 0)
             }
+            moodTint
+            vignette
             if let focus = focus {
                 RadialGradient(colors: [Palette.glow, Palette.glow.opacity(0)],
                                center: .center, startRadius: 0, endRadius: 200)
@@ -789,8 +1013,32 @@ struct AmbientBackground: View {
         }
         .ignoresSafeArea()
         .animation(.easeOut(duration: 0.35), value: focus == nil)
+        .animation(.easeInOut(duration: 1.4), value: mood)
         .allowsHitTesting(false)
         .accessibilityHidden(true)
+    }
+
+    /// Indigo gathering at the top while studying; amber settling at the
+    /// bottom when the day is done.
+    @ViewBuilder
+    private var moodTint: some View {
+        let dark = scheme == .dark
+        switch mood {
+        case .calm:
+            Color.clear
+        case .focus:
+            LinearGradient(colors: [Palette.accent.opacity(dark ? 0.1 : 0.06), Color.clear],
+                           startPoint: .top, endPoint: UnitPoint(x: 0.5, y: 0.6))
+        case .done:
+            LinearGradient(colors: [Color.clear, Palette.kohaku.opacity(dark ? 0.08 : 0.07)],
+                           startPoint: UnitPoint(x: 0.5, y: 0.4), endPoint: .bottom)
+        }
+    }
+
+    /// Paper is never evenly lit; the edges fall off by a few percent.
+    private var vignette: some View {
+        RadialGradient(colors: [Color.clear, Palette.shadow.opacity(scheme == .dark ? 0 : 0.045)],
+                       center: .center, startRadius: 120, endRadius: 620)
     }
 
     /// MeshGradient needs the iOS 18 SDK (Swift 6 toolchains) to compile and
@@ -1379,6 +1627,7 @@ struct InkRing: View {
                 .trim(from: 0, to: share)
                 .stroke(Palette.accent.gradient, style: StrokeStyle(lineWidth: size * 0.15, lineCap: .round))
                 .rotationEffect(.degrees(-90))
+                .bloom(Palette.accent, strength: share >= 1 ? 0.5 : 0, radius: size * 0.3)
                 .animation(Motion.settle, value: share)
             if share >= 1 {
                 Image(systemName: "checkmark")
@@ -3562,7 +3811,17 @@ struct ContentView: View {
     /// already knows, within the thumb's reach. On iPad it becomes a sidebar.
     @ViewBuilder
     private var tabs: some View {
-        #if compiler(>=6.0)
+        #if compiler(>=6.2)
+        if #available(iOS 26.0, *) {
+            tabView
+                .tabViewStyle(.sidebarAdaptable)
+                .tabBarMinimizeBehavior(.onScrollDown)
+        } else if #available(iOS 18.0, *) {
+            tabView.tabViewStyle(.sidebarAdaptable)
+        } else {
+            tabView
+        }
+        #elseif compiler(>=6.0)
         if #available(iOS 18.0, *) {
             tabView.tabViewStyle(.sidebarAdaptable)
         } else {
@@ -3692,7 +3951,7 @@ struct HomeScreen: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background {
-            AmbientBackground()
+            AmbientBackground(mood: canStart ? .calm : .done)
         }
         .background(startKey)
     }
@@ -3800,6 +4059,7 @@ struct HomeScreen: View {
             VStack(spacing: Space.xs) {
                 Text("All done")
                     .font(.display(.largeTitle, weight: .bold))
+                    .tracking(Tracking.display)
                     .foregroundStyle(Palette.ink)
                 Group {
                     if let next = next {
@@ -3997,11 +4257,14 @@ struct HomeDeck: View {
             .font(.jpFixed(width * 0.5, face: store.data.settings.face))
             .foregroundStyle(Palette.ink)
             .frame(width: width, height: height)
-            .background(Palette.card)
-            .clipShape(shape)
-            .overlay {
-                shape.stroke(Palette.edge, lineWidth: 1)
+            .background {
+                ZStack {
+                    Palette.card
+                    PaperGrain(strength: 0.7)
+                }
             }
+            .clipShape(shape)
+            .litEdge(shape)
             .background {
                 shape.fill(Palette.card)
                     .elevation(depth == 0 ? 1 : 0.6)
@@ -4096,9 +4359,7 @@ struct KanjiArticle: View {
             }
         }
         .clipShape(shape)
-        .overlay {
-            shape.stroke(Palette.edge, lineWidth: 1)
-        }
+        .litEdge(shape)
         .background {
             shape.fill(Palette.card)
                 .elevation(1)
@@ -4147,7 +4408,7 @@ struct KanjiArticle: View {
             .lineLimit(1)
             .padding(.horizontal, Space.s)
             .frame(height: 28)
-            .background(Palette.surface, in: Capsule())
+            .background(Palette.fill, in: Capsule())
     }
 
     // MARK: Meaning and readings
@@ -4156,6 +4417,7 @@ struct KanjiArticle: View {
         VStack(alignment: .leading, spacing: Space.m) {
             Text(kanji.meaningList.capitalizedFirst)
                 .font(.display(.largeTitle, weight: .bold))
+                .tracking(Tracking.display)
                 .foregroundStyle(Palette.ink)
                 .fixedSize(horizontal: false, vertical: true)
                 .accessibilityAddTraits(.isHeader)
@@ -4253,7 +4515,7 @@ struct KanjiArticle: View {
         }
         .padding(.horizontal, Space.s)
         .frame(minHeight: 32)
-        .background(Palette.surface, in: Capsule())
+        .background(Palette.fill, in: Capsule())
         .accessibilityElement(children: .combine)
     }
 
@@ -4263,7 +4525,7 @@ struct KanjiArticle: View {
                 .lineLimit(2...6)
                 .focused($hookFocused)
                 .padding(Space.s)
-                .background(Palette.surface, in: RoundedRectangle(cornerRadius: Radius.control, style: .continuous))
+                .well(radius: Radius.control)
                 .overlay {
                     RoundedRectangle(cornerRadius: Radius.control, style: .continuous)
                         .stroke(Palette.accent.opacity(hookFocused ? 0.6 : 0), lineWidth: 1.5)
@@ -4435,24 +4697,6 @@ struct KanjiArticle: View {
     }
 }
 
-/// A sheet of paper on the page: card color, a hairline edge, a soft shadow.
-struct SheetSurface: ViewModifier {
-    var radius: CGFloat = Radius.card
-
-    func body(content: Content) -> some View {
-        let shape = RoundedRectangle(cornerRadius: radius, style: .continuous)
-        return content
-            .background {
-                shape.fill(Palette.card)
-                    .elevation(0.5)
-            }
-            .overlay {
-                shape.stroke(Palette.edge, lineWidth: 1)
-                    .allowsHitTesting(false)
-            }
-    }
-}
-
 // MARK: Library
 
 struct LibraryView: View {
@@ -4590,6 +4834,7 @@ struct LibraryView: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(level.label)
                         .font(.display(.title2, weight: .bold))
+                        .tracking(Tracking.title)
                         .foregroundStyle(Palette.ink)
                     Text(level.name)
                         .font(.footnote)
@@ -4677,12 +4922,14 @@ struct ReadView: View {
     }
 }
 
-/// A kanji in the library, on its own small tile. Its ink deepens as it
-/// settles in memory — faint when new, full black once known — so progress
-/// is visible without a single chart.
+/// A kanji in the library, on its own small tile. A kanji not yet started
+/// is pressed into the paper; once started, its tile lies on top, and its
+/// ink deepens as it settles in memory — faint at first, full black once
+/// known — so progress is visible without a single chart.
 struct GlyphCell: View {
     @EnvironmentObject var store: Store
     let kanji: Kanji
+    @Environment(\.colorScheme) private var scheme
 
     private func inkOpacity(_ stage: Stage) -> Double {
         switch stage {
@@ -4695,17 +4942,22 @@ struct GlyphCell: View {
 
     var body: some View {
         let stage = store.stage(of: kanji.glyph)
+        let raised = stage != .new
         let shape = RoundedRectangle(cornerRadius: Radius.tile, style: .continuous)
         Text(kanji.glyph)
             .font(.jp(30, face: store.data.settings.face, relativeTo: .title))
             .foregroundStyle(Palette.ink.opacity(inkOpacity(stage)))
             .frame(maxWidth: .infinity, minHeight: 66)
             .background {
-                shape.fill(stage == .new ? Palette.card.opacity(0.55) : Palette.card)
+                if raised {
+                    shape.fill(Palette.card)
+                        .elevation(0.35)
+                } else {
+                    shape.fill(Palette.well.shadow(.inner(color: Palette.shadow.opacity(scheme == .dark ? 0.7 : 0.08),
+                                                          radius: 3, x: 0, y: 1)))
+                }
             }
-            .overlay {
-                shape.stroke(Palette.edge, lineWidth: 1)
-            }
+            .litEdge(shape, strength: raised ? 1 : 0)
             .overlay(alignment: .topTrailing) {
                 if store.isSaved(kanji.glyph) {
                     Image(systemName: "bookmark.fill")
@@ -5238,10 +5490,11 @@ struct SettingsView: View {
             HStack(spacing: Space.m) {
                 SumiMark(size: 52, delay: 0.2)
                     .padding(6)
-                    .background(Palette.surface, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    .well(radius: 14)
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Sumi")
                         .font(.display(.title2, weight: .bold))
+                        .tracking(Tracking.title)
                         .foregroundStyle(Palette.ink)
                     Text(progressLine)
                         .font(.subheadline)
@@ -5492,6 +5745,8 @@ struct KnownPickerView: View {
                             .frame(maxWidth: .infinity, minHeight: 60)
                             .background(isOn ? Palette.accent : Palette.card,
                                         in: RoundedRectangle(cornerRadius: Radius.control, style: .continuous))
+                            .litEdge(RoundedRectangle(cornerRadius: Radius.control, style: .continuous),
+                                     strength: isOn ? 0 : 1)
                             .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
@@ -5570,6 +5825,7 @@ struct AboutView: View {
             SumiMark(size: 120, delay: 0.3)
             Text("Ink, a little each day.")
                 .font(.display(.title, weight: .bold))
+                .tracking(Tracking.title)
                 .foregroundStyle(Palette.ink)
                 .multilineTextAlignment(.center)
             Text("Sumi keeps the schedule, the pacing and the bookkeeping out of sight, so each screen asks for one thing.")
@@ -5836,6 +6092,7 @@ struct OnboardingView: View {
         VStack(spacing: Space.s) {
             Text(title)
                 .font(.display(.largeTitle, weight: .bold))
+                .tracking(Tracking.display)
                 .foregroundStyle(Palette.ink)
                 .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
@@ -5861,6 +6118,7 @@ struct OnboardingView: View {
             VStack(spacing: Space.xs) {
                 Text("Sumi")
                     .font(.display(.largeTitle, weight: .bold))
+                    .tracking(Tracking.display)
                     .foregroundStyle(Palette.ink)
                 Text("Kanji, one quiet step at a time.")
                     .font(.title3)
@@ -6076,9 +6334,8 @@ struct GestureList: View {
                 .symbolEffect(.bounce, value: active)
                 .frame(width: 40, height: 40)
                 .background(Palette.card, in: Circle())
-                .overlay {
-                    Circle().stroke(Palette.edge, lineWidth: 1)
-                }
+                .litEdge(Circle())
+                .elevation(0.3)
             Text(row.gesture)
                 .font(.body.weight(.semibold))
                 .foregroundStyle(Palette.ink)
@@ -6672,7 +6929,7 @@ struct ReelsFeed: View {
         let paper: Double = Double(1 - min(shut * 2.5, 1))
         return ZStack {
             Color.black.opacity(Double(0.22 * (1 - shut)) * (1 - paper))
-            AmbientBackground()
+            AmbientBackground(mood: .focus)
                 .opacity(paper)
         }
         .ignoresSafeArea()
@@ -7007,9 +7264,10 @@ struct ReelPage: View {
         .frame(width: pageSize.width, height: pageSize.height)
     }
 
-    /// A clean sheet: the card color, a hairline edge, two soft shadows.
-    /// State lives at its edges — the ask top left, Forgot or Easy top
-    /// right, a bookmark ribbon hanging from the top when saved.
+    /// A clean sheet: the card colour under a breath of grain, light along
+    /// its top edge, two soft shadows. State lives at its edges — the ask
+    /// top left, Forgot or Easy top right, a bookmark ribbon hanging from
+    /// the top when saved.
     private func paperCard(_ k: Kanji) -> some View {
         let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
         return ZStack {
@@ -7036,10 +7294,7 @@ struct ReelPage: View {
         }
         .frame(width: pageSize.width, height: pageSize.height)
         .clipShape(shape)
-        .overlay {
-            shape.stroke(Palette.edge, lineWidth: 1)
-                .allowsHitTesting(false)
-        }
+        .litEdge(shape)
         .background {
             shape.fill(Palette.card)
                 .elevation(1)
@@ -7050,6 +7305,7 @@ struct ReelPage: View {
     private var cardFill: some View {
         ZStack {
             Palette.card
+            PaperGrain(strength: 0.45)
             if marked {
                 LinearGradient(colors: [Palette.shu.opacity(0), Palette.shu.opacity(0.09)],
                                startPoint: .top, endPoint: .bottom)
@@ -7256,6 +7512,7 @@ struct ReelPage: View {
                 case .meaning, .writing:
                     Text(k.meaningList.capitalizedFirst)
                         .font(.display(.title, weight: .semibold))
+                        .tracking(Tracking.title)
                         .foregroundStyle(Palette.ink)
                         .multilineTextAlignment(.center)
                         .lineLimit(2)
@@ -7339,6 +7596,7 @@ struct ReelPage: View {
             VStack(spacing: Space.xs) {
                 Text(k.meaningList.capitalizedFirst)
                     .font(.display(.title, weight: .semibold))
+                    .tracking(Tracking.title)
                     .foregroundStyle(Palette.ink)
                     .multilineTextAlignment(.center)
                     .lineLimit(2)
@@ -7377,7 +7635,7 @@ struct ReelPage: View {
             }
         }
         .frame(maxWidth: 400)
-        .background(Palette.surface.opacity(0.7), in: RoundedRectangle(cornerRadius: Radius.control, style: .continuous))
+        .well(radius: Radius.control)
     }
 
     private func teachWordRow(_ w: Word, k: Kanji) -> some View {
@@ -7509,7 +7767,7 @@ struct ReelPage: View {
             }
             .padding(.horizontal, Space.l)
             .frame(height: Metrics.buttonHeight)
-            .background(Palette.surface, in: Capsule())
+            .well(Capsule())
             .overlay {
                 Capsule()
                     .stroke(Palette.accent.opacity(fieldFocused ? 0.7 : 0), lineWidth: 1.5)
@@ -8078,7 +8336,7 @@ struct RecapView: View {
         .padding(.horizontal, Space.l)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background {
-            AmbientBackground()
+            AmbientBackground(mood: .done)
         }
         .background {
             GeometryReader { geo in
@@ -8105,6 +8363,7 @@ struct RecapView: View {
             VStack(spacing: Space.xs) {
                 Text(title)
                     .font(.display(.largeTitle, weight: .bold))
+                    .tracking(Tracking.display)
                     .foregroundStyle(Palette.ink)
                 Text(detail)
                     .font(.body)
@@ -8146,12 +8405,7 @@ struct RecapView: View {
             stat(counted ? model.result.bestCombo : 0, suffix: "", label: "best run")
         }
         .padding(.vertical, Space.m)
-        .background(Palette.card, in: RoundedRectangle(cornerRadius: Radius.card, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: Radius.card, style: .continuous)
-                .stroke(Palette.edge, lineWidth: 1)
-        }
-        .elevation(0.6)
+        .paperSheet(level: 0.6)
         .opacity(appeared ? 1 : 0)
         .offset(y: appeared || reduceMotion ? 0 : 16)
     }
@@ -8192,12 +8446,7 @@ struct RecapView: View {
             .font(.jpFixed(30, face: store.data.settings.face))
             .foregroundStyle(Palette.ink)
             .frame(width: 56, height: 70)
-            .background(Palette.card, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-            .overlay {
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .stroke(Palette.edge, lineWidth: 1)
-            }
-            .elevation(0.6)
+            .paperSheet(radius: 12, level: 0.6, grain: true)
             .rotationEffect(.degrees(appeared ? angle : 0), anchor: .bottom)
             .offset(y: appeared ? CGFloat(drop) : 40)
             .opacity(appeared ? 1 : 0)

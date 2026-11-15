@@ -8,6 +8,136 @@ questions that only testing with real learners can answer.
 
 ---
 
+## 0f. Revision 8 — one ladder of light: colour, space, hierarchy and the effects, budgeted
+
+The brief for this revision was the look itself: the best colours and
+spacing for the eye, hierarchy, Gestalt, alignment, and a confident use of
+depth — glass, shadows, inner shadows, strokes, bloom — that still reads as
+minimal. The method was to go back to the literature on perception and
+interface design, extract what is actually actionable for a card-based
+learning app, and then give every effect a job and a budget.
+
+### What the literature says, and what it changed
+
+| Source | Principle | What it changed in Sumi |
+|---|---|---|
+| Johnson, *Designing with the Mind in Mind* (ch. 2–4) | We see structure before content: proximity, similarity, common region and figure/ground organise a screen before a word is read. Colour vision is limited — small differences in hue or saturation are hard to see; differences in *lightness* are not. | Surfaces are told apart by lightness alone, on one ladder (page, sheet, well), never by hue or by a border. Groups are 8 pt apart inside and 24–32 pt apart between, so grouping is done by space before any line is drawn. |
+| Evans, *Bottlenecks* (attention, perception) | Foveal acuity covers about two degrees; everything else is seen in low resolution. Depth is read from shadow, occlusion and relative size, and the eye assumes one light source from above. | One focal object per screen at the fovea — the kanji, the deck, the seal — with every other element lower in contrast. Every shadow, lit edge and inner shadow assumes the same light from above, so the whole app is one scene. |
+| Weinschenk, *100 Things Every Designer Needs to Know About People* | Peripheral vision decides where the eye goes next; people see in patterns and identify things by shape; working memory holds three or four items; stories are remembered. | A 4 % vignette keeps the eye in the middle of the page; the ribbon, the badge and the seal are shapes, not words; one primary action per screen; onboarding is a story told in the app's own gesture. |
+| Norman, *The Design of Everyday Things* | Affordances need signifiers; the physical world is the metaphor people already have; feedback must be immediate and proportionate. | Light along a sheet's top edge signifies "this lies on the page and can be lifted"; an inner shadow signifies "this is a recess you can put something into" (fields, the word list). The ring blooms when it closes; the prominent button blooms because it is the one live thing. |
+| Krug, *Don't Make Me Think* | Make it obvious; create a clear visual hierarchy; keep conventions; omit needless words. | One section-header component (a caption and a count on one baseline) is used in exactly the same place and size on every screen, so it is learned once. |
+| Colborne, *Simple and Usable* | Remove, organise, hide, displace. Simplicity is a budget, not an absence. | Every effect has a list of where it is allowed and where it is not (table below). Bloom appears in three places in the whole app, so it still means something. |
+| Tidwell, Brewer & Valencia, *Designing Interfaces* | "Few hues, many values"; titled sections; a card stack and a thumbnail grid are patterns people already read. | One hue family (warm paper and ink) with a single accent; everything else is a value of the same warm grey. The library grid encodes progress in the tile's depth, not in a legend. |
+| Cooper et al., *About Face* | Reduce excise; prefer modeless feedback; a sovereign posture for the main task, a transient one for the rest. | Study is a full-screen, chrome-free sovereign screen; Settings is a transient sheet. The ring, the combo and the badge are modeless. |
+| Schwartz, *The Paradox of Choice* | More options cost more than they give. | Still one button per screen; the rest state offers at most three quiet ones. |
+| Rosenberg, *UX Magic*; Hall, *Just Enough Research*; Travis & Hodgson; Marsh; Buley; Gothelf & Seiden | Name things by what they are; test the assumptions you can't reason out. | The three hypotheses at the end of this section are written as tests, not decisions. |
+| Norman, *Emotional Design*; Bar & Neta (2006) | Visceral, behavioural and reflective layers; people prefer curved forms. | Visceral: warm paper, soft light, continuous corners. Behavioural: springs that inherit the finger. Reflective: the hanko, the saved collection, the ring closed for the day. |
+| Apple HIG — *Materials*, *Color*, *Dark Mode*, *Typography*, *Layout*; WWDC25 *Meet Liquid Glass*; WWDC20 *The details of UI typography* | Liquid Glass belongs to the navigation and control layer, never to content, and takes colour sparingly. In dark mode, surfaces lighten as they rise. Tracking is set per size. Group, align and space before you decorate. | Glass only on the ✕ and the pill buttons (tinted indigo for the prominent one), never on a card. Dark mode inverts the ladder: black page, a lighter sheet, a darker well. Display type closes up (−0.7 pt), captions open out (+1.1 pt), body is untouched. |
+
+### The ladder of light
+
+Every surface is a step on one ladder, and the steps are a few percent of
+lightness apart — enough for the eye to read "lying on" and "pressed in"
+without a border, not enough to notice as colour.
+
+| Token | Light | Dark | What it is |
+|---|---|---|---|
+| paper | `#F6F3EC` | `#000000` | The page |
+| card | `#FFFEFB` | `#1B1A18` | A sheet lying on the page (cards, rows, tiles once started) |
+| surface | `#F0ECE3` | `#262523` | A raised control (chip, pill) |
+| well | `#EFEBE2` | `#0F0F0E` | A recess: fields, the word list, tiles not yet started |
+| fill / fill2 | ink at 6 % / 10 % | white at 8 % / 13 % | Translucent ink for small fills, so they work on any step |
+| edge | ink at 8 % | white at 10 % | The hairline round every sheet and well |
+| edgeLight | white at 90 % | white at 14 % | The light along a sheet's top edge |
+| shadow | `#3A2C1C` | `#000000` | Shadows carry the paper's warmth by day |
+| ink / ink2 / ink3 | `#1E1C19` / `#67625A` / `#968F83` | `#F3F0E9` / `#A8A399` / `#7A766F` | Three steps of text; ink3 only for glyphs that are never the only cue |
+| accent 藍 | `#2D4F9E` | `#9DB3EE` | The one colour that means "act on this" |
+| accentDeep | `#24418A` | `#7D97DC` | The base of a filled control |
+
+Contrast, light: ink2 on paper 5.5:1, accent on paper 7.0:1, white on
+accent 7.7:1. Dark: ink2 on card 6.9:1, accent on card 8.4:1. Increase
+Contrast swaps every pair for a deeper one.
+
+By day the ladder descends into the paper; by night it inverts — the page
+is black and a surface lightens as it rises — which is what the HIG asks
+of dark mode and what a lamp does to real objects. Shadows are the colour
+of the paper's own shade rather than grey, so they never go muddy.
+
+### Space, alignment and rhythm
+
+- A 4-pt grid with one rhythm everywhere: 8 inside a group, 12 between
+  related rows, 24 between groups, 32 between sections, 48 to the end of a
+  screen. Page margin 20; sheet padding 20.
+- One alignment axis per screen. Reading screens (Kanji page, Read,
+  Settings) are left-aligned and scan as an F; stage screens (Today, the
+  study card, the recap, onboarding) are centred on their one focal object.
+- Section headers sit on a 4-pt inset so the caption's first letter aligns
+  optically with the text inside the sheet below it (a sheet's hairline is
+  drawn 1 pt outside its content).
+- The primary action stays in the thumb's zone and is capped at 420 pt on
+  iPad, as the HIG asks (*avoid full-width buttons*).
+- Radii are concentric with the device: 10 chips, 14 controls, 16 wells,
+  18 tiles, 24 cards, 32 sheets.
+
+### Hierarchy
+
+Five levels, each one step down in size *and* one step quieter in colour,
+never both bold and large at once:
+
+1. Display — New York, tracking −0.7 (the large titles, "All done", a
+   kanji's meaning).
+2. Title — New York, tracking −0.3 (section titles, the answer on a card).
+3. Body — San Francisco, ink.
+4. Secondary — San Francisco, ink2 (readings, hooks, counts).
+5. Caption — small capitals, tracking +1.1, ink2 (what a card asks, a
+   section's name).
+
+Numbers are set in SF Rounded with tabular figures so they roll without
+jittering.
+
+### The effects, budgeted
+
+Each effect has one job, a list of places, and a list of places it must
+never appear. That is what keeps a screen with shadows, strokes, inner
+shadows, bloom and glass reading as quiet.
+
+| Effect | Job | Where | Never |
+|---|---|---|---|
+| Two-layer shadow (contact + ambient, warm) | "This lies on the page" | Every sheet: cards, rows, tiles once started, the deck, the hero | Text, icons, wells |
+| Lit top edge over a hairline | "This can be lifted" | Every sheet | Wells — a recess has a plain rim, because light lands on what rises |
+| Inner shadow | "This is a recess" | Fields, the word list on a lesson card, tiles not yet started, the mark's well in Settings | Sheets |
+| Bloom | "This is alive" | The ring as it closes, the prominent button, the wet stroke being written | Static text; more than three places |
+| Liquid Glass (iOS 26) | The floating control layer | The ✕, the pill buttons (the prominent one tinted indigo), the system bars | Cards or any content (HIG) |
+| Paper grain | "This is paper" | The deck, the hero sheet, the study card (at 45 %), the learned mini-cards | Controls, wells, text |
+| Mood tint | Context, felt not seen | Indigo gathering at the top during study; amber settling at the bottom when the day is done; 1.4 s ramp | More than 10 % |
+| Vignette | Keeps the eye in the middle | 4.5 % at the edges by day; none by night | — |
+| Tilt and sheen | Depth you can feel | The deck on Today, the hero on a kanji page | The study card — a card that leans while you read it is a distraction |
+
+Before iOS 26 the prominent pill is lit from above, deepens toward its
+base and blooms onto the page; on iOS 26 it is tinted glass, and the quiet
+pill is clear glass. The tab bar minimises as you scroll a list on iOS 26,
+as the system's own apps do.
+
+### Dark mode
+
+The ladder inverts; the grain inverts (white specks on black); the lit edge
+drops to 14 %; shadows go black and deeper, because a shadow on black needs
+more to read; bloom reads as a glow because it is composited additively.
+Reduce Transparency makes the glass solid; Increase Contrast deepens every
+text pair.
+
+### What only testing can settle
+
+- **H1 — depth as progress.** Five learners, Krug-style, are asked what
+  the difference between a raised tile and a pressed one means. If fewer
+  than four say "learned / not yet" unprompted, the tiles need a legend.
+- **H2 — the mood tint.** Asked after a session whether anything about the
+  background changed, learners should say no; asked whether study felt
+  focused, they should say yes. If the tint is noticed, it is too strong.
+- **H3 — the lit edge.** Stills with and without the edge, shown in random
+  order: the edge should be preferred as "higher quality" without being
+  named. If it is named, it is too strong.
+
 ## 0e. Revision 7 — navigation people already know, cards worth looking at
 
 Device testing after revision 6 found four things: saved and liked cards
@@ -611,11 +741,12 @@ Increase Contrast swaps in darker/lighter variants.
 
 | Token | Light | Dark | Role |
 |---|---|---|---|
-| paper 和紙 | `#F7F5F0` | `#121211` | Background — warm, low-glare |
-| surface | `#FFFFFF` | `#1D1C1A` | Cards (elevated in dark mode) |
-| ink 墨 | `#1B1A18` | `#F3F1EC` | Primary text |
-| ink2 | `#5C5850` (≈6.5:1 on paper) | `#ABA69C` | Secondary text |
-| accent 藍 | `#2D4F9E` (≈7.7:1 on white) | `#93ABEB` | Actions, focus, highlighted kanji |
+| paper 和紙 | `#F6F3EC` | `#000000` | The page — warm by day, true black by night |
+| card | `#FFFEFB` | `#1B1A18` | A sheet lying on the page (lighter than the page in dark mode) |
+| well | `#EFEBE2` | `#0F0F0E` | A recess pressed into a surface |
+| ink 墨 | `#1E1C19` | `#F3F0E9` | Primary text |
+| ink2 | `#67625A` (≈5.5:1 on paper) | `#A8A399` (≈6.9:1 on card) | Secondary text |
+| accent 藍 | `#2D4F9E` (≈7.0:1 on paper) | `#9DB3EE` | Actions, focus, highlighted kanji |
 | shu 朱 | `#C2412D` | `#F08A74` | Forgot / wrong |
 | matcha 抹茶 | `#3F7A3A` | `#94C98A` | Remembered / correct |
 | kohaku 琥珀 | `#9A6A0B` | `#E5B65A` | Learning stage, hints |
@@ -653,9 +784,11 @@ pure red; green confirms. Stage colors always come with a text label
 - 4-pt grid (4, 8, 12, 16, 20, 24, 32, 48). Screen margins 20 pt; card
   padding 20 pt; related items 4–12 pt apart, sections 20 pt apart (Gestalt
   proximity).
-- Continuous-corner radii: 10 (chips), 14 (controls), 20 (cards). Rounded
-  forms are preferred to sharp ones and read as approachable (Bar & Neta 2006).
-- Cards use a 1-pt hairline instead of heavy shadows (content over chrome).
+- Continuous-corner radii: 10 (chips), 14 (controls), 16 (wells), 18
+  (tiles), 24 (cards), 32 (sheets). Rounded forms are preferred to sharp
+  ones and read as approachable (Bar & Neta 2006).
+- Sheets carry a hairline, a lit top edge and two warm shadows; wells an
+  inner shadow (see section 0f for the full ladder and the effects budget).
 - Every tap target ≥ 44 × 44 pt; primary buttons 52 pt tall, grade buttons 60 pt.
 - Reading column capped at 680 pt on iPad (~35–40 Japanese characters per line).
 
@@ -788,6 +921,15 @@ motivation and habit questions (Hall; Marsh).
 - Apple — Beyond scroll views (WWDC23): `scrollTransition`, `visualEffect`, `scrollTargetBehavior`. https://developer.apple.com/videos/play/wwdc2023/10159/
 - Apple — Create custom visual effects with SwiftUI (WWDC24): mesh gradients and visual effects. https://developer.apple.com/videos/play/wwdc2024/10151/
 - Apple — Get to know the new design system (WWDC25): concentric shapes and Liquid Glass hierarchy. https://developer.apple.com/videos/play/wwdc2025/356/
+- Apple — The details of UI typography (WWDC20): optical sizes, tracking and leading per size. https://developer.apple.com/videos/play/wwdc2020/10175/
+- Apple — Principles of great design (WWDC26); Designing with Liquid Glass. https://developer.apple.com/videos/
+- Norman, *Emotional Design* (2004): visceral, behavioural and reflective design.
+- Evans, *Bottlenecks: Aligning UX Design with User Psychology* (Apress, 2017) — attention, perception and memory bottlenecks. https://link.springer.com/book/10.1007/978-1-4842-2580-6
+- Johnson, *Designing with the Mind in Mind*, 3rd ed. (Morgan Kaufmann, 2020), chapters 2–4 on perception, structure and colour.
+- Weinschenk, *100 Things Every Designer Needs to Know About People*, 2nd ed. (New Riders, 2020).
+- Tidwell, Brewer & Valencia, *Designing Interfaces*, 3rd ed. (O'Reilly, 2020) — visual hierarchy, "few hues, many values".
+- Colborne, *Simple and Usable Web, Mobile, and Interaction Design*, 2nd ed. (New Riders, 2017) — remove, organise, hide, displace.
+- GitHub — actions/runner-images, macOS 15 image (Xcode 26.3 is the newest released toolchain used by the iOS build). https://github.com/actions/runner-images/blob/main/images/macos/macos-15-Readme.md
 - Apple Human Interface Guidelines — Color, Dark Mode, Typography, Motion, Pointing devices. https://developer.apple.com/design/human-interface-guidelines/color · https://developer.apple.com/design/human-interface-guidelines/dark-mode · https://developer.apple.com/design/human-interface-guidelines/typography · https://developer.apple.com/design/human-interface-guidelines/motion · https://developer.apple.com/design/human-interface-guidelines/pointing-devices
 - W3C — WCAG 2.2, contrast (minimum). https://www.w3.org/TR/WCAG22/#contrast-minimum
 - Apple Developer Documentation — UIGestureRecognizer and coordinating multiple gesture recognizers. https://developer.apple.com/documentation/uikit/uigesturerecognizer · https://developer.apple.com/documentation/uikit/touches_presses_and_gestures/coordinating_multiple_gesture_recognizers

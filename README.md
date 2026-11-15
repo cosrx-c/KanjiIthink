@@ -55,20 +55,26 @@ Esc) and VoiceOver actions cover every gesture.
 
 **The look: ink on washi**
 
-- *Paper:* warm off-white by day, true black by night. Cards are sheets
-  with a faint grain, a hairline edge and two soft shadows; a slow ink
-  wash drifts behind everything (a mesh gradient on iOS 18).
-- *Depth:* the study deck is 2.5D. Cards lean a few degrees as you move the
-  phone and a sheen slides across them, and a soft light follows your
-  finger. On iPad, the pointer lifts and highlights what it's over.
+- *Paper:* warm off-white by day, true black by night. Every surface is a
+  step on one ladder of light — the page, a sheet lying on it, a well
+  pressed into it — told apart by lightness, never by a border. Sheets
+  catch light along their top edge and cast two warm shadows; wells hold
+  a soft inner shadow; the page is faintly vignetted and a slow ink wash
+  drifts behind everything (a mesh gradient on iOS 18), turning a few
+  percent cooler while you study and warmer when the day is done.
+- *Depth:* the deck on Today and the glyph on a kanji page lean a few
+  degrees as you move the phone and a sheen slides across them; a soft
+  light follows your finger. On iPad, the pointer lifts and highlights
+  what it's over. Study cards stay still, so nothing moves under the
+  character you're reading.
 - *Type:* San Francisco for text, New York (Apple's serif) for a few
   display lines, SF Rounded for numbers, Hiragino for Japanese. Everything
   scales with Dynamic Type and keeps at least 4.5:1 contrast.
 - *Story:* onboarding is four pages you swipe up through: the 墨 mark writes
   itself, a forgetting curve draws as its page arrives, the gestures
   arrive one by one, and you set your daily pace on a 3D number wheel.
-- *Settings* looks like the Settings app, with colored icon tiles and a new
-  Appearance option (Automatic, Light or Dark).
+- *Settings* sits on the same paper and sheets as every other screen,
+  with an Appearance option (Automatic, Light or Dark).
 
 **Built to feel like it belongs on iOS**
 
@@ -89,8 +95,12 @@ Esc) and VoiceOver actions cover every gesture.
   the one you pick in Settings. Automatic speech follows the Ring/Silent
   switch and mixes with your music; anything you ask for (tap, hold)
   plays and briefly ducks it.
-- *Materials:* Liquid Glass (iOS 26) for the floating chips only — never
-  for content — with a thin material on earlier systems.
+- *Materials:* Liquid Glass (iOS 26) for the floating controls only —
+  the ✕ and the pill buttons, the prominent one tinted indigo — never for
+  content. Before iOS 26 the prominent button is lit from above and
+  blooms softly onto the page. Bloom appears in exactly three places (the
+  ring as it closes, the prominent button, the stroke being written) so
+  it still means "alive".
 
 **Light gamification, no anxiety.** A small ring beside the date fills as
 the day's cards are done — a goal to close, like the Activity rings, never
@@ -104,7 +114,7 @@ collection you can practice. There are no streaks, lives or leaderboards.
 | Screen | Contents |
 |---|---|
 | **Today** | The cards waiting for you as a small deck, how many there are and roughly how long they'll take, a ring that fills as the day is done, and one button: Review or Learn (the deck lifts under a swipe up too). When you're done: a hanko seal, when the next review is, and quiet buttons (read a text, practice saved, learn more). |
-| **Kanji** | The library: all kanji by level, or only the ones you've saved. Each glyph sits on a tile whose ink deepens as you learn it — faint when new, full black once known — and each level shows how much of it you know. Search takes kanji, English, kana or romaji. |
+| **Kanji** | The library: all kanji by level, or only the ones you've saved. A kanji you haven't started sits pressed into the paper; once started, its tile lies on top, and its ink deepens as you learn it — faint at first, full black once known. Each level shows how much of it you know. Search takes kanji, English, kana or romaji. |
 | **Read** | Short texts with furigana only above kanji you haven't learned, the most readable first, each with a ring showing how much of it you can already read. Tap any word to look it up. |
 | **Kanji page** | The glyph on a sheet of practice paper (hold for strokes and sound, double-tap to save), its level, stroke count and type, the meaning, on and kun readings, a memory hook (or your own), words and a sentence — tap any of them to hear it. |
 | **Settings** | Daily pace, type readings, appearance, typeface, furigana, audio, voice, haptics, a daily reminder, import/export, privacy — on the same paper and sheets as every other screen. |
@@ -272,13 +282,16 @@ registered trademark.
 
 ## Verification status
 
-This was written on a Windows machine without Xcode, so it has **not yet been
-compiled or run**. What was checked: bracket/string structure of the Swift
-file, the starter content (every kanji annotated with furigana, readings in
-the right script, every word containing its kanji, passage answers in
-range), and that the content tools round-trip the embedded JSON exactly.
-Build it once in Swift Playgrounds; if the compiler reports anything, the
-error line will point to a specific view and is likely a one-line fix.
+The code is written on a Windows machine without Xcode. Every push to
+`main` is compiled for iPhone by the GitHub Actions workflow in
+`.github/workflows/ios.yml` (Xcode 26.3, iOS 26 SDK, unsigned), so a green
+run means the whole app builds; the result is published as the `latest`
+release. What is checked before each push: bracket/string structure of
+the Swift file, the starter content (every kanji annotated with furigana,
+readings in the right script, every word containing its kanji, passage
+answers in range), and that the content tools round-trip the embedded JSON
+exactly. What still needs a person: running it on a device and looking at
+it — the layout, the motion and the feel can only be judged there.
 
 ## Roadmap
 
