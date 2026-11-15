@@ -2168,6 +2168,9 @@ struct DaySeal: View {
 
     private static let glyphs = ["日", "月", "火", "水", "木", "金", "土"]
     private static let names = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
+    /// How the day is said — tap the seal to hear it.
+    private static let readings = ["にちようび", "げつようび", "かようび", "すいようび", "もくようび", "きんようび", "どようび"]
+    @State private var struck = false
 
     private static func index(_ date: Date) -> Int {
         let weekday = Calendar(identifier: .gregorian).component(.weekday, from: date)
@@ -2192,8 +2195,12 @@ struct DaySeal: View {
                 .foregroundStyle(closed ? Palette.accent : Palette.ink)
         }
         .frame(width: size, height: size)
+        .scaleEffect(struck ? 0.9 : 1)
         .animation(Motion.settle, value: share)
         .animation(Motion.flick, value: closed)
+        .animation(Motion.flick, value: struck)
+        .contentShape(Circle())
+        .onTapGesture { say(day) }
         .onAppear {
             withAnimation(.easeOut(duration: 0.9).delay(0.3)) { drawn = true }
         }
@@ -2201,6 +2208,15 @@ struct DaySeal: View {
         .accessibilityLabel(closed
                             ? "\(DaySeal.names[day]). Today's ring is closed"
                             : "\(DaySeal.names[day]). Today \(Int((share * 100).rounded())) percent done")
+        .accessibilityAction(named: "Hear the day in Japanese") { say(day) }
+    }
+
+    /// The day of the week, aloud: 日曜日, 月曜日… The seal dips as it's struck.
+    private func say(_ day: Int) {
+        Speaker.shared.say(DaySeal.readings[day])
+        Haptics.tap()
+        struck = true
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) { struck = false }
     }
 }
 
@@ -4290,8 +4306,22 @@ final class Router: ObservableObject {
 
     /// The reader has scrolled down, so the bar has stepped back.
     @Published var compact = false
-    /// The places are showing over a screen's own controls.
-    @Published var peek = false
+    /// The places are showing over a screen's own controls. Left alone
+    /// they step back again after a few seconds — unless VoiceOver is
+    /// running, when nothing should change on a timer.
+    @Published var peek = false {
+        didSet {
+            peekTimer?.cancel()
+            peekTimer = nil
+            guard peek, !UIAccessibility.isVoiceOverRunning else { return }
+            let timer = DispatchWorkItem { [weak self] in
+                self?.peek = false
+            }
+            peekTimer = timer
+            DispatchQueue.main.asyncAfter(deadline: .now() + 5, execute: timer)
+        }
+    }
+    private var peekTimer: DispatchWorkItem? = nil
     @Published var menuOpen = false
     @Published var keyboardUp = false
 
@@ -4798,16 +4828,23 @@ struct NavBar: View {
         return ZStack {
             if wide {
                 places
-                    .transition(.opacity)
+                    .transition(NavBar.swap)
             } else {
                 placeDot
-                    .transition(.opacity)
+                    .transition(NavBar.swap)
             }
         }
         .frame(maxWidth: width)
         .frame(height: height)
+        .clipShape(Capsule())
         .glassBackground(Capsule(), interactive: true)
     }
+
+    /// What's inside the glass changes hands quickly — out at once, in as
+    /// the new shape forms — so nothing is seen being squeezed.
+    private static let swap = AnyTransition.asymmetric(
+        insertion: AnyTransition.opacity.animation(Animation.easeIn(duration: 0.22).delay(0.12)),
+        removal: AnyTransition.opacity.animation(Animation.easeOut(duration: 0.1)))
 
     private var places: some View {
         HStack(spacing: 0) {
@@ -5072,12 +5109,18 @@ struct HomeScreen: View {
             header
                 .padding(.horizontal, Space.xl)
                 .padding(.top, Space.l)
+                // As the deck lifts under a finger the words step back,
+                // so the eye stays with the card.
+                .offset(y: lift * 0.1)
+                .opacity(Double(max(0.45, 1 + lift / 420)))
             stage
             actions
                 .padding(.horizontal, Space.l)
                 .padding(.bottom, NavMetrics.clearance - Space.xxs)
                 .frame(maxWidth: Metrics.actionWidth)
                 .frame(maxWidth: .infinity)
+                .scaleEffect(armed ? 1.03 : 1)
+                .animation(Motion.press, value: armed)
                 .modifier(Arrive(shown: arrived, order: 3))
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -6208,6 +6251,12 @@ struct LibraryView: View {
                     GlyphCell(kanji: k)
                 }
                 .buttonStyle(PressableStyle(scale: 0.92))
+                .contentShape(.contextMenuPreview, RoundedRectangle(cornerRadius: Radius.tile, style: .continuous))
+                .contextMenu {
+                    tileMenu(k)
+                } preview: {
+                    KanjiPeek(kanji: k, face: store.data.settings.face)
+                }
                 .zoomSource("kanji:" + k.glyph, in: zoomNamespace)
                 .scrollTransition(.interactive, axis: .vertical) { content, phase in
                     content
@@ -6216,6 +6265,33 @@ struct LibraryView: View {
                         .blur(radius: CGFloat(abs(phase.value)) * 2)
                         .offset(y: CGFloat(phase.value) * 12)
                 }
+            }
+        }
+    }
+
+    /// Holding a tile lifts a glance at the kanji out of it, with the two
+    /// things most often done to one — for anyone who'd rather not open
+    /// the page.
+    @ViewBuilder
+    private func tileMenu(_ k: Kanji) -> some View {
+        let saved: Bool = store.isSaved(k.glyph)
+        Button {
+            store.toggleSaved(k.glyph)
+            Haptics.saved()
+        } label: {
+            Label(saved ? "Remove from saved" : "Save", systemImage: saved ? "bookmark.slash" : "bookmark")
+        }
+        if store.isStarted(k.glyph) {
+            Button {
+                if let launch = store.practiceLaunch([k.glyph]) { router.session = launch }
+            } label: {
+                Label("Practice", systemImage: "arrow.triangle.2.circlepath")
+            }
+        } else {
+            Button {
+                store.prioritize(k.glyph)
+            } label: {
+                Label("Learn next", systemImage: "plus.circle")
             }
         }
     }
@@ -6318,6 +6394,7 @@ struct ReadView: View {
                         PassageFeature(passage: first)
                     }
                     .buttonStyle(SheetPressStyle(radius: Radius.sheet, grain: true))
+                    .modifier(DeviceTilt(enabled: true, cornerRadius: Radius.sheet))
                     .zoomSource("passage:" + first.id, in: zoomNamespace)
                 } else {
                     ContentUnavailableView("No texts yet", systemImage: "book",
@@ -6411,6 +6488,44 @@ struct GlyphCell: View {
             .accessibilityLabel("\(kanji.glyph), \(kanji.primaryMeaning)")
             .accessibilityValue(stage.title)
             .accessibilityAddTraits(.isButton)
+    }
+}
+
+/// A kanji at a glance — the preview that lifts out of a library tile
+/// under a long press: the glyph, what it means, how it sounds, and the
+/// level it belongs to.
+struct KanjiPeek: View {
+    let kanji: Kanji
+    var face: JPFace = .gothic
+
+    var body: some View {
+        VStack(spacing: Space.m) {
+            Text(kanji.glyph)
+                .font(.jpFixed(112, face: face))
+                .foregroundStyle(Palette.ink)
+            VStack(spacing: Space.xxs) {
+                Text(kanji.meaningList.capitalizedFirst)
+                    .font(.display(.title2, weight: .bold))
+                    .tracking(Tracking.title)
+                    .foregroundStyle(Palette.ink)
+                    .multilineTextAlignment(.center)
+                    .lineLimit(2)
+                Text(readingLine(kanji))
+                    .font(.jp(16, relativeTo: .body))
+                    .foregroundStyle(Palette.ink2)
+                    .multilineTextAlignment(.center)
+                    .lineLimit(2)
+            }
+            Text(kanji.level.label)
+                .font(.caption.weight(.bold))
+                .foregroundStyle(Palette.ink)
+                .padding(.horizontal, Space.s)
+                .frame(height: 24)
+                .background(kanji.level.hue, in: Capsule())
+        }
+        .padding(Space.xl)
+        .frame(width: 260)
+        .background(Palette.card)
     }
 }
 
