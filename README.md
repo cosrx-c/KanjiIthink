@@ -218,9 +218,11 @@ builds itself on GitHub's macOS machines instead
 1. Every push to `main` that touches `Sumi.swiftpm` runs the **iOS build**
    workflow (or start one by hand under **Actions → iOS build → Run
    workflow**). It takes a few minutes.
-2. Open the finished run and download the **Sumi-unsigned-ipa** artifact; it
-   unzips to `Sumi-unsigned.ipa`. If the run failed, the **build-log**
-   artifact has the compiler's output.
+2. When it's done, the build is published as the release called **latest**:
+   <https://github.com/cosrx-c/KanjiIthink/releases/latest> — download
+   `Sumi-unsigned.ipa` from there (no GitHub login needed). The same file
+   is also attached to the run as an artifact, and if the run failed, the
+   **build-log** artifact has the compiler's output.
 3. On a Windows PC, install [Sideloadly](https://sideloadly.io) and Apple's
    own iTunes (from apple.com, not the Microsoft Store build). Plug the
    iPhone in, open Sideloadly, drag the `.ipa` onto it, enter your Apple ID,

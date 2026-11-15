@@ -15,6 +15,9 @@ concurrency:
   group: ios-build-${{ github.ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: write
+
 jobs:
   build:
     name: Build unsigned IPA
@@ -59,6 +62,19 @@ jobs:
           name: Sumi-unsigned-ipa
           path: Sumi-unsigned.ipa
           if-no-files-found: error
+
+      # Artifacts need a GitHub login to download; a release asset is a
+      # plain link that works from any device. "latest" is replaced on
+      # every successful build.
+      - name: Publish as the "latest" release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete latest --repo "$GITHUB_REPOSITORY" --yes --cleanup-tag 2>/dev/null || true
+          gh release create latest Sumi-unsigned.ipa \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "Sumi — latest build" \
+            --notes "Unsigned iPhone build of commit ${GITHUB_SHA::7}. Sign and install it with Sideloadly (see the README)."
 
       - name: Attach the full build log
         if: always()
