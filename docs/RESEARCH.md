@@ -138,6 +138,9 @@ One floating bar holds only what the moment needs.
   material with a lit rim.
 - Scroll direction is read with hysteresis — 22 pt of travel, and nothing
   within 28 pt of the top — so it never flickers under a resting thumb.
+  From iOS 18 the scroll view reports its own travel
+  (`onScrollGeometryChange`); on iOS 17 a clear layer behind the content
+  watches where it is on screen.
 - Every item is a symbol *over* a label (HIG: include tab labels; Norman:
   signifiers), and each offers the system's large-content viewer, since a
   10-pt label can't grow with Dynamic Type.
@@ -232,10 +235,17 @@ branch first. There the workflow compiles it for the device and also runs
 it in an iPhone simulator, opening it on each screen in turn with sample
 progress (`Showcase`, driven by an environment variable only a simulator
 can set) and photographing it in light and dark. Layout, colour and
-legibility can be judged on those pictures; motion, haptics and sound
-cannot be, and are the first things to look at on a device. The palette
-itself was checked by rendering every wash, light and dark, with sample
-ink, a sheet and the bar on top.
+legibility were judged on those pictures, and they earned their keep at
+once: they showed the study screen's ✕ and progress line sitting under
+the status bar (on iOS 26 a geometry reader that ignores the safe area
+reports no insets — the insets are now read by one that respects it), a
+sheen that washed the featured text on Read down to grey (the tilt was
+taken off it), a caption that truncated its level away (level now comes
+first) and three buttons of three widths on the finished day (now one
+width). Motion, haptics and sound cannot be judged this way, and are the
+first things to look at on a device. The palette itself was checked
+earlier by rendering every wash, light and dark, with sample ink, a sheet
+and the bar on top.
 
 ### What only testing can settle
 

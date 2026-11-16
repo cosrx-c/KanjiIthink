@@ -297,10 +297,10 @@ removes the pictures again.
 
 The app can be opened on a given screen with sample progress by setting
 `SUMI_SCENE` (`today`, `learn`, `rest`, `kanji`, `page`, `read`, `text`,
-`menu`, `study`, `answer`, `lesson`, `onboarding`) and optionally
-`SUMI_HOUR` when launching it in a simulator — see *Showcase* in
-`ContentView.swift`. Nothing on a device can set these, so none of it runs
-there.
+`menu`, `about`, `study`, `answer`, `lesson`, `recap`, `onboarding`; add
+`-end` to open a screen scrolled to its end) and optionally `SUMI_HOUR`
+when launching it in a simulator — see *Showcase* in `ContentView.swift`.
+Nothing on a device can set these, so none of it runs there.
 
 ## Adding content
 

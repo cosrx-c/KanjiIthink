@@ -1784,18 +1784,30 @@ struct Arrive: ViewModifier {
     }
 }
 
+/// A small piece of content coming into focus as it scrolls into view: it
+/// rises a few points out of a soft blur, tied 1:1 to the scroll, so it can
+/// be scrubbed back and forth. With Reduce Motion it only fades. For rows
+/// and chips, never for a whole section.
+struct ScrollReveal: ViewModifier {
+    var rise: CGFloat = 14
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    func body(content: Content) -> some View {
+        let travel: CGFloat = reduceMotion ? 0 : rise
+        let soften: CGFloat = reduceMotion ? 0 : 2.5
+        return content
+            .scrollTransition(.interactive, axis: .vertical) { view, phase in
+                view
+                    .opacity(1 - abs(phase.value) * 0.7)
+                    .offset(y: CGFloat(phase.value) * travel)
+                    .blur(radius: CGFloat(abs(phase.value)) * soften)
+            }
+    }
+}
+
 extension View {
-    /// A small piece of content coming into focus as it scrolls into view:
-    /// it rises a few points out of a soft blur, tied 1:1 to the scroll, so
-    /// it can be scrubbed back and forth. For rows and chips, never for a
-    /// whole section.
     func scrollReveal(rise: CGFloat = 14) -> some View {
-        scrollTransition(.interactive, axis: .vertical) { content, phase in
-            content
-                .opacity(1 - abs(phase.value) * 0.7)
-                .offset(y: CGFloat(phase.value) * rise)
-                .blur(radius: CGFloat(abs(phase.value)) * 2.5)
-        }
+        modifier(ScrollReveal(rise: rise))
     }
 }
 
@@ -4483,7 +4495,7 @@ struct ContentView: View {
     @StateObject private var router = Router()
     @Environment(\.scenePhase) private var scenePhase
     @Namespace private var zoomSpace
-    @State private var menuDetent: PresentationDetent = Showcase.scene == "menu-full" ? .large : .medium
+    @State private var menuDetent: PresentationDetent = Showcase.tall ? .large : .medium
 
     init() {
         NavigationType.install()
@@ -4644,6 +4656,11 @@ enum Showcase {
         (scene ?? "").hasSuffix("-end") ? UnitPoint.bottom : nil
     }
 
+    /// Scenes that want the menu pulled up to its full height.
+    static var tall: Bool {
+        scene == "menu-full" || scene == "about"
+    }
+
     /// A fixed hour of today, so each of the day's washes can be looked at.
     static var now: Date? {
         guard isOn, let raw = ProcessInfo.processInfo.environment["SUMI_HOUR"], let hour = Int(raw) else { return nil }
@@ -4733,6 +4750,12 @@ enum Showcase {
                 router.session = store.reviewLaunch()
             case "lesson":
                 router.session = store.lessonLaunch(extra: true)
+            case "recap":
+                // A session with nothing left in it opens on its last page.
+                router.session = SessionLaunch(mode: .review, items: [])
+            case "recap-lesson":
+                let learned = Array(store.lessonQueue.prefix(5).map(\.glyph))
+                router.session = SessionLaunch(mode: .lesson, items: [], lessonGlyphs: learned)
             default:
                 break
             }
@@ -4771,21 +4794,59 @@ enum NavigationType {
     }
 }
 
-/// A marker at the top of a scroll view's content that reports where it
-/// is on screen as the content moves.
+/// How a scrolling screen tells the bar which way it is moving. From
+/// iOS 18 the scroll view reports its own travel (`onScrollTravel`); on
+/// iOS 17 a clear layer behind the content watches where it is on screen
+/// (`ScrollProbe`). Only one of the two is ever live.
+enum ScrollReporting {
+    static var native: Bool {
+        #if compiler(>=6.0)
+        if #available(iOS 18.0, *) { return true }
+        #endif
+        return false
+    }
+}
+
+/// A clear layer behind a scroll view's content that reports where the
+/// content's top edge is on screen as it moves (iOS 17).
 struct ScrollProbe: View {
     let action: (CGFloat) -> Void
 
     var body: some View {
-        GeometryReader { geo in
+        if ScrollReporting.native {
             Color.clear
-                .onChange(of: geo.frame(in: .global).minY) { _, y in
-                    action(y)
-                }
+        } else {
+            GeometryReader { geo in
+                Color.clear
+                    .onChange(of: geo.frame(in: .global).minY) { _, y in
+                        action(y)
+                    }
+            }
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
         }
-        .frame(height: 1)
-        .allowsHitTesting(false)
-        .accessibilityHidden(true)
+    }
+}
+
+extension View {
+    /// Reports how far a scroll view has travelled from its top — 0 at
+    /// rest, falling as the reader scrolls down (iOS 18 and later). Goes on
+    /// the scroll view itself.
+    @ViewBuilder
+    func onScrollTravel(_ action: @escaping (CGFloat) -> Void) -> some View {
+        #if compiler(>=6.0)
+        if #available(iOS 18.0, *) {
+            self.onScrollGeometryChange(for: CGFloat.self) { geometry in
+                -(geometry.contentOffset.y + geometry.contentInsets.top)
+            } action: { _, travel in
+                action(travel)
+            }
+        } else {
+            self
+        }
+        #else
+        self
+        #endif
     }
 }
 
@@ -4805,9 +4866,15 @@ final class ScrollSense {
         fresh = true
     }
 
-    /// The new direction when it changes; nil while it holds.
-    func update(_ y: CGFloat) -> Bool? {
-        guard let rest = rest else {
+    /// The new direction when it changes; nil while it holds. `fixed` is
+    /// where the content rests, when the caller knows it.
+    func update(_ y: CGFloat, rest fixed: CGFloat? = nil) -> Bool? {
+        if let fixed = fixed, self.rest == nil {
+            self.rest = fixed
+            pivot = y
+            fresh = false
+        }
+        guard let rest = self.rest else {
             self.rest = y
             pivot = y
             fresh = false
@@ -5366,7 +5433,7 @@ struct HomeScreen: View {
     /// The centrepiece shrinks to the room it has — a phone on its side,
     /// or very large type in the header — instead of spilling out of it.
     private func fit(_ height: CGFloat) -> CGFloat {
-        let wanted: CGFloat = canStart ? 300 : 190
+        let wanted: CGFloat = canStart ? 330 : 190
         return min(1, max(0.4, height / wanted))
     }
 
@@ -5557,7 +5624,7 @@ struct HomeDeck: View {
     let glyphs: [String]
     var lift: CGFloat = 0
     var armed = false
-    @ScaledMetric(relativeTo: .largeTitle) private var baseWidth: CGFloat = 176
+    @ScaledMetric(relativeTo: .largeTitle) private var baseWidth: CGFloat = 196
     @State private var writing = false
     @State private var written = ""
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -5567,7 +5634,7 @@ struct HomeDeck: View {
         let glyph: String
     }
 
-    private var width: CGFloat { min(baseWidth, 216) }
+    private var width: CGFloat { min(baseWidth, 232) }
     private var height: CGFloat { width * 1.32 }
 
     /// Bottom card first, so the top card draws last.
@@ -5628,7 +5695,7 @@ struct HomeDeck: View {
     private func deckCard(_ glyph: String, depth: Int) -> some View {
         let d = CGFloat(depth)
         let fan: [Double] = [0, -7, 6]
-        let shift: [CGFloat] = [0, -18, 20]
+        let shift: [CGFloat] = [0, -22, 24]
         let follow: CGFloat = depth == 0 ? 1 : 0.45 - 0.15 * d
         let settle = Double(min(-lift / 300, 1))
         let shape = RoundedRectangle(cornerRadius: 26, style: .continuous)
@@ -6274,6 +6341,9 @@ struct LibraryView: View {
                 }
             }
         }
+        .onScrollTravel { y in
+            if let down = sense.update(y, rest: 0) { router.scrolled(down: down) }
+        }
         .scrollDismissesKeyboard(.immediately)
         .defaultScrollAnchor(Showcase.anchor)
         .background {
@@ -6568,6 +6638,9 @@ struct ReadView: View {
                 }
             }
         }
+        .onScrollTravel { y in
+            if let down = sense.update(y, rest: 0) { router.scrolled(down: down) }
+        }
         .defaultScrollAnchor(Showcase.anchor)
         .background {
             AmbientBackground(wash: .read, animated: false)
@@ -6853,6 +6926,9 @@ struct KanjiView: View {
                     }
                 }
         }
+        .onScrollTravel { y in
+            if let down = sense.update(y, rest: 0) { router.scrolled(down: down) }
+        }
         .scrollDismissesKeyboard(.interactively)
         .defaultScrollAnchor(Showcase.anchor)
         .background {
@@ -6931,6 +7007,9 @@ struct PassageView: View {
                         if let down = sense.update(y) { router.scrolled(down: down) }
                     }
                 }
+            }
+            .onScrollTravel { y in
+                if let down = sense.update(y, rest: 0) { router.scrolled(down: down) }
             }
             .defaultScrollAnchor(Showcase.anchor)
             .background {
