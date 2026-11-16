@@ -4636,6 +4636,28 @@ struct ContentView_Previews: PreviewProvider {
     }
 }
 
+// MARK: Build stamp
+
+/// Which build this is, shown at the bottom of the menu, so the app on a
+/// phone or in Swift Playgrounds can be checked against GitHub at a
+/// glance. The revision goes up with each published change; GitHub's
+/// build fills in its build number and commit, so a copy built anywhere
+/// else says "local build".
+enum BuildInfo {
+    static let revision = 9
+    static let commit = "local"
+
+    static var number: String {
+        (Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String) ?? "1"
+    }
+
+    static var line: String {
+        commit == "local"
+            ? "Revision \(revision) · local build"
+            : "Revision \(revision) · build \(number) · \(commit)"
+    }
+}
+
 // MARK: Showcase
 //
 // A way for a simulator to open the app on a given screen with sample
@@ -4658,7 +4680,8 @@ enum Showcase {
 
     /// Scenes that want the menu pulled up to its full height.
     static var tall: Bool {
-        scene == "menu-full" || scene == "about"
+        let name = (scene ?? "").replacingOccurrences(of: "-end", with: "")
+        return name == "menu-full" || name == "about"
     }
 
     /// A fixed hour of today, so each of the day's washes can be looked at.
@@ -5165,7 +5188,7 @@ struct NavBar: View {
                     Haptics.tap()
                     router.strokeToken += 1
                 } label: {
-                    BarItem(title: "Write", symbol: "pencil.tip")
+                    BarItem(title: "Strokes", symbol: "pencil.tip")
                 }
                 .buttonStyle(PressableStyle(scale: 0.92))
                 .accessibilityLabel("Play stroke order and sound")
@@ -7388,6 +7411,7 @@ struct MenuSheet: View {
                 .readableColumn()
             }
             .scrollIndicators(.hidden)
+            .defaultScrollAnchor(Showcase.anchor)
             .menuBackdrop()
             .toolbar(.hidden, for: .navigationBar)
             .navigationDestination(isPresented: $showsAbout) { AboutView() }
@@ -7630,10 +7654,16 @@ struct MenuSheet: View {
                 }
                 .buttonStyle(.plain)
             }
-            Text("Sumi 1.0 · Stroke order from KanjiVG")
-                .font(.footnote)
-                .foregroundStyle(Palette.ink2)
-                .frame(maxWidth: .infinity)
+            VStack(spacing: Space.xxs) {
+                Text("Sumi 1.0 · Stroke order from KanjiVG")
+                Text(BuildInfo.line)
+                    .monospacedDigit()
+            }
+            .font(.footnote)
+            .foregroundStyle(Palette.ink2)
+            .multilineTextAlignment(.center)
+            .frame(maxWidth: .infinity)
+            .accessibilityElement(children: .combine)
         }
     }
 

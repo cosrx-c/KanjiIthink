@@ -223,6 +223,12 @@ and every edit lands straight in the Git checkout.
 4. **To sync:** edits made in Playgrounds show up as changes in Working Copy —
    commit and push there. Pull in Working Copy to bring in changes made
    elsewhere, then reopen the project.
+5. **To check which version you have:** open the menu (三) and scroll to the
+   bottom. It reads *Revision N · local build*; the revision should match
+   the one on the [latest release](https://github.com/cosrx-c/KanjiIthink/releases/latest).
+   If it's older after a pull, Swift Playgrounds is running a copy rather
+   than the Working Copy folder: delete the project from Playgrounds' own
+   list and open it again through **Locations → Working Copy** (step 2).
 
 If Swift Playgrounds can't see the Working Copy location, use Working Copy's
 *Link Repository to Directory* instead: link the repository to a folder in
@@ -277,6 +283,11 @@ builds itself on GitHub's macOS machines instead
 4. On the iPhone: turn on **Settings → Privacy & Security → Developer
    Mode**, then trust your Apple ID under **Settings → General → VPN &
    Device Management**.
+5. To check what's installed, open the menu (三) and scroll to the bottom:
+   it reads *Revision N · build N · commit*, the same as the title and
+   notes of the latest release. If it shows an older build, the file you
+   dragged in was an old download — browsers save a second download as
+   `Sumi-unsigned (1).ipa`, so delete old copies before downloading again.
 
 With a free Apple ID the app expires after 7 days (install it again to
 renew; progress is kept) and you can have three sideloaded apps at once. A
@@ -293,7 +304,8 @@ iPhone simulator and each screen is photographed, in light and dark; the
 pictures are attached to the run and to a prerelease called
 [`try-screens`](https://github.com/cosrx-c/KanjiIthink/releases/tag/try-screens).
 When they look right, merge the branch into `main` to publish; that build
-removes the pictures again.
+removes the pictures again. **Nothing on a `try/…` branch reaches the
+release, Working Copy's `main` or anyone's phone until it is merged.**
 
 The app can be opened on a given screen with sample progress by setting
 `SUMI_SCENE` (`today`, `learn`, `rest`, `kanji`, `page`, `read`, `text`,
