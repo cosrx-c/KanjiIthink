@@ -5,6 +5,11 @@ name: iOS build
 
 # Pushes to main build and publish. Pushes to a try/… branch only build,
 # so a change can be compiled before it replaces the published app.
+#
+# A run that fails before its first step with "The job was not acquired by
+# Runner of type hosted even after multiple attempts" never got a Mac:
+# GitHub was short of macOS machines. Nothing is wrong with the code; start
+# it again with Actions → iOS build → Run workflow (or Re-run jobs).
 on:
   push:
     branches: [main, "try/**"]
