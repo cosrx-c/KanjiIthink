@@ -4483,6 +4483,7 @@ struct ContentView: View {
     @StateObject private var router = Router()
     @Environment(\.scenePhase) private var scenePhase
     @Namespace private var zoomSpace
+    @State private var menuDetent: PresentationDetent = Showcase.scene == "menu-full" ? .large : .medium
 
     init() {
         NavigationType.install()
@@ -4506,7 +4507,7 @@ struct ContentView: View {
                 MenuSheet()
                     .environmentObject(store)
                     .environmentObject(router)
-                    .presentationDetents([.medium, .large])
+                    .presentationDetents([.medium, .large], selection: $menuDetent)
                     .sheetChrome()
                     .morphsFromSource("menu", in: zoomSpace)
             }
@@ -4638,6 +4639,11 @@ enum Showcase {
 
     static var isOn: Bool { scene != nil }
 
+    /// Scenes named "…-end" open scrolled to the end of their screen.
+    static var anchor: UnitPoint? {
+        (scene ?? "").hasSuffix("-end") ? UnitPoint.bottom : nil
+    }
+
     /// A fixed hour of today, so each of the day's washes can be looked at.
     static var now: Date? {
         guard isOn, let raw = ProcessInfo.processInfo.environment["SUMI_HOUR"], let hour = Int(raw) else { return nil }
@@ -4696,7 +4702,8 @@ enum Showcase {
 
     /// Goes to the screen asked for, once the first screen is up.
     static func open(_ router: Router, _ store: Store) {
-        guard let scene = scene else { return }
+        guard let asked = Showcase.scene else { return }
+        let scene = asked.replacingOccurrences(of: "-end", with: "")
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
             switch scene {
             case "kanji":
@@ -4720,7 +4727,7 @@ enum Showcase {
                     router.readPath = [.passage(passage.id)]
                 }
                 router.translation = scene == "text-english"
-            case "menu":
+            case "menu", "menu-full", "about":
                 router.menuOpen = true
             case "study", "answer":
                 router.session = store.reviewLaunch()
@@ -5448,6 +5455,7 @@ struct HomeScreen: View {
                     router.open(.passage(passage.id))
                 } label: {
                     Label("Read “\(Ruby.plain(passage.title))”", systemImage: "text.book.closed")
+                        .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(PillStyle())
             }
@@ -5456,6 +5464,7 @@ struct HomeScreen: View {
                     if let launch = store.practiceLaunch(store.data.saved) { router.session = launch }
                 } label: {
                     Label("Practice saved kanji", systemImage: "bookmark")
+                        .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(PillStyle())
             }
@@ -5464,10 +5473,13 @@ struct HomeScreen: View {
                     if let launch = store.lessonLaunch(extra: true) { router.session = launch }
                 } label: {
                     Label("Learn more today", systemImage: "plus")
+                        .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(PillStyle())
             }
         }
+        // One width for all three, so their edges line up.
+        .frame(maxWidth: 280)
         .frame(minHeight: Metrics.buttonHeight)
     }
 
@@ -5627,6 +5639,12 @@ struct HomeDeck: View {
                 ZStack {
                     Palette.card
                     PaperGrain(strength: 0.7)
+                    if depth == 0 {
+                        // The top card is a square of practice paper, like
+                        // the sheet a kanji's own page opens on.
+                        GuideGrid()
+                            .padding(width * 0.13)
+                    }
                 }
             }
             .clipShape(shape)
@@ -6257,6 +6275,7 @@ struct LibraryView: View {
             }
         }
         .scrollDismissesKeyboard(.immediately)
+        .defaultScrollAnchor(Showcase.anchor)
         .background {
             AmbientBackground(wash: store.currentLevel.wash, animated: false)
         }
@@ -6516,7 +6535,6 @@ struct ReadView: View {
                         PassageFeature(passage: first)
                     }
                     .buttonStyle(SheetPressStyle(radius: Radius.sheet, grain: true))
-                    .modifier(DeviceTilt(enabled: true, cornerRadius: Radius.sheet))
                     .zoomSource("passage:" + first.id, in: zoomNamespace)
                 } else {
                     ContentUnavailableView("No texts yet", systemImage: "book",
@@ -6550,6 +6568,7 @@ struct ReadView: View {
                 }
             }
         }
+        .defaultScrollAnchor(Showcase.anchor)
         .background {
             AmbientBackground(wash: .read, animated: false)
         }
@@ -6679,7 +6698,7 @@ struct PassageFeature: View {
                 Caption(text: read ? "Read again" : "Read next", color: Palette.accent)
                 Text("·")
                     .foregroundStyle(Palette.ink3)
-                Caption(text: "\(passage.genre) · \(passage.level.label)")
+                Caption(text: "\(passage.level.label) · \(passage.genre)")
                 Spacer(minLength: 0)
             }
             VStack(alignment: .leading, spacing: Space.xxs) {
@@ -6739,7 +6758,8 @@ struct PassageRow: View {
         HStack(alignment: .center, spacing: Space.m) {
             VStack(alignment: .leading, spacing: Space.xxs) {
                 HStack(spacing: Space.xs) {
-                    Caption(text: "\(passage.genre) · \(passage.level.label)")
+                    // Level first, so a long genre is what gives way.
+                    Caption(text: "\(passage.level.label) · \(passage.genre)")
                     if store.data.readPassages.contains(passage.id) {
                         Image(systemName: "checkmark.circle.fill")
                             .font(.caption2.weight(.bold))
@@ -6834,6 +6854,7 @@ struct KanjiView: View {
                 }
         }
         .scrollDismissesKeyboard(.interactively)
+        .defaultScrollAnchor(Showcase.anchor)
         .background {
             AmbientBackground(wash: level.wash, animated: false)
         }
@@ -6911,6 +6932,7 @@ struct PassageView: View {
                     }
                 }
             }
+            .defaultScrollAnchor(Showcase.anchor)
             .background {
                 AmbientBackground(wash: passage.level.wash, animated: false)
             }
@@ -7228,6 +7250,7 @@ struct MenuSheet: View {
     @State private var showKnownPicker = false
     @State private var voices: [AVSpeechSynthesisVoice] = Speaker.japaneseVoices
     @State private var arrived = false
+    @State private var showsAbout = Showcase.scene == "about"
 
     private var paceOptions: [Int] {
         Array(Set([0, 3, 5, 10, 15, 20, 30, store.data.settings.newPerDay])).sorted()
@@ -7288,6 +7311,7 @@ struct MenuSheet: View {
             .scrollIndicators(.hidden)
             .menuBackdrop()
             .toolbar(.hidden, for: .navigationBar)
+            .navigationDestination(isPresented: $showsAbout) { AboutView() }
             .onAppear { arrived = true }
             .onChange(of: store.data.settings.voiceID) { _, id in previewVoice(id) }
             .sheet(isPresented: $showKnownPicker) {
@@ -8846,11 +8870,18 @@ struct ReelsFeed: View {
     private var pinching: Bool { pinch < 1 || vanishing }
     private var closing: Bool { pullingToClose || pinching }
 
+    /// The safe area is read by a reader that respects it; the deck is laid
+    /// out edge to edge inside. (A reader that itself ignores the safe area
+    /// reports none on iOS 26, which put the ✕ and the progress line under
+    /// the status bar.)
     var body: some View {
-        GeometryReader { geo in
-            deck(StackGeometry(size: geo.size, insets: geo.safeAreaInsets))
+        GeometryReader { safe in
+            let insets: EdgeInsets = safe.safeAreaInsets
+            GeometryReader { geo in
+                deck(StackGeometry(size: geo.size, insets: insets))
+            }
+            .ignoresSafeArea(.container)
         }
-        .ignoresSafeArea(.container)
         .background(escapeKey)
         .accessibilityAction(.escape) { onClose(true) }
     }

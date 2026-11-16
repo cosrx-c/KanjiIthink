@@ -237,7 +237,7 @@ jobs:
           shoot 08-kanji           kanji          13 light
           shoot 09-kanji-compact   kanji-compact  13 light
           shoot 10-page            page           13 light 8
-          shoot 11-page-peek       page-peek      13 light 8
+          shoot 11-page-peek       page-peek      13 light 3
           shoot 12-read            read           13 light
           shoot 13-text            text           13 light 7
           shoot 14-text-english    text-english   13 light 7
@@ -245,6 +245,12 @@ jobs:
           shoot 16-study           study          13 light 7
           shoot 17-answer          answer         13 light 7
           shoot 18-lesson          lesson         13 light 9
+          shoot 19-kanji-end       kanji-end      13 light 7
+          shoot 20-page-end        page-end       13 light 8
+          shoot 31-read-end        read-end       13 light 7
+          shoot 32-text-end        text-end       13 light 7
+          shoot 33-menu-full       menu-full      13 light 7
+          shoot 34-about           about          13 light 8
           shoot 21-today-dark      today          22 dark
           shoot 22-rest-dark       rest           22 dark
           shoot 23-kanji-dark      kanji          22 dark
@@ -253,6 +259,9 @@ jobs:
           shoot 26-text-dark       text           22 dark 7
           shoot 27-menu-dark       menu           22 dark 7
           shoot 28-answer-dark     answer         22 dark 7
+          shoot 35-page-end-dark   page-end       22 dark 8
+          shoot 36-menu-full-dark  menu-full      22 dark 7
+          shoot 37-study-dark      study          22 dark 7
 
           for f in shots/*.png; do
             sips -s format jpeg -s formatOptions 74 -Z 1500 "$f" --out "${f%.png}.jpg" >/dev/null
