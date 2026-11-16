@@ -3,9 +3,11 @@
 # Sideloadly (see README: "On an iPhone, without a Mac").
 name: iOS build
 
+# Pushes to main build and publish. Pushes to a try/… branch only build,
+# so a change can be compiled before it replaces the published app.
 on:
   push:
-    branches: [main]
+    branches: [main, "try/**"]
     paths:
       - "Sumi.swiftpm/**"
       - ".github/workflows/ios.yml"
@@ -34,6 +36,16 @@ jobs:
           sudo xcode-select -s "$XCODE"
           xcodebuild -version
 
+      # The app shows which build it is at the bottom of its menu, so a
+      # phone can be checked against GitHub at a glance.
+      - name: Stamp the build number and commit
+        run: |
+          sed -i '' "s/static let commit = \"local\"/static let commit = \"${GITHUB_SHA::7}\"/" Sumi.swiftpm/Sources/ContentView.swift
+          sed -i '' "s/bundleVersion: \"1\"/bundleVersion: \"${GITHUB_RUN_NUMBER}\"/" Sumi.swiftpm/Package.swift
+          grep -q "static let commit = \"${GITHUB_SHA::7}\"" Sumi.swiftpm/Sources/ContentView.swift
+          grep -q "bundleVersion: \"${GITHUB_RUN_NUMBER}\"" Sumi.swiftpm/Package.swift
+          echo "::notice title=Build stamp::revision $(grep -o 'static let revision = [0-9]*' Sumi.swiftpm/Sources/ContentView.swift | grep -o '[0-9]*$'), build ${GITHUB_RUN_NUMBER}, commit ${GITHUB_SHA::7}"
+
       - name: Build for iPhone without signing
         working-directory: Sumi.swiftpm
         run: |
@@ -46,6 +58,63 @@ jobs:
             CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
             build 2>&1 | tee ../build.log | grep -E 'error:|\*\* BUILD' || true
           grep -q '\*\* BUILD SUCCEEDED \*\*' ../build.log
+
+      # The log needs a GitHub login to read; annotations don't. Every
+      # compile error becomes one, so a failed build explains itself on
+      # the run's page (and through the public API); a build that passes
+      # lists the compiler's warnings about the app's own sources.
+      - name: Report what the compiler said
+        if: always()
+        run: |
+          python3 - <<'PY'
+          import os, re
+
+          root = os.environ.get("GITHUB_WORKSPACE", "") + "/"
+          if not os.path.exists("build.log"):
+              raise SystemExit(0)
+          lines = open("build.log", errors="replace").read().splitlines()
+          passed = any("** BUILD SUCCEEDED **" in line for line in lines)
+
+          def unique(marker):
+              seen, found = set(), []
+              for line in lines:
+                  if marker not in line:
+                      continue
+                  line = line.replace(root, "")
+                  if line not in seen:
+                      seen.add(line)
+                      found.append(line)
+              return found
+
+          def esc(text):
+              return text.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
+
+          def notices(title, rows):
+              chunks, chunk = [], ""
+              for row in rows:
+                  if len(chunk) + len(row) > 3000:
+                      chunks.append(chunk)
+                      chunk = ""
+                  chunk += row + "\n"
+              if chunk:
+                  chunks.append(chunk)
+              for index, chunk in enumerate(chunks[:10]):
+                  print(f"::notice title={title} {index + 1} of {len(chunks)}::{esc(chunk)}")
+
+          if passed:
+              warnings = [w.replace("Sumi.swiftpm/Sources/", "") for w in unique(": warning: ") if "Sumi.swiftpm" in w]
+              if warnings:
+                  notices("Build warnings", warnings)
+          else:
+              errors = unique(": error: ")
+              for line in errors[:9]:
+                  match = re.match(r"(.+?):(\d+):(\d+): error: (.*)", line)
+                  if match:
+                      print(f"::error file={match.group(1)},line={match.group(2)},col={match.group(3)}::{esc(match.group(4))}")
+                  else:
+                      print(f"::error::{esc(line)}")
+              notices("Build errors", [e.replace("Sumi.swiftpm/Sources/", "") for e in errors] or lines[-60:])
+          PY
 
       - name: Package as .ipa
         run: |
@@ -65,16 +134,20 @@ jobs:
 
       # Artifacts need a GitHub login to download; a release asset is a
       # plain link that works from any device. "latest" is replaced on
-      # every successful build.
+      # every successful build of main.
       - name: Publish as the "latest" release
+        if: github.ref == 'refs/heads/main'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release delete latest --repo "$GITHUB_REPOSITORY" --yes --cleanup-tag 2>/dev/null || true
+          REV=$(grep -o 'static let revision = [0-9]*' Sumi.swiftpm/Sources/ContentView.swift | grep -o '[0-9]*$')
           gh release create latest Sumi-unsigned.ipa \
             --repo "$GITHUB_REPOSITORY" \
-            --title "Sumi — latest build" \
-            --notes "Unsigned iPhone build of commit ${GITHUB_SHA::7}. Sign and install it with Sideloadly (see the README)."
+            --title "Sumi — revision $REV, build $GITHUB_RUN_NUMBER" \
+            --notes "Unsigned iPhone build of commit ${GITHUB_SHA::7}. The bottom of the app's menu reads \"Revision $REV · build $GITHUB_RUN_NUMBER · ${GITHUB_SHA::7}\" when this is the build installed. Sign and install it with Sideloadly (see the README)."
+          # The pictures of a try build have done their job once it's published.
+          gh release delete try-screens --repo "$GITHUB_REPOSITORY" --yes --cleanup-tag 2>/dev/null || true
 
       - name: Attach the full build log
         if: always()
@@ -83,3 +156,198 @@ jobs:
           name: build-log
           path: build.log
           if-no-files-found: ignore
+
+  # On a try/… branch the app is also run in a simulator and each screen is
+  # photographed, so a change can be looked at — not just compiled — before
+  # it replaces the published app. The app opens on a given screen with
+  # sample progress when SUMI_SCENE is set (see "Showcase" in
+  # ContentView.swift); nothing else drives it. The pictures are attached
+  # to a prerelease called "try-screens", which the next build of main
+  # removes.
+  screens:
+    name: Photograph the screens
+    if: startsWith(github.ref, 'refs/heads/try/')
+    runs-on: macos-15
+    timeout-minutes: 45
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Use the newest released Xcode on this machine
+        run: |
+          XCODE=$(ls -d /Applications/Xcode_*.app | grep -vi beta | sort -V | tail -n 1)
+          echo "Using $XCODE"
+          sudo xcode-select -s "$XCODE"
+          xcodebuild -version
+
+      # The app shows which build it is at the bottom of its menu, so a
+      # phone can be checked against GitHub at a glance.
+      - name: Stamp the build number and commit
+        run: |
+          sed -i '' "s/static let commit = \"local\"/static let commit = \"${GITHUB_SHA::7}\"/" Sumi.swiftpm/Sources/ContentView.swift
+          sed -i '' "s/bundleVersion: \"1\"/bundleVersion: \"${GITHUB_RUN_NUMBER}\"/" Sumi.swiftpm/Package.swift
+          grep -q "static let commit = \"${GITHUB_SHA::7}\"" Sumi.swiftpm/Sources/ContentView.swift
+          grep -q "bundleVersion: \"${GITHUB_RUN_NUMBER}\"" Sumi.swiftpm/Package.swift
+          echo "::notice title=Build stamp::revision $(grep -o 'static let revision = [0-9]*' Sumi.swiftpm/Sources/ContentView.swift | grep -o '[0-9]*$'), build ${GITHUB_RUN_NUMBER}, commit ${GITHUB_SHA::7}"
+
+      - name: Build for the simulator
+        working-directory: Sumi.swiftpm
+        run: |
+          set -o pipefail
+          xcodebuild -scheme Sumi \
+            -configuration Debug \
+            -sdk iphonesimulator \
+            -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath ../build-sim \
+            CODE_SIGNING_ALLOWED=NO \
+            build 2>&1 | tee ../build-sim.log | grep -E 'error:|\*\* BUILD' || true
+          grep -q '\*\* BUILD SUCCEEDED \*\*' ../build-sim.log
+
+      # The newest iOS this machine has, and — if it has one — an iOS from
+      # before Liquid Glass, so the frosted fallback gets looked at too.
+      - name: Boot an iPhone
+        run: |
+          xcrun simctl list runtimes
+          python3 - <<'PY'
+          import json, os, re, subprocess
+
+          listing = subprocess.check_output(["xcrun", "simctl", "list", "devices", "available", "-j"])
+          devices = json.loads(listing)["devices"]
+
+          def version(runtime):
+              return [int(n) for n in re.findall(r"\d+", runtime.split("SimRuntime.")[-1])]
+
+          picks = []
+          for runtime in sorted((r for r in devices if "iOS" in r), key=version, reverse=True):
+              phones = [d for d in devices[runtime] if d["name"].startswith("iPhone")]
+              if not phones:
+                  continue
+              plain_pro = [d for d in phones if "Pro" in d["name"] and "Max" not in d["name"]]
+              choice = (plain_pro or phones)[-1]
+              if not picks or (len(picks) == 1 and version(runtime)[0] < 26):
+                  picks.append((runtime.split("SimRuntime.")[-1], choice["name"], choice["udid"]))
+          with open(os.environ["GITHUB_ENV"], "a") as env:
+              env.write("UDID=" + (picks[0][2] if picks else "") + "\n")
+              env.write("LEGACY=" + (picks[1][2] if len(picks) > 1 else "") + "\n")
+          print("::notice title=Simulators::" + "; ".join(p[0] + " " + p[1] for p in picks))
+          PY
+          UDID=$(grep '^UDID=' "$GITHUB_ENV" | tail -n 1 | cut -d= -f2)
+          test -n "$UDID" || { echo "::error::No iPhone simulator is installed for this Xcode"; exit 1; }
+          xcrun simctl boot "$UDID"
+          xcrun simctl bootstatus "$UDID" -b
+
+      - name: Photograph each screen
+        run: |
+          APP=$(find build-sim/Build/Products -type d -name 'Sumi.app' | head -n 1)
+          test -n "$APP" || { echo "Sumi.app not found"; exit 1; }
+          xcrun simctl install "$UDID" "$APP"
+          xcrun simctl status_bar "$UDID" override --time "9:41" --batteryState charged --batteryLevel 100 --wifiBars 3 --cellularBars 4 || true
+          mkdir -p shots
+
+          # shoot <file> <scene> <hour> <light|dark> [seconds to wait]
+          DEVICE="$UDID"
+          shoot() {
+            xcrun simctl ui "$DEVICE" appearance "$4"
+            xcrun simctl terminate "$DEVICE" com.cosrx.sumi 2>/dev/null || true
+            SIMCTL_CHILD_SUMI_SCENE="$2" SIMCTL_CHILD_SUMI_HOUR="$3" xcrun simctl launch "$DEVICE" com.cosrx.sumi
+            sleep "${5:-6}"
+            xcrun simctl io "$DEVICE" screenshot "shots/$1.png"
+          }
+
+          shoot 01-onboarding      onboarding     9  light 9
+          shoot 02-today-dawn      today          7  light
+          shoot 03-today-day       today          13 light
+          shoot 04-today-dusk      today          18 light
+          shoot 05-today-night     today          22 light
+          shoot 06-today-learn     learn          13 light
+          shoot 07-today-rest      rest           18 light
+          shoot 08-kanji           kanji          13 light
+          shoot 09-kanji-compact   kanji-compact  13 light
+          shoot 10-page            page           13 light 8
+          shoot 11-page-peek       page-peek      13 light 3
+          shoot 12-read            read           13 light
+          shoot 13-text            text           13 light 7
+          shoot 14-text-english    text-english   13 light 7
+          shoot 15-menu            menu           13 light 7
+          shoot 16-study           study          13 light 7
+          shoot 17-answer          answer         13 light 7
+          shoot 18-lesson          lesson         13 light 9
+          shoot 19-kanji-end       kanji-end      13 light 7
+          shoot 20-page-end        page-end       13 light 8
+          shoot 31-read-end        read-end       13 light 7
+          shoot 32-text-end        text-end       13 light 7
+          shoot 33-menu-full       menu-full      13 light 7
+          shoot 34-about           about          13 light 8
+          shoot 38-recap           recap          18 light 7
+          shoot 39-recap-lesson    recap-lesson   18 light 7
+          shoot 40-menu-end        menu-full-end  13 light 8
+          shoot 21-today-dark      today          22 dark
+          shoot 22-rest-dark       rest           22 dark
+          shoot 23-kanji-dark      kanji          22 dark
+          shoot 24-page-dark       page           22 dark 8
+          shoot 25-read-dark       read           22 dark
+          shoot 26-text-dark       text           22 dark 7
+          shoot 27-menu-dark       menu           22 dark 7
+          shoot 28-answer-dark     answer         22 dark 7
+          shoot 35-page-end-dark   page-end       22 dark 8
+          shoot 36-menu-full-dark  menu-full      22 dark 7
+          shoot 37-study-dark      study          22 dark 7
+
+          # Larger text: the layouts must hold as Dynamic Type grows.
+          xcrun simctl ui "$UDID" content_size extra-extra-extra-large
+          shoot 41-today-xxxl      today          13 light
+          shoot 42-kanji-xxxl      kanji          13 light
+          shoot 43-page-xxxl       page           13 light 8
+          shoot 44-menu-xxxl       menu-full      13 light 7
+          xcrun simctl ui "$UDID" content_size accessibility-large
+          shoot 45-today-ax        today          13 light
+          shoot 46-answer-ax       answer         13 light 7
+          shoot 47-read-ax         read           13 light
+          xcrun simctl ui "$UDID" content_size large
+
+          # The same build on an iOS from before Liquid Glass, if this
+          # machine has one. It never fails the job.
+          if [ -n "$LEGACY" ]; then
+            (
+              xcrun simctl shutdown "$UDID" || true
+              xcrun simctl boot "$LEGACY"
+              xcrun simctl bootstatus "$LEGACY" -b
+              xcrun simctl install "$LEGACY" "$APP"
+              xcrun simctl status_bar "$LEGACY" override --time "9:41" --batteryState charged --batteryLevel 100 --wifiBars 3 --cellularBars 4 || true
+              DEVICE="$LEGACY"
+              shoot 51-old-today       today          18 light 14
+              shoot 52-old-kanji       kanji          13 light
+              shoot 53-old-page        page           13 light 8
+              shoot 54-old-text        text           13 light 7
+              shoot 55-old-menu        menu           13 light 7
+              shoot 56-old-answer      answer         13 light 7
+              shoot 57-old-read        read           13 light
+              shoot 58-old-today-dark  today          22 dark
+              shoot 59-old-menu-dark   menu-full      22 dark 7
+            ) || echo "::warning::The older simulator could not be photographed"
+          fi
+
+          for f in shots/*.png; do
+            sips -s format jpeg -s formatOptions 74 -Z 1500 "$f" --out "${f%.png}.jpg" >/dev/null
+          done
+          rm shots/*.png
+          ls -la shots
+
+      - name: Attach the pictures to this run
+        uses: actions/upload-artifact@v4
+        with:
+          name: screens
+          path: shots
+          if-no-files-found: error
+
+      - name: Publish the pictures as the "try-screens" prerelease
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete try-screens --repo "$GITHUB_REPOSITORY" --yes --cleanup-tag 2>/dev/null || true
+          gh release create try-screens shots/*.jpg \
+            --repo "$GITHUB_REPOSITORY" \
+            --prerelease \
+            --target "$GITHUB_SHA" \
+            --title "Screens of the latest try build" \
+            --notes "Simulator screenshots of commit ${GITHUB_SHA::7} (${GITHUB_REF_NAME}), for looking a change over before it is published. Replaced by every try build; removed when main is built."
