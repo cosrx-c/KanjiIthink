@@ -274,13 +274,16 @@ extension View {
 struct Caption: View {
     let text: String
     var color: Color = Palette.ink2
+    /// Lines it may wrap onto when the type is large, rather than cutting
+    /// words off; one by default.
+    var lines: Int = 1
 
     var body: some View {
         Text(text.uppercased())
             .font(.caption.weight(.semibold))
             .tracking(Tracking.caption)
             .foregroundStyle(color)
-            .lineLimit(1)
+            .lineLimit(lines)
     }
 }
 
@@ -5793,7 +5796,7 @@ struct HomeScreen: View {
     private var header: some View {
         HStack(alignment: .top, spacing: Space.m) {
             VStack(alignment: .leading, spacing: Space.xs) {
-                Caption(text: dateLine)
+                Caption(text: dateLine, lines: 2)
                 Text(greeting)
                     .font(.display(.largeTitle, weight: .bold))
                     .tracking(Tracking.display)
@@ -7303,12 +7306,18 @@ struct PassageFeature: View {
         let read: Bool = store.data.readPassages.contains(passage.id)
         let shape = RoundedRectangle(cornerRadius: Radius.sheet, style: .continuous)
         VStack(alignment: .leading, spacing: Space.m) {
-            HStack(spacing: Space.xs) {
-                Caption(text: read ? "Read again" : "Read next", color: Palette.accent)
-                Text("·")
-                    .foregroundStyle(Palette.ink3)
-                Caption(text: "\(passage.level.label) · \(passage.genre)")
-                Spacer(minLength: 0)
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: Space.xs) {
+                    Caption(text: read ? "Read again" : "Read next", color: Palette.accent)
+                    Text("·")
+                        .foregroundStyle(Palette.ink3)
+                    Caption(text: "\(passage.level.label) · \(passage.genre)")
+                    Spacer(minLength: 0)
+                }
+                VStack(alignment: .leading, spacing: Space.xxs) {
+                    Caption(text: read ? "Read again" : "Read next", color: Palette.accent, lines: 2)
+                    Caption(text: "\(passage.level.label) · \(passage.genre)", lines: 2)
+                }
             }
             VStack(alignment: .leading, spacing: Space.xxs) {
                 Text(Ruby.plain(passage.title))
@@ -7420,7 +7429,9 @@ struct CoverageRing: View {
                 .font(.figure(.caption2, weight: .bold))
                 .monospacedDigit()
                 .foregroundStyle(Palette.ink2)
-                .minimumScaleFactor(0.7)
+                .lineLimit(1)
+                .minimumScaleFactor(0.6)
+                .dynamicTypeSize(...DynamicTypeSize.xLarge)
         }
         .frame(width: 46, height: 46)
         .onAppear {

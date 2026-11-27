@@ -249,6 +249,13 @@ jobs:
           xcrun simctl status_bar "$UDID" override --time "9:41" --batteryState charged --batteryLevel 100 --wifiBars 3 --cellularBars 4 || true
           mkdir -p shots
 
+          # The first launch after an install is slow while the system
+          # prepares the app, so launch it once and wait before the first
+          # picture (otherwise it shows the blank launch screen).
+          SIMCTL_CHILD_SUMI_SCENE=today xcrun simctl launch "$UDID" com.cosrx.sumi || true
+          sleep 15
+          xcrun simctl terminate "$UDID" com.cosrx.sumi 2>/dev/null || true
+
           # shoot <file> <scene> <hour> <light|dark> [seconds to wait]
           DEVICE="$UDID"
           shoot() {
