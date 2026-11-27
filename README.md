@@ -115,7 +115,15 @@ whatever is alive is written in ink; whatever floats is glass.
 - *Motion:* springs that start from where things are and inherit the
   finger's velocity, so a flick carries straight into the page turn;
   momentum is projected the way scroll views decelerate; edges resist with
-  Apple's rubber-band curve. Reduce Motion turns all of it into crossfades.
+  Apple's rubber-band curve. Everything that answers a touch settles within
+  0.4 s, and nothing waits for an animation: a finger that lands while a
+  card is still flying away takes hold of the next one, so you can flick
+  through a review as fast as you read. What happens often moves plainly;
+  the rare moments are allowed more — the heart pops where you tapped and
+  lands with a squash, a saved bookmark flies along a curve into its
+  ribbon, which swings as it lands, the hanko is pressed rather than faded
+  in, and the bar's highlight stretches like a drop of water as it moves.
+  Reduce Motion turns all of it into crossfades.
 - *Spatial continuity:* the session rises from Home on the same swipe up
   that starts it; the cover is clear, so pulling the first page down or
   pinching shows Home underneath; the recap and the onboarding lift away
@@ -139,17 +147,22 @@ whatever is alive is written in ink; whatever floats is glass.
 
 **Light gamification, no anxiety.** The day's seal — a ring round the
 day's kanji — fills as the day's cards are done: a goal to close, like
-the Activity rings, never a streak to lose. A combo chip (×3, ×4…) counts first-try answers and
-quietly resets on a miss; milestones get a haptic, the recap notes your
-best run, and a hanko stamp closes each session. Saved kanji form a
-collection you can practice. There are no streaks, lives or leaderboards.
+the Activity rings, never a streak to lose. Progress made during a session
+is drawn into the seal when you come back to Today, so you see it land,
+and the ring closing is the day's one celebration. A combo chip (×3, ×4…)
+counts first-try answers and quietly resets on a miss; milestones (5, 10,
+20…) make it leap and flash. A hanko is pressed at the end of each
+session, the recap notes your best run and names any kanji you had once
+forgotten and remembered today. In the library, the kanji you'll learn
+next is the one tile marked NEXT. Saved kanji form a collection you can
+practice. There are no streaks, lives or leaderboards.
 
 **Screens**
 
 | Screen | Contents |
 |---|---|
 | **Today** | A greeting (and the same in kana), what is waiting in one line, the day's seal, the cards as a small deck whose top card is written as you arrive, and one button: Review or Learn (the deck lifts under a swipe up too). The light follows the hour. When you're done: a hanko seal, when the next review is, and quiet buttons (read a text, practice saved, learn more). |
-| **Kanji** | The library: all kanji by level, or only the ones you've saved. Each level has its own pastel and a rule that is also its progress. A kanji you haven't started sits pressed into the paper; once started, its tile lies on top, and its ink deepens as you learn it — faint at first, full black once known. Search takes kanji, English, kana or romaji; hold a tile for a glance. |
+| **Kanji** | The library: all kanji by level, or only the ones you've saved. Each level has its own pastel and a rule that is also its progress. A kanji you haven't started sits pressed into the paper; once started, its tile lies on top, and its ink deepens as you learn it — faint at first, full black once known. Search takes kanji, English, kana or romaji; hold a tile for a glance. The kanji your next lesson teaches is the one tile marked NEXT. |
 | **Read** | Short texts with furigana only above kanji you haven't learned. The one to read next is set large with its opening line; the rest follow, each with a ring showing how much of it you can already read. Tap any word to look it up; Listen, Furigana and English are in the bar. |
 | **Kanji page** | The glyph on a sheet of practice paper, written as you arrive (hold for strokes and sound, double-tap to save), then numbered sections: meaning and readings, a memory hook (or your own), a stroke-order strip, words and a sentence — tap any of them to hear it. Save, Write and Practice are in the bar. |
 | **Menu** | Appearance, furigana, typeface, audio, voice, haptics; then pace, type readings, a daily reminder, import/export, how Sumi works, privacy, reset. |

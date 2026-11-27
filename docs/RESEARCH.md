@@ -8,6 +8,109 @@ questions that only testing with real learners can answer.
 
 ---
 
+## 0h. Revision 10 — motion with a reason: fifteen principles, each given a place
+
+The brief named fifteen principles to refine the app by: exaggeration,
+origin awareness, staggering, squash and stretch, rubber banding, the
+Doherty threshold, anticipation, follow-through, arcs, the Von Restorff
+effect, interruptible motion, secondary action, solid drawing, frequency
+of use and the peak–end rule. Nine of them are Disney's principles of
+animation (Thomas & Johnston, *The Illusion of Life*, 1981) as interface
+designers have translated them; the rest are laws of UX. On their own they
+pull in different directions — exaggeration and frequency of use, for one,
+are opposites — so the first job was to decide how they rank.
+
+### Two rules first
+
+Two of the fifteen decide how much of the other thirteen anything gets.
+
+- **The Doherty threshold** (Doherty & Thadani, IBM, 1982: productivity
+  rises sharply when a system answers in under 400 ms). Every motion that
+  answers a touch starts on the same frame and has settled inside 0.4 s;
+  and — the part animations usually break — **nothing waits for an
+  animation to finish**. The timing constants were tightened to fit
+  (`Motion`): a reveal 0.45 → 0.34 s, a page turn 0.42 → 0.36 s, a press
+  0.22 → 0.2 s, a first-appearance stagger whose last piece starts by
+  0.17 s. Decorative motion (a ring drawing round, a kanji writing itself)
+  may run longer because nothing is ever blocked behind it.
+- **Frequency of use** (HIG, *Motion*: "generally avoid adding motion to
+  UI interactions that occur frequently"). The more often something
+  happens, the plainer its motion. A page turn, a reveal, a tab change and
+  the bar stepping back as you scroll are quick and critically damped; the
+  bar's resizing while you read no longer uses the bouncy glass spring
+  (`Motion.glide` for the frequent changes, `Motion.liquid` only for the
+  rare structural ones). A kanji's page writes its glyph the first time it
+  is opened since launch, not every time (`Greeted`). Overshoot, squash and
+  keyframed flourishes are kept for the rare moments that should be felt,
+  so they keep their meaning.
+
+### The fifteen, and where each one lives
+
+| Principle | What it means | Where it is in Sumi |
+|---|---|---|
+| Exaggeration | Push a moment past realism so it reads — sparingly | The day's ring closing (the seal swells to 124 % and settles, a ring of light spreads, a success tap); combo milestones 5, 10, 20, 30, 50, 100 (the chip leaps to 145 %, wobbles and flashes amber; other steps get an 8 % bump); a swipe action passing its commit point (the icon jumps to 122 %) |
+| Origin awareness | Things come from where they were caused | The heart appears where the double-tap landed, not mid-card; a saved bookmark leaves the Save panel and flies into the ribbon; Strokes in the bar scrolls the page back to the kanji before writing it; (already) tiles zoom into their kanji, the menu grows out of 三 |
+| Staggering | Related pieces arrive one after another | An answer's lines unveil in reading order, 50 ms apart; the library's tiles settle in as a ripple the first time it opens; a text's Listen · Furigana · English unfold one by one in the bar; Practice arrives a beat after Save · Strokes; Today and the menu arrive in order — all inside 0.4 s |
+| Squash and stretch | Deformation shows mass and speed; volume is kept | The bar's highlight and every sliding switch stretch as they travel (see *liquid thumb*); the heart launches tall and lands wide; the hanko lands wide and flat; the bookmark pop; the day's seal dips when tapped; the deck squashes when pushed into the table |
+| Rubber banding | Resistance at a limit, not a wall | (already) cards past the first and last, sideways swipes past their limit, the deck lifted on Today; now also the deck pushed *down*, which resists at once and squashes |
+| Doherty threshold | Answer in under 400 ms; never block | The timing budget above; and the deck's touch surface (*interruptible motion*) |
+| Anticipation | A small move before the main one says what is coming | Holding Review lifts the top card toward you; lifting the deck past its threshold — or holding the button — turns the paper's light toward the cool light of a session before it starts; a finger resting on the deck presses it in; (already) the menu's three strokes even out under a finger |
+| Follow-through | Parts keep moving after the main body stops | The highlight's trailing edge arrives after its leading edge and overshoots; a saved ribbon lands and swings on its top edge; the heart drifts up after it has popped; the deck springs back past rest when released |
+| Arcs | Natural motion travels on curves | The bookmark's flight bows out to the side on its way up; a removed bookmark is tossed and falls; the heart's drift sways; (already) a swiped card turns about its bottom edge |
+| Von Restorff effect | The one that differs is noticed and remembered | In a library of dozens of quiet tiles, the kanji the next lesson will teach is the only one outlined in the accent and labelled NEXT; (already) one accent action per screen |
+| Interruptible motion | Any motion can be grabbed and redirected | The study deck's touch surface no longer rides on the card: a finger that lands while a card is still flying away ends that turn on the spot and keeps the touch, so a fast reader can flick, flick, flick without a dropped swipe (`FeedTouch`); both edges of every highlight are springs, so a second tap mid-way turns it round |
+| Secondary action | A smaller motion that supports the main one | A place's symbol bounces as it is chosen; Save, Strokes, Listen and English bounce when used; the line between question and answer draws itself; ink spreads from the hanko; light spreads from the closing seal |
+| Solid drawing | Things have weight, volume and one light | A card's shadow softens and widens as it is lifted and tightens when pressed (the study card, the deck); squash keeps area constant; the hanko's ink carries the pinholes and thin patches of a real stamp |
+| Frequency of use | Frequent motion is plain; rare motion may be rich | The rule above |
+| Peak–end rule | Experiences are remembered by their peak and their end | The session's end is designed: the hanko is pressed with a success tap on the frame it lands, the numbers roll up, and the recap now names the session's best news — kanji once forgotten and remembered first time today; back on Today, progress made during the session is drawn into the seal while you watch, and the ring closing is the day's peak |
+
+### The liquid thumb
+
+The highlight under the current place in the bar, and the thumb of every
+sliding switch, used to jump by matched geometry. It is now drawn from two
+edges animated by two springs (`LiquidThumb`): the edge in the direction of
+travel leaves at once (`Motion.lead`, 0.24 s, almost no bounce) and the
+other follows a little later and overshoots (`Motion.trail`, 0.42 s,
+bounce 0.24). The gap between them is the stretch, and it closes by
+itself — squash and stretch, follow-through and interruptibility from one
+small mechanism, the way the glass tab bar of iOS 26 behaves. With Reduce
+Motion both edges move together, without stretching.
+
+### Interruptible page turns
+
+Before, the gesture surface rode on the top card, so for the 0.4 s a card
+took to fly away, any new touch landed on nothing and was lost: a fast
+flick-flick dropped the second flick. Now the deck has one touch surface
+that stays where the top card rests, and the card on top hands it its
+gestures each time it draws. A turn in flight registers how it ends;
+a finger landing on the deck ends it immediately and the same touch
+continues on the next card — a tap reveals it, a swipe turns it. The
+gestures themselves are untouched (`GestureSurface`'s recognizers and
+their rules are the ones from revision 6); only where the surface lives
+changed, and the tap filter now resets for each new card so a tap on one
+card can never pair with a tap on the next.
+
+### Accessibility
+
+Every keyframed flourish has a resting state that Reduce Motion goes
+straight to (the seal, the hanko, the heart, the ribbon, the thumbs, the
+cascades and the unveils); haptics and VoiceOver labels are unchanged, and
+the NEXT tile also says "Next to learn" to VoiceOver.
+
+### What only testing can settle
+
+- **H9 — fast flicking.** Five readers who know the app review 40 cards as
+  fast as they like. With revision 9 and revision 10 in turn, count dropped
+  swipes (a swipe that did nothing). Revision 10 should drop none.
+- **H10 — the stretch.** Asked to describe the bar after a session, people
+  shouldn't mention the highlight stretching; asked which of two otherwise
+  identical builds feels better made, they should pick the one with it.
+- **H11 — NEXT.** Shown the library cold, four of five should be able to
+  say which kanji they'll learn next within five seconds.
+- **H12 — the end.** People who saw a "once forgotten — remembered today"
+  line should rate the session as more satisfying than people who
+  answered the same cards without it.
+
 ## 0g. Revision 9 — ink, light and water: one bar, a menu, washes of colour and lines that draw themselves
 
 The brief for this revision asked for the look to go much further — more

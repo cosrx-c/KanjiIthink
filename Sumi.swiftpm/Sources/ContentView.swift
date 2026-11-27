@@ -274,13 +274,16 @@ extension View {
 struct Caption: View {
     let text: String
     var color: Color = Palette.ink2
+    /// Lines it may wrap onto when the type is large, rather than cutting
+    /// words off; one by default.
+    var lines: Int = 1
 
     var body: some View {
         Text(text.uppercased())
             .font(.caption.weight(.semibold))
             .tracking(Tracking.caption)
             .foregroundStyle(color)
-            .lineLimit(1)
+            .lineLimit(lines)
     }
 }
 
@@ -349,24 +352,51 @@ struct SectionHeader: View {
 
 /// Motion in Apple's terms: springs that start from where things are,
 /// inherit the finger's velocity, project momentum and resist at the edges.
+///
+/// Two rules decide how much motion anything gets.
+///
+///   · The Doherty threshold. Whatever answers a touch starts on the same
+///     frame and has settled within 0.4 s, and nothing ever waits for an
+///     animation to finish — a new touch takes over from the old motion.
+///   · Frequency of use. The more often something happens, the plainer its
+///     motion: a page turn, a reveal, a tab or the bar stepping back is
+///     quick and critically damped. Overshoot, squash and keyframed
+///     flourishes are kept for the rare moments that should be felt — a
+///     heart, a seal pressed at the end, the day's ring closing, a run of
+///     ten — so they keep their meaning (exaggeration, peak–end).
 enum Motion {
     /// Critically damped — for things that simply settle.
-    static let settle = Animation.spring(duration: 0.35, bounce: 0)
+    static let settle = Animation.spring(duration: 0.32, bounce: 0)
     /// A touch of overshoot, only after a gesture carried momentum.
-    static let flick = Animation.spring(duration: 0.4, bounce: 0.15)
-    /// Answers arriving on a reveal.
-    static let reveal = Animation.spring(duration: 0.45, bounce: 0.08)
+    static let flick = Animation.spring(duration: 0.38, bounce: 0.15)
+    /// Answers arriving on a reveal — the most frequent motion in the app,
+    /// so the plainest: fast, barely any overshoot.
+    static let reveal = Animation.spring(duration: 0.34, bounce: 0.06)
     /// A control answering a touch: quick, no overshoot.
-    static let press = Animation.spring(duration: 0.22, bounce: 0)
+    static let press = Animation.spring(duration: 0.2, bounce: 0)
     /// Glass changing shape: a little overshoot, as a drop of water has.
-    static let liquid = Animation.spring(duration: 0.5, bounce: 0.2)
+    static let liquid = Animation.spring(duration: 0.46, bounce: 0.2)
+    /// Glass that changes size often — the bar stepping back as you read,
+    /// a tab changing — is over quickly, without a wobble.
+    static let glide = Animation.spring(duration: 0.3, bounce: 0)
+    /// The two edges of a sliding highlight: the one in front leaves at
+    /// once, the one behind follows and overshoots a little. The gap
+    /// between them is the stretch.
+    static let lead = Animation.spring(duration: 0.24, bounce: 0.1)
+    static let trail = Animation.spring(duration: 0.42, bounce: 0.24)
     /// A line being drawn: quick off the mark, slowing as the brush lifts.
     static let draw = Animation.easeOut(duration: 0.7)
+
+    /// A piece of a screen arriving the first time it's seen, a beat after
+    /// the piece before it — the whole sequence inside the 0.4 s budget.
+    static func arrival(_ order: Int) -> Animation {
+        reveal.delay(0.02 + Double(order) * 0.05)
+    }
 
     /// A page turn that continues at the finger's speed. `velocity` is
     /// relative: points per second divided by the distance left to travel.
     static func page(velocity: Double) -> Animation {
-        .interpolatingSpring(duration: 0.42, bounce: 0, initialVelocity: velocity)
+        .interpolatingSpring(duration: 0.36, bounce: 0, initialVelocity: velocity)
     }
 
     /// Apple's rubber-band curve: the further past the edge, the less the
@@ -940,6 +970,9 @@ struct PressableStyle: ButtonStyle {
 /// sink slightly on touch and spring back.
 struct PillStyle: ButtonStyle {
     var prominent = false
+    /// Told when a finger lands on the button and when it lifts, so what
+    /// the button acts on can lean toward it first (anticipation).
+    var onPress: ((Bool) -> Void)? = nil
 
     func makeBody(configuration: Configuration) -> some View {
         pill(configuration.label)
@@ -947,6 +980,9 @@ struct PillStyle: ButtonStyle {
             .opacity(configuration.isPressed ? 0.85 : 1)
             .animation(configuration.isPressed ? Motion.press : Motion.flick, value: configuration.isPressed)
             .hoverEffect(.highlight)
+            .onChange(of: configuration.isPressed) { _, pressed in
+                onPress?(pressed)
+            }
     }
 
     @ViewBuilder
@@ -1080,6 +1116,37 @@ struct SeededRandom: RandomNumberGenerator {
 enum Grain {
     static let forLight: UIImage = make(tone: UIColor.black, strength: 1)
     static let forDark: UIImage = make(tone: UIColor.white, strength: 0.7)
+
+    /// What a seal leaves on paper: solid ink with the pinholes and thin
+    /// patches of a real stamp, so the hanko reads as pressed into the page
+    /// rather than printed on the screen (solid drawing). Used as a mask.
+    static let stamp: UIImage = {
+        let size = CGSize(width: 160, height: 160)
+        let format = UIGraphicsImageRendererFormat()
+        format.opaque = false
+        format.scale = 2
+        return UIGraphicsImageRenderer(size: size, format: format).image { context in
+            let cg = context.cgContext
+            cg.setFillColor(UIColor.black.cgColor)
+            cg.fill(CGRect(origin: .zero, size: size))
+            var rng = SeededRandom(seed: 0x4A4E_4B4F)
+            cg.setBlendMode(.clear)
+            for _ in 0..<240 {
+                let x = CGFloat(rng.unit()) * size.width
+                let y = CGFloat(rng.unit()) * size.height
+                let r = CGFloat(0.25 + rng.unit() * 0.85)
+                cg.fillEllipse(in: CGRect(x: x - r, y: y - r, width: r * 2, height: r * 2))
+            }
+            cg.setBlendMode(.destinationOut)
+            for _ in 0..<24 {
+                let x = CGFloat(rng.unit()) * size.width
+                let y = CGFloat(rng.unit()) * size.height
+                let r = CGFloat(3 + rng.unit() * 7)
+                cg.setFillColor(UIColor(white: 0, alpha: CGFloat(0.12 + rng.unit() * 0.2)).cgColor)
+                cg.fillEllipse(in: CGRect(x: x - r, y: y - r, width: r * 2, height: r * 2))
+            }
+        }
+    }()
 
     private static func make(tone: UIColor, strength: CGFloat) -> UIImage {
         let size = CGSize(width: 180, height: 180)
@@ -1700,19 +1767,29 @@ struct SlidePill<Value: Hashable>: View {
     @Binding var selection: Value
     /// Segments hug their titles instead of sharing the width.
     var compact = false
-    @Namespace private var thumb
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         HStack(spacing: 0) {
-            ForEach(options) { option in
+            ForEach(Array(options.enumerated()), id: \.element.id) { index, option in
                 segment(option)
+                    .thumbSegment(index)
             }
         }
+        .modifier(LiquidThumb(selected: selectedIndex) {
+            Capsule()
+                .fill(Palette.card)
+                .elevation(0.3)
+                .litEdge(Capsule())
+        })
         .padding(3)
         .well(Capsule())
         .accessibilityElement(children: .contain)
         .accessibilityLabel(label)
+    }
+
+    private var selectedIndex: Int {
+        options.firstIndex(where: { $0.value == selection }) ?? 0
     }
 
     private func segment(_ option: Option) -> some View {
@@ -1733,19 +1810,118 @@ struct SlidePill<Value: Hashable>: View {
                 .padding(.horizontal, compact ? Space.m : Space.xs)
                 .frame(maxWidth: width)
                 .frame(height: 34)
-                .background {
-                    if selected {
-                        Capsule()
-                            .fill(Palette.card)
-                            .elevation(0.3)
-                            .litEdge(Capsule())
-                            .matchedGeometryEffect(id: "thumb", in: thumb)
-                    }
-                }
                 .contentShape(Capsule())
         }
         .buttonStyle(.plain)
         .accessibilityAddTraits(selected ? .isSelected : [])
+    }
+}
+
+/// Where each segment of a switch, or each place in the bar, lies — so a
+/// single highlight can travel between them.
+struct ThumbSegmentKey: PreferenceKey {
+    static let defaultValue: [Int: Anchor<CGRect>] = [:]
+
+    static func reduce(value: inout [Int: Anchor<CGRect>], nextValue: () -> [Int: Anchor<CGRect>]) {
+        value.merge(nextValue()) { _, new in new }
+    }
+}
+
+extension View {
+    /// Marks one segment a `LiquidThumb` can come to rest on.
+    func thumbSegment(_ index: Int) -> some View {
+        anchorPreference(key: ThumbSegmentKey.self, value: .bounds) { anchor in [index: anchor] }
+    }
+}
+
+/// A highlight that travels between segments like a drop of water. The
+/// edge in the direction of travel leaves first and the other follows and
+/// overshoots a little, so the highlight stretches on the way and gathers
+/// itself where it lands (squash and stretch, follow-through). Both edges
+/// are springs that start from wherever they are, so a second tap half-way
+/// simply turns it round (interruptible motion). With Reduce Motion it
+/// moves without stretching.
+struct LiquidThumb<Thumb: View>: ViewModifier {
+    let selected: Int
+    @ViewBuilder var thumb: () -> Thumb
+    @State private var shown: Int? = nil
+    @State private var forward = true
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    func body(content: Content) -> some View {
+        content
+            .backgroundPreferenceValue(ThumbSegmentKey.self) { anchors in
+                GeometryReader { geo in
+                    if let anchor = anchors[shown ?? selected] {
+                        let rect: CGRect = geo[anchor]
+                        let leading: CGFloat = max(rect.minX, 0)
+                        let trailing: CGFloat = max(geo.size.width - rect.maxX, 0)
+                        thumb()
+                            .padding(.leading, leading)
+                            .animation(leadingEdge, value: leading)
+                            .padding(.trailing, trailing)
+                            .animation(trailingEdge, value: trailing)
+                            .frame(width: geo.size.width, height: rect.height)
+                            .offset(y: rect.minY)
+                    }
+                }
+            }
+            .onChange(of: selected) { old, new in
+                forward = new > old
+                shown = new
+            }
+    }
+
+    private var leadingEdge: Animation {
+        if reduceMotion { return Motion.settle }
+        return forward ? Motion.trail : Motion.lead
+    }
+
+    private var trailingEdge: Animation {
+        if reduceMotion { return Motion.settle }
+        return forward ? Motion.lead : Motion.trail
+    }
+}
+
+/// A line arriving in reading order, a beat after the line above it
+/// (staggering): the eye is led down instead of meeting a block. It plays
+/// once, when the line first appears, and inside the 0.4 s budget.
+struct Unveil: ViewModifier {
+    var order: Int = 0
+    var rise: CGFloat = 6
+    var soften: CGFloat = 3
+    @State private var shown = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    func body(content: Content) -> some View {
+        let visible: Bool = shown || reduceMotion
+        return content
+            .opacity(visible ? 1 : 0)
+            .offset(y: visible ? 0 : rise)
+            .blur(radius: visible ? 0 : soften)
+            .onAppear {
+                guard !shown else { return }
+                withAnimation(Motion.reveal.delay(0.03 + Double(order) * 0.05)) { shown = true }
+            }
+    }
+}
+
+/// Tiles settling into a grid one after another the first time it is
+/// shown — a ripple from the first tile on, each a hair after the last,
+/// all of it inside the 0.4 s budget (staggering). Tiles that appear later,
+/// as the grid scrolls, are simply there.
+struct Cascade: ViewModifier {
+    let shown: Bool
+    let index: Int
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    func body(content: Content) -> some View {
+        let visible: Bool = shown || reduceMotion
+        return content
+            .opacity(visible ? 1 : 0)
+            .scaleEffect(visible ? 1 : 0.88)
+            .offset(y: visible ? 0 : 10)
+            .animation(Motion.reveal.delay(Double(min(index, 24)) * 0.012), value: shown)
     }
 }
 
@@ -1778,9 +1954,9 @@ struct Arrive: ViewModifier {
         let visible: Bool = shown || reduceMotion
         return content
             .opacity(visible ? 1 : 0)
-            .offset(y: visible ? 0 : 14)
-            .blur(radius: visible ? 0 : 6)
-            .animation(Motion.reveal.delay(0.06 + Double(order) * 0.08), value: shown)
+            .offset(y: visible ? 0 : 10)
+            .blur(radius: visible ? 0 : 4)
+            .animation(Motion.arrival(order), value: shown)
     }
 }
 
@@ -1902,35 +2078,106 @@ struct ShimmerText: View {
     }
 }
 
-/// The heart that pops on a double-tap: it springs in past full size, a
-/// ring spreads from it, then it floats up and fades.
+/// The heart that pops on a double-tap — where the finger landed, not in
+/// the middle of the card (origin awareness). It launches tall and narrow,
+/// lands wide and flat and springs back to its shape without losing volume
+/// (squash and stretch, solid drawing); it tilts as it lands (secondary
+/// action); then it drifts up along a curve and fades (arcs,
+/// follow-through), while a ring of colour spreads from where it began.
 struct HeartBurst: View {
-    @State private var popped = false
-    @State private var ring = false
-    @State private var gone = false
+    /// Where the double-tap landed, in the card; the middle when unknown.
+    var at: CGPoint? = nil
+    @State private var go = false
+
+    private struct Pose {
+        var scale = 0.2
+        var stretchX = 1.0
+        var stretchY = 1.0
+        var tilt = Angle.zero
+        var rise = 0.0
+        var sway = 0.0
+        var opacity = 0.0
+        var ring = 0.0
+    }
 
     var body: some View {
-        ZStack {
+        GeometryReader { geo in
+            KeyframeAnimator(initialValue: Pose(), trigger: go) { pose in
+                heart(pose)
+                    .position(origin(in: geo.size))
+            } keyframes: { _ in
+                KeyframeTrack(\.scale) {
+                    SpringKeyframe(1.15, duration: 0.2, spring: .bouncy)
+                    SpringKeyframe(1.0, duration: 0.24, spring: .smooth)
+                    LinearKeyframe(1.0, duration: 0.18)
+                    CubicKeyframe(0.82, duration: 0.3)
+                }
+                KeyframeTrack(\.stretchX) {
+                    CubicKeyframe(0.84, duration: 0.1)
+                    CubicKeyframe(1.17, duration: 0.09)
+                    SpringKeyframe(1.0, duration: 0.3, spring: .bouncy)
+                }
+                KeyframeTrack(\.stretchY) {
+                    CubicKeyframe(1.18, duration: 0.1)
+                    CubicKeyframe(0.85, duration: 0.09)
+                    SpringKeyframe(1.0, duration: 0.3, spring: .bouncy)
+                }
+                KeyframeTrack(\.tilt) {
+                    CubicKeyframe(Angle.degrees(-10), duration: 0.12)
+                    CubicKeyframe(Angle.degrees(6), duration: 0.14)
+                    SpringKeyframe(Angle.zero, duration: 0.3, spring: .smooth)
+                }
+                KeyframeTrack(\.rise) {
+                    LinearKeyframe(0.0, duration: 0.5)
+                    CubicKeyframe(52.0, duration: 0.42)
+                }
+                KeyframeTrack(\.sway) {
+                    LinearKeyframe(0.0, duration: 0.5)
+                    CubicKeyframe(12.0, duration: 0.2)
+                    CubicKeyframe(5.0, duration: 0.22)
+                }
+                KeyframeTrack(\.opacity) {
+                    LinearKeyframe(1.0, duration: 0.06)
+                    LinearKeyframe(1.0, duration: 0.54)
+                    LinearKeyframe(0.0, duration: 0.32)
+                }
+                KeyframeTrack(\.ring) {
+                    CubicKeyframe(1.0, duration: 0.65)
+                }
+            }
+        }
+        .onAppear { go = true }
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
+    }
+
+    /// The tap point, kept far enough inside the card for the heart to fit.
+    private func origin(in size: CGSize) -> CGPoint {
+        guard let at = at else { return CGPoint(x: size.width / 2, y: size.height / 2) }
+        let x: CGFloat = min(max(at.x, 70), max(size.width - 70, 70))
+        let y: CGFloat = min(max(at.y, 90), max(size.height - 80, 90))
+        return CGPoint(x: x, y: y)
+    }
+
+    private func heart(_ pose: Pose) -> some View {
+        let spread = CGFloat(pose.ring)
+        let fade: Double = 0.45 * (1 - pose.ring)
+        return ZStack {
             Circle()
-                .stroke(Palette.sakura.opacity(ring ? 0 : 0.45), lineWidth: ring ? 1 : 8)
+                .stroke(Palette.sakura.opacity(fade), lineWidth: 1 + 7 * (1 - spread))
                 .frame(width: 120, height: 120)
-                .scaleEffect(ring ? 2 : 0.5)
+                .scaleEffect(0.5 + 1.5 * spread)
             Image(systemName: "heart.fill")
-                .font(.system(size: 96, weight: .regular))
+                .font(.system(size: 92, weight: .regular))
                 .foregroundStyle(LinearGradient(colors: [Palette.sakura, Color.pink],
                                                 startPoint: .top, endPoint: .bottom))
                 .shadow(color: Palette.sakura.opacity(0.35), radius: 18, x: 0, y: 8)
-                .scaleEffect(popped ? (gone ? 0.9 : 1) : 0.2)
-                .offset(y: gone ? -36 : 0)
-                .opacity(gone ? 0 : (popped ? 1 : 0))
+                .scaleEffect(x: CGFloat(pose.stretchX), y: CGFloat(pose.stretchY), anchor: .bottom)
+                .scaleEffect(CGFloat(pose.scale))
+                .rotationEffect(pose.tilt)
+                .offset(x: CGFloat(pose.sway), y: -CGFloat(pose.rise))
+                .opacity(pose.opacity)
         }
-        .onAppear {
-            withAnimation(.spring(duration: 0.4, bounce: 0.55)) { popped = true }
-            withAnimation(.easeOut(duration: 0.65)) { ring = true }
-            withAnimation(.easeIn(duration: 0.3).delay(0.55)) { gone = true }
-        }
-        .allowsHitTesting(false)
-        .accessibilityHidden(true)
     }
 }
 
@@ -1992,6 +2239,9 @@ struct GestureSurface: UIViewRepresentable {
         var pinchEnded: (CGFloat) -> Void = { _ in }
         /// The pointer's location while it's over the surface, nil when it leaves.
         var hover: (CGPoint?) -> Void = { _ in }
+        /// Changes when the surface starts serving a different card, so a
+        /// tap on the old card can never pair with a tap on the new one.
+        var epoch = 0
     }
 
     var handlers: Handlers
@@ -2010,6 +2260,9 @@ struct GestureSurface: UIViewRepresentable {
     }
 
     func updateUIView(_ uiView: TouchView, context: Context) {
+        if context.coordinator.handlers.epoch != handlers.epoch {
+            context.coordinator.forgetTaps()
+        }
         context.coordinator.handlers = handlers
     }
 
@@ -2054,6 +2307,11 @@ struct GestureSurface: UIViewRepresentable {
 
         init(handlers: Handlers) {
             self.handlers = handlers
+        }
+
+        /// A new card: the next tap starts afresh.
+        func forgetTaps() {
+            lastTap = .distantPast
         }
 
         func install(on view: TouchView, pinches: Bool) {
@@ -2170,35 +2428,110 @@ struct GestureSurface: UIViewRepresentable {
 /// Today, as a seal: a ring that fills with ink as the day's cards are
 /// done, drawn round the kanji for the day of the week — 日 月 火 水 木 金
 /// 土, seven of the first kanji anyone learns. A goal to close, the way
-/// the Activity rings are, never a streak to lose; it blooms when it does.
+/// the Activity rings are, never a streak to lose.
+///
+/// Progress made while a session covers the seal is held back and drawn in
+/// when you come back to it, so you watch your work land (goal gradient,
+/// peak–end). The moment the ring closes is the day's peak and is allowed
+/// more than anything else on the screen: the seal swells and settles, a
+/// ring of light spreads from it and the phone answers on the same beat
+/// (exaggeration). Tapped, it says the day aloud and dips like a stamp
+/// being pressed (squash and stretch).
 struct DaySeal: View {
     let progress: Double
     let date: Date
     var size: CGFloat = 46
-    @State private var drawn = false
+    /// Whether the seal can be seen. While it can't, the ring waits.
+    var visible = true
+    @State private var shown = 0.0
+    @State private var strikes = 0
+    @State private var closings = 0
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private static let glyphs = ["日", "月", "火", "水", "木", "金", "土"]
     private static let names = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
     /// How the day is said — tap the seal to hear it.
     private static let readings = ["にちようび", "げつようび", "かようび", "すいようび", "もくようび", "きんようび", "どようび"]
-    @State private var struck = false
+
+    private struct Squash {
+        var x = 1.0
+        var y = 1.0
+    }
+
+    private struct Pop {
+        var scale = 1.0
+        var ripple = 1.0
+    }
 
     private static func index(_ date: Date) -> Int {
         let weekday = Calendar(identifier: .gregorian).component(.weekday, from: date)
         return min(max(weekday - 1, 0), 6)
     }
 
+    private var target: Double { min(max(progress, 0), 1) }
+
     var body: some View {
-        let share = CGFloat(min(max(progress, 0), 1))
-        let closed: Bool = share >= 1
-        let line: CGFloat = size * 0.075
         let day = DaySeal.index(date)
-        ZStack {
+        let closed: Bool = shown >= 1
+        KeyframeAnimator(initialValue: Pop(), trigger: closings) { pop in
+            KeyframeAnimator(initialValue: Squash(), trigger: strikes) { squash in
+                seal(day: day, closed: closed)
+                    .scaleEffect(x: CGFloat(squash.x), y: CGFloat(squash.y), anchor: .bottom)
+            } keyframes: { _ in
+                KeyframeTrack(\.x) {
+                    CubicKeyframe(1.12, duration: 0.07)
+                    CubicKeyframe(0.96, duration: 0.1)
+                    SpringKeyframe(1.0, duration: 0.25, spring: .bouncy)
+                }
+                KeyframeTrack(\.y) {
+                    CubicKeyframe(0.86, duration: 0.07)
+                    CubicKeyframe(1.05, duration: 0.1)
+                    SpringKeyframe(1.0, duration: 0.25, spring: .bouncy)
+                }
+            }
+            .scaleEffect(CGFloat(pop.scale))
+            .background {
+                Circle()
+                    .stroke(Palette.accent.opacity(0.5 * (1 - pop.ripple)), lineWidth: 2)
+                    .scaleEffect(1 + 0.9 * CGFloat(pop.ripple))
+            }
+        } keyframes: { _ in
+            KeyframeTrack(\.scale) {
+                SpringKeyframe(1.24, duration: 0.18, spring: .bouncy)
+                SpringKeyframe(0.95, duration: 0.14, spring: .smooth)
+                SpringKeyframe(1.0, duration: 0.3, spring: .bouncy)
+            }
+            KeyframeTrack(\.ripple) {
+                MoveKeyframe(0.0)
+                CubicKeyframe(1.0, duration: 0.8)
+            }
+        }
+        .frame(width: size, height: size)
+        .contentShape(Circle())
+        .onTapGesture { say(day) }
+        .onAppear { arrive() }
+        .onChange(of: progress) { _, _ in
+            if visible { land() }
+        }
+        .onChange(of: visible) { _, now in
+            guard now else { return }
+            // Let whatever covered the seal finish leaving first.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) { land() }
+        }
+        .accessibilityElement()
+        .accessibilityLabel(target >= 1
+                            ? "\(DaySeal.names[day]). Today's ring is closed"
+                            : "\(DaySeal.names[day]). Today \(Int((target * 100).rounded())) percent done")
+        .accessibilityAction(named: "Hear the day in Japanese") { say(day) }
+    }
+
+    private func seal(day: Int, closed: Bool) -> some View {
+        let line: CGFloat = size * 0.075
+        return ZStack {
             Circle()
                 .stroke(Palette.ink.opacity(0.1), lineWidth: line)
             Circle()
-                .trim(from: 0, to: drawn || reduceMotion ? share : 0)
+                .trim(from: 0, to: CGFloat(shown))
                 .stroke(Palette.accent.gradient, style: StrokeStyle(lineWidth: line, lineCap: .round))
                 .rotationEffect(.degrees(-90))
                 .bloom(Palette.accent, strength: closed ? 0.5 : 0, radius: size * 0.2)
@@ -2207,43 +2540,127 @@ struct DaySeal: View {
                 .foregroundStyle(closed ? Palette.accent : Palette.ink)
         }
         .frame(width: size, height: size)
-        .scaleEffect(struck ? 0.9 : 1)
-        .animation(Motion.settle, value: share)
         .animation(Motion.flick, value: closed)
-        .animation(Motion.flick, value: struck)
-        .contentShape(Circle())
-        .onTapGesture { say(day) }
-        .onAppear {
-            withAnimation(.easeOut(duration: 0.9).delay(0.3)) { drawn = true }
-        }
-        .accessibilityElement()
-        .accessibilityLabel(closed
-                            ? "\(DaySeal.names[day]). Today's ring is closed"
-                            : "\(DaySeal.names[day]). Today \(Int((share * 100).rounded())) percent done")
-        .accessibilityAction(named: "Hear the day in Japanese") { say(day) }
     }
 
-    /// The day of the week, aloud: 日曜日, 月曜日… The seal dips as it's struck.
+    /// The ring draws round to where the day stands when the seal appears.
+    private func arrive() {
+        guard shown == 0 else { return }
+        if reduceMotion {
+            shown = target
+        } else {
+            withAnimation(.easeOut(duration: 0.9).delay(0.3)) { shown = target }
+        }
+    }
+
+    /// Brings the ring up to date where it can be seen.
+    private func land() {
+        let goal = target
+        guard goal != shown else { return }
+        let closing: Bool = shown < 1 && goal >= 1
+        withAnimation(reduceMotion ? Animation.easeOut(duration: 0.2) : Animation.easeInOut(duration: 0.7)) {
+            shown = goal
+        }
+        guard closing else { return }
+        DispatchQueue.main.asyncAfter(deadline: .now() + (reduceMotion ? 0.2 : 0.62)) {
+            if !reduceMotion { closings += 1 }
+            Haptics.success()
+        }
+    }
+
+    /// The day of the week, aloud: 日曜日, 月曜日… The seal dips like a
+    /// stamp as it's struck.
     private func say(_ day: Int) {
         Speaker.shared.say(DaySeal.readings[day])
         Haptics.tap()
-        struck = true
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) { struck = false }
+        if !reduceMotion { strikes += 1 }
     }
 }
 
 // MARK: Shared pieces
 
 /// A vermilion seal (判子) used to mark a finished session — in Japan a
-/// stamp is how something is signed off as done.
+/// stamp is how something is signed off as done. It is pressed, not faded
+/// in: it falls, lands wide and flat and springs back to its shape (squash
+/// and stretch); its ink has the pinholes of a real stamp (solid drawing);
+/// a ring of ink spreads into the paper from the impact (secondary action);
+/// and at the end of a session the phone answers on the frame it lands.
 struct Hanko: View {
     var glyph = "済"
     var size: CGFloat = 96
-    @State private var stamped = false
-    @State private var pressed = false
+    /// A success tap in the hand as the stamp lands.
+    var thud = false
+    @State private var go = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
+    private struct Pose {
+        var scale = 1.6
+        var stretchX = 1.0
+        var stretchY = 1.0
+        var turn = -15.0
+        var opacity = 0.0
+        var ink = 1.0
+    }
+
+    /// Where the stamp comes to rest — and where it starts with Reduce Motion.
+    private static let rest = Pose(scale: 1, stretchX: 1, stretchY: 1, turn: -8, opacity: 1, ink: 1)
+
     var body: some View {
+        KeyframeAnimator(initialValue: reduceMotion ? Hanko.rest : Pose(), trigger: go) { pose in
+            seal
+                .scaleEffect(x: CGFloat(pose.stretchX), y: CGFloat(pose.stretchY), anchor: .bottom)
+                .scaleEffect(CGFloat(pose.scale))
+                .rotationEffect(.degrees(pose.turn))
+                .opacity(pose.opacity)
+                .background {
+                    Circle()
+                        .stroke(Palette.shu.opacity(0.32 * (1 - pose.ink)),
+                                lineWidth: max(1, size * 0.05 * CGFloat(1 - pose.ink)))
+                        .scaleEffect(0.9 + 0.95 * CGFloat(pose.ink))
+                }
+        } keyframes: { _ in
+            KeyframeTrack(\.scale) {
+                CubicKeyframe(1.0, duration: 0.16)
+            }
+            KeyframeTrack(\.stretchX) {
+                LinearKeyframe(1.0, duration: 0.16)
+                CubicKeyframe(1.12, duration: 0.06)
+                CubicKeyframe(0.97, duration: 0.08)
+                SpringKeyframe(1.0, duration: 0.22, spring: .smooth)
+            }
+            KeyframeTrack(\.stretchY) {
+                LinearKeyframe(1.0, duration: 0.16)
+                CubicKeyframe(0.89, duration: 0.06)
+                CubicKeyframe(1.03, duration: 0.08)
+                SpringKeyframe(1.0, duration: 0.22, spring: .smooth)
+            }
+            KeyframeTrack(\.turn) {
+                CubicKeyframe(-8.0, duration: 0.2)
+            }
+            KeyframeTrack(\.opacity) {
+                LinearKeyframe(1.0, duration: 0.1)
+            }
+            KeyframeTrack(\.ink) {
+                LinearKeyframe(1.0, duration: 0.16)
+                MoveKeyframe(0.0)
+                CubicKeyframe(1.0, duration: 0.85)
+            }
+        }
+        .frame(width: size, height: size)
+        .onAppear {
+            guard !reduceMotion else {
+                if thud { Haptics.success() }
+                return
+            }
+            go = true
+            if thud {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.16) { Haptics.success() }
+            }
+        }
+        .accessibilityHidden(true)
+    }
+
+    private var seal: some View {
         ZStack {
             Circle().strokeBorder(Palette.shu, lineWidth: size * 0.06)
             Text(glyph)
@@ -2251,25 +2668,10 @@ struct Hanko: View {
                 .foregroundStyle(Palette.shu)
         }
         .frame(width: size, height: size)
-        .rotationEffect(.degrees(-8))
-        .scaleEffect(stamped || reduceMotion ? 1 : 1.5)
-        .opacity(stamped ? 1 : 0)
-        .background {
-            // The press of the stamp: a ring of ink spreading into the paper.
-            Circle()
-                .stroke(Palette.shu.opacity(pressed ? 0 : 0.32), lineWidth: pressed ? 1 : size * 0.05)
-                .scaleEffect(pressed ? 1.85 : 0.9)
-                .opacity(reduceMotion || !stamped ? 0 : 1)
+        .mask {
+            Image(uiImage: Grain.stamp)
+                .resizable()
         }
-        .onAppear {
-            withAnimation(reduceMotion ? .easeOut(duration: 0.2) : .spring(response: 0.35, dampingFraction: 0.55)) {
-                stamped = true
-            }
-            withAnimation(.easeOut(duration: 0.85).delay(0.2)) {
-                pressed = true
-            }
-        }
-        .accessibilityHidden(true)
     }
 }
 
@@ -3923,6 +4325,9 @@ struct SessionResult {
     var firstTry = 0
     var bestCombo = 0
     var missed: [String] = []
+    /// Kanji forgotten at some point before, remembered first time today —
+    /// the best news a session can hold, kept for its end (peak–end).
+    var recovered: [String] = []
     var started = Date()
 }
 
@@ -4002,6 +4407,7 @@ final class SessionModel: ObservableObject {
     func commit(_ rating: Rating, ms: Int, miss: MissReason?, store: Store) {
         guard let item = queue.first, item.kind == .card else { return }
         remember(store)
+        let before = store.card(item.glyph, item.facet)
         if mode != .practice {
             store.record(rating, glyph: item.glyph, facet: item.facet, ms: ms, miss: miss)
         }
@@ -4024,6 +4430,9 @@ final class SessionModel: ObservableObject {
                 r.firstTry += 1
                 combo += 1
                 r.bestCombo = max(r.bestCombo, combo)
+                if (before?.lapses ?? 0) > 0 && !r.recovered.contains(item.glyph) {
+                    r.recovered.append(item.glyph)
+                }
                 sinceContext += 1
                 // Now and then, a sentence for a kanji just recalled —
                 // variety for attention, context for meaning.
@@ -4281,6 +4690,15 @@ enum Route: Hashable {
 final class Router: ObservableObject {
     enum Tab: Hashable {
         case today, kanji, read
+
+        /// Left to right in the bar.
+        var order: Int {
+            switch self {
+            case .today: return 0
+            case .kanji: return 1
+            case .read: return 2
+            }
+        }
 
         var title: String {
             switch self {
@@ -4644,7 +5062,7 @@ struct ContentView_Previews: PreviewProvider {
 /// build fills in its build number and commit, so a copy built anywhere
 /// else says "local build".
 enum BuildInfo {
-    static let revision = 9
+    static let revision = 10
     static let commit = "local"
 
     static var number: String {
@@ -4941,6 +5359,9 @@ struct BarItem: View {
     var active = false
     /// Japanese shown in place of a symbol (あ for furigana).
     var glyph: String? = nil
+    /// Counts up whenever the item is chosen; the symbol gives a small
+    /// bounce each time (secondary action).
+    var bounce = 0
 
     var body: some View {
         VStack(spacing: 3) {
@@ -4953,6 +5374,7 @@ struct BarItem: View {
                         .font(.system(size: 18, weight: .medium))
                         .symbolVariant(active ? .fill : .none)
                         .contentTransition(.symbolEffect(.replace))
+                        .symbolEffect(.bounce, value: bounce)
                 }
             }
             .frame(height: 22)
@@ -4989,7 +5411,7 @@ struct NavBar: View {
     @EnvironmentObject var router: Router
     @Environment(\.zoomNamespace) private var zoomNamespace
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @Namespace private var thumb
+    @State private var bounces: [Router.Tab: Int] = [:]
 
     /// What the bar is holding right now.
     private enum Mode: Equatable {
@@ -5031,8 +5453,14 @@ struct NavBar: View {
         }
         .frame(maxWidth: NavMetrics.maxWidth)
         .padding(.horizontal, NavMetrics.margin)
-        .animation(reduceMotion ? Animation.easeOut(duration: 0.2) : Motion.liquid, value: mode)
-        .animation(reduceMotion ? Animation.easeOut(duration: 0.2) : Motion.liquid, value: router.tab)
+        // A change of what the bar holds — a screen pushed, the places
+        // peeking — is rare and gets the liquid spring. The bar stepping
+        // back while you read and a change of place happen all the time,
+        // so they glide, with no wobble (frequency of use).
+        .animation(reduceMotion ? Animation.easeOut(duration: 0.2) : Motion.liquid, value: router.route)
+        .animation(reduceMotion ? Animation.easeOut(duration: 0.2) : Motion.liquid, value: router.peek)
+        .animation(reduceMotion ? Animation.easeOut(duration: 0.2) : Motion.glide, value: router.compact)
+        .animation(reduceMotion ? Animation.easeOut(duration: 0.2) : Motion.glide, value: router.tab)
         .accessibilityElement(children: .contain)
     }
 
@@ -5063,12 +5491,21 @@ struct NavBar: View {
         insertion: AnyTransition.opacity.animation(Animation.easeIn(duration: 0.22).delay(0.12)),
         removal: AnyTransition.opacity.animation(Animation.easeOut(duration: 0.1)))
 
+    /// The three places. The highlight under the current one travels to
+    /// the next like a drop of water (see `LiquidThumb`).
     private var places: some View {
         HStack(spacing: 0) {
             place(.today)
+                .thumbSegment(0)
             place(.kanji)
+                .thumbSegment(1)
             place(.read)
+                .thumbSegment(2)
         }
+        .modifier(LiquidThumb(selected: router.tab.order) {
+            Capsule()
+                .fill(Palette.accent.opacity(0.12))
+        })
         .padding(.horizontal, 5)
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Tabs")
@@ -5079,14 +5516,7 @@ struct NavBar: View {
         return Button {
             select(tab)
         } label: {
-            BarItem(title: tab.title, symbol: tab.symbol, active: selected)
-                .background {
-                    if selected {
-                        Capsule()
-                            .fill(Palette.accent.opacity(0.12))
-                            .matchedGeometryEffect(id: "place", in: thumb)
-                    }
-                }
+            BarItem(title: tab.title, symbol: tab.symbol, active: selected, bounce: bounces[tab] ?? 0)
         }
         .buttonStyle(PressableStyle(scale: 0.94))
         .accessibilityLabel(tab.title)
@@ -5127,6 +5557,7 @@ struct NavBar: View {
         if router.tab == tab {
             router.popToRoot()
         } else {
+            bounces[tab, default: 0] += 1
             router.tab = tab
         }
         router.peek = false
@@ -5180,7 +5611,8 @@ struct NavBar: View {
                     withAnimation(Motion.flick) { store.toggleSaved(glyph) }
                     Haptics.saved()
                 } label: {
-                    BarItem(title: saved ? "Saved" : "Save", symbol: "bookmark", active: saved)
+                    BarItem(title: saved ? "Saved" : "Save", symbol: "bookmark", active: saved,
+                            bounce: saved ? 1 : 0)
                 }
                 .buttonStyle(PressableStyle(scale: 0.92))
                 .accessibilityLabel(saved ? "Remove from saved" : "Save")
@@ -5188,7 +5620,7 @@ struct NavBar: View {
                     Haptics.tap()
                     router.strokeToken += 1
                 } label: {
-                    BarItem(title: "Strokes", symbol: "pencil.tip")
+                    BarItem(title: "Strokes", symbol: "pencil.tip", bounce: router.strokeToken)
                 }
                 .buttonStyle(PressableStyle(scale: 0.92))
                 .accessibilityLabel("Play stroke order and sound")
@@ -5221,6 +5653,9 @@ struct NavBar: View {
             .buttonStyle(PressableStyle(scale: 0.97))
             .prominentCapsule()
             .disabled(!started && queued)
+            // Unfolding from the edge, the next step arrives a beat after
+            // the tools (staggering).
+            .modifier(Unveil(order: 1, rise: 0, soften: 0))
         }
     }
 
@@ -5234,9 +5669,10 @@ struct NavBar: View {
             } label: {
                 BarItem(title: router.listening ? "Stop" : "Listen",
                         symbol: router.listening ? "stop" : "speaker.wave.2",
-                        active: router.listening)
+                        active: router.listening, bounce: router.listening ? 1 : 0)
             }
             .buttonStyle(PressableStyle(scale: 0.92))
+            .modifier(Unveil(order: 0, rise: 4, soften: 0))
             Button {
                 Haptics.tick()
                 withAnimation(Motion.settle) { router.toggleFurigana(store) }
@@ -5244,15 +5680,18 @@ struct NavBar: View {
                 BarItem(title: "Furigana", symbol: "textformat", active: furigana, glyph: "あ")
             }
             .buttonStyle(PressableStyle(scale: 0.92))
+            .modifier(Unveil(order: 1, rise: 4, soften: 0))
             .accessibilityLabel("Furigana")
             .accessibilityValue(furigana ? "On" : "Off")
             Button {
                 Haptics.tick()
                 withAnimation(Motion.settle) { router.translation.toggle() }
             } label: {
-                BarItem(title: "English", symbol: "character.bubble", active: router.translation)
+                BarItem(title: "English", symbol: "character.bubble", active: router.translation,
+                        bounce: router.translation ? 1 : 0)
             }
             .buttonStyle(PressableStyle(scale: 0.92))
+            .modifier(Unveil(order: 2, rise: 4, soften: 0))
             .accessibilityLabel("English translation")
             .accessibilityValue(router.translation ? "On" : "Off")
         }
@@ -5320,6 +5759,8 @@ struct HomeScreen: View {
     @State private var armed = false
     @State private var finger: CGPoint? = nil
     @State private var arrived = false
+    /// A finger is on the button.
+    @State private var reaching = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -5328,8 +5769,8 @@ struct HomeScreen: View {
                 .padding(.top, Space.l)
                 // As the deck lifts under a finger the words step back,
                 // so the eye stays with the card.
-                .offset(y: lift * 0.1)
-                .opacity(Double(max(0.45, 1 + lift / 420)))
+                .offset(y: min(lift, 0) * 0.1)
+                .opacity(Double(min(1, max(0.45, 1 + min(lift, 0) / 420))))
             stage
             actions
                 .padding(.horizontal, Space.l)
@@ -5342,7 +5783,7 @@ struct HomeScreen: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background {
-            AmbientBackground(wash: canStart ? Wash.hour(now) : .done)
+            AmbientBackground(wash: homeWash)
         }
         .background(startKey)
         .onAppear { arrived = true }
@@ -5355,7 +5796,7 @@ struct HomeScreen: View {
     private var header: some View {
         HStack(alignment: .top, spacing: Space.m) {
             VStack(alignment: .leading, spacing: Space.xs) {
-                Caption(text: dateLine)
+                Caption(text: dateLine, lines: 2)
                 Text(greeting)
                     .font(.display(.largeTitle, weight: .bold))
                     .tracking(Tracking.display)
@@ -5369,7 +5810,7 @@ struct HomeScreen: View {
             }
             .accessibilityElement(children: .combine)
             Spacer(minLength: Space.s)
-            DaySeal(progress: store.todayProgress, date: now)
+            DaySeal(progress: store.todayProgress, date: now, visible: router.session == nil)
                 .padding(.top, Space.xxs)
         }
         .frame(maxWidth: Metrics.readableWidth)
@@ -5480,13 +5921,13 @@ struct HomeScreen: View {
     private var centerpiece: some View {
         switch state {
         case .review(let count):
-            HomeDeck(glyphs: preview, lift: lift, armed: armed)
+            HomeDeck(glyphs: preview, lift: deckLift, armed: armed || reaching, pressed: deckPressed)
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel(count == 1 ? "1 card to review" : "\(count) cards to review")
                 .accessibilityAddTraits(.isButton)
                 .accessibilityAction { start() }
         case .learn(let batch):
-            HomeDeck(glyphs: batch.map(\.glyph), lift: lift, armed: armed)
+            HomeDeck(glyphs: batch.map(\.glyph), lift: deckLift, armed: armed || reaching, pressed: deckPressed)
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel(batch.count == 1 ? "1 new kanji to learn" : "\(batch.count) new kanji to learn")
                 .accessibilityAddTraits(.isButton)
@@ -5529,10 +5970,10 @@ struct HomeScreen: View {
         switch state {
         case .review:
             Button("Review") { start() }
-                .buttonStyle(PillStyle(prominent: true))
+                .buttonStyle(PillStyle(prominent: true, onPress: reach))
         case .learn:
             Button("Learn") { start() }
-                .buttonStyle(PillStyle(prominent: true))
+                .buttonStyle(PillStyle(prominent: true, onPress: reach))
         case .rest(_, let canLearnMore, let passage):
             restLinks(canLearnMore: canLearnMore, passage: passage)
         }
@@ -5607,9 +6048,14 @@ struct HomeScreen: View {
         }
         h.panChanged = { t, point in
             finger = point
-            let up = min(t.height, 0)
-            lift = Motion.rubberband(up, dimension: 360)
-            let ready = up < -110
+            if t.height <= 0 {
+                lift = Motion.rubberband(t.height, dimension: 360)
+            } else {
+                // Pushed down into the table the deck resists at once and
+                // squashes against it (rubber banding).
+                lift = Motion.rubberband(t.height, dimension: 80)
+            }
+            let ready = t.height < -110
             if ready != armed {
                 if ready { Haptics.tick() }
                 armed = ready
@@ -5625,6 +6071,25 @@ struct HomeScreen: View {
             withAnimation(Motion.flick) { lift = 0 }
         }
         return h
+    }
+
+    /// The light on the paper. While the deck is lifted far enough to
+    /// begin, or the button is held, it already turns toward the cool
+    /// light of a session (anticipation); let go without starting and it
+    /// settles back.
+    private var homeWash: Wash {
+        guard canStart else { return .done }
+        return armed || reaching ? .focus : Wash.hour(now)
+    }
+
+    /// Holding the button lifts the top card a little toward you.
+    private var deckLift: CGFloat { lift + (reaching ? -14 : 0) }
+
+    /// A finger resting on the deck, not yet moving it.
+    private var deckPressed: Bool { finger != nil && lift == 0 }
+
+    private func reach(_ pressed: Bool) {
+        withAnimation(Motion.press) { reaching = pressed }
     }
 
     private var startKey: some View {
@@ -5647,6 +6112,8 @@ struct HomeDeck: View {
     let glyphs: [String]
     var lift: CGFloat = 0
     var armed = false
+    /// A finger resting on the deck: the top card gives a little under it.
+    var pressed = false
     @ScaledMetric(relativeTo: .largeTitle) private var baseWidth: CGFloat = 196
     @State private var writing = false
     @State private var written = ""
@@ -5694,7 +6161,7 @@ struct HomeDeck: View {
               let strokes = store.library.byGlyph[glyph]?.strokePaths.count, strokes > 0 else { return }
         written = glyph
         let time = HomeDeck.pace(strokes) * Double(strokes) + 0.4
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
             guard written == glyph else { return }
             writing = true
             DispatchQueue.main.asyncAfter(deadline: .now() + time) {
@@ -5720,9 +6187,14 @@ struct HomeDeck: View {
         let fan: [Double] = [0, -7, 6]
         let shift: [CGFloat] = [0, -22, 24]
         let follow: CGFloat = depth == 0 ? 1 : 0.45 - 0.15 * d
-        let settle = Double(min(-lift / 300, 1))
+        let up: CGFloat = min(lift, 0)
+        let push: CGFloat = depth == 0 ? max(lift, 0) : 0
+        let settle = Double(min(-up / 300, 1))
         let shape = RoundedRectangle(cornerRadius: 26, style: .continuous)
         let lit: Bool = armed && depth == 0
+        // Lifted, the card's shadow softens and widens; pressed down, it
+        // tightens under it — one light, one table (solid drawing).
+        let elevation: CGFloat = depth == 0 ? max(0.45, 1.1 + min(-up, 220) / 260 - push / 90) : 0.6
         return face(glyph, top: depth == 0)
             .frame(width: width, height: height)
             .background {
@@ -5746,13 +6218,25 @@ struct HomeDeck: View {
             }
             .background {
                 shape.fill(Palette.card)
-                    .elevation(depth == 0 ? 1.1 : 0.6)
+                    .elevation(elevation)
             }
             .modifier(DeviceTilt(enabled: depth == 0, cornerRadius: 26))
+            .scaleEffect(pressed && depth == 0 ? 0.985 : 1)
+            .animation(Motion.press, value: pressed)
+            // Pushed into the table, the top card squashes against it and
+            // keeps its volume: wider as it gets shorter.
+            .scaleEffect(x: 1 + push * 0.0012, y: 1 - push * 0.0016, anchor: .bottom)
             .scaleEffect(1 - 0.045 * d)
             .rotationEffect(.degrees(fan[depth] * (1 - settle * 0.6)))
-            .offset(x: shift[depth], y: d * 7 + lift * follow)
+            .offset(x: shift[depth], y: d * 7 + up * follow + push * 0.35)
     }
+}
+
+/// Kanji whose page has already written itself since the app opened. The
+/// second visit opens on the finished glyph: what is seen often should
+/// move less (frequency of use).
+enum Greeted {
+    static var kanji = Set<String>()
 }
 
 /// Everything about one kanji, told top to bottom like a short story: the
@@ -5841,6 +6325,7 @@ struct KanjiArticle: View {
             }
         }
         .frame(maxWidth: .infinity)
+        .id("hero")
     }
 
     /// Seconds per stroke for the writing that greets you: quick enough
@@ -6228,10 +6713,12 @@ struct KanjiArticle: View {
             autoplay(kanji)
             return
         }
-        guard !arrived, !reduceMotion, !kanji.strokePaths.isEmpty else { return }
+        guard !arrived, !reduceMotion, !kanji.strokePaths.isEmpty,
+              !Greeted.kanji.contains(kanji.glyph) else { return }
         arrived = true
+        Greeted.kanji.insert(kanji.glyph)
         let time = greetingPace(kanji) * Double(kanji.strokePaths.count) + 0.4
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
             arriving = true
             DispatchQueue.main.asyncAfter(deadline: .now() + time) {
                 arriving = false
@@ -6308,6 +6795,8 @@ struct LibraryView: View {
     @State private var query = ""
     @State private var sense = ScrollSense()
     @FocusState private var searching: Bool
+    /// The tiles have settled in once; they don't do it again.
+    @State private var cascade = false
 
     enum Shelf: String, CaseIterable, Identifiable {
         case all = "All"
@@ -6373,7 +6862,10 @@ struct LibraryView: View {
             AmbientBackground(wash: store.currentLevel.wash, animated: false)
         }
         .navigationTitle("Kanji")
-        .onAppear { sense.resume() }
+        .onAppear {
+            sense.resume()
+            if !cascade { cascade = true }
+        }
     }
 
     /// A well to type into: the kanji itself, a meaning, or a reading.
@@ -6474,15 +6966,18 @@ struct LibraryView: View {
     }
 
     /// Each tile opens into its kanji and, on the way back, the kanji
-    /// folds into its tile again.
+    /// folds into its tile again. The first time the library is shown the
+    /// tiles settle in one after another, and the kanji you'll learn next
+    /// stands apart from all the others (Von Restorff).
     private func grid(_ kanji: [Kanji]) -> some View {
-        LazyVGrid(columns: columns, spacing: Space.xs) {
-            ForEach(kanji) { k in
+        let next: String? = store.lessonQueue.first?.glyph
+        return LazyVGrid(columns: columns, spacing: Space.xs) {
+            ForEach(Array(kanji.enumerated()), id: \.element.id) { index, k in
                 Button {
                     searching = false
                     router.open(.kanji(k.glyph))
                 } label: {
-                    GlyphCell(kanji: k)
+                    GlyphCell(kanji: k, isNext: k.glyph == next)
                 }
                 .buttonStyle(PressableStyle(scale: 0.92))
                 .contentShape(.contextMenuPreview, RoundedRectangle(cornerRadius: Radius.tile, style: .continuous))
@@ -6499,6 +6994,7 @@ struct LibraryView: View {
                         .blur(radius: CGFloat(abs(phase.value)) * 2)
                         .offset(y: CGFloat(phase.value) * 12)
                 }
+                .modifier(Cascade(shown: cascade, index: index))
             }
         }
     }
@@ -6680,6 +7176,10 @@ struct ReadView: View {
 struct GlyphCell: View {
     @EnvironmentObject var store: Store
     let kanji: Kanji
+    /// The kanji the next lesson will teach: the one tile drawn in the
+    /// accent among dozens of quiet ones, so the eye finds where the work
+    /// continues without a word of explanation (Von Restorff).
+    var isNext = false
     @Environment(\.colorScheme) private var scheme
 
     private func inkOpacity(_ stage: Stage) -> Double {
@@ -6697,7 +7197,7 @@ struct GlyphCell: View {
         let shape = RoundedRectangle(cornerRadius: Radius.tile, style: .continuous)
         Text(kanji.glyph)
             .font(.jp(30, face: store.data.settings.face, relativeTo: .title))
-            .foregroundStyle(Palette.ink.opacity(inkOpacity(stage)))
+            .foregroundStyle(Palette.ink.opacity(isNext ? 0.66 : inkOpacity(stage)))
             .frame(maxWidth: .infinity, minHeight: 66)
             .background {
                 if raised {
@@ -6709,6 +7209,22 @@ struct GlyphCell: View {
                 }
             }
             .litEdge(shape, strength: raised ? 1 : 0)
+            .overlay {
+                if isNext {
+                    shape.strokeBorder(Palette.accent.opacity(0.75), lineWidth: 1.5)
+                        .allowsHitTesting(false)
+                }
+            }
+            .overlay(alignment: .bottom) {
+                if isNext {
+                    Text("NEXT")
+                        .font(.system(size: 9, weight: .bold))
+                        .tracking(0.9)
+                        .foregroundStyle(Palette.accent)
+                        .padding(.bottom, 5)
+                        .accessibilityHidden(true)
+                }
+            }
             .overlay(alignment: .topTrailing) {
                 if store.isSaved(kanji.glyph) {
                     Image(systemName: "bookmark.fill")
@@ -6723,7 +7239,7 @@ struct GlyphCell: View {
             .contentShape(Rectangle())
             .accessibilityElement(children: .ignore)
             .accessibilityLabel("\(kanji.glyph), \(kanji.primaryMeaning)")
-            .accessibilityValue(stage.title)
+            .accessibilityValue(isNext ? "Next to learn" : stage.title)
             .accessibilityAddTraits(.isButton)
     }
 }
@@ -6790,12 +7306,18 @@ struct PassageFeature: View {
         let read: Bool = store.data.readPassages.contains(passage.id)
         let shape = RoundedRectangle(cornerRadius: Radius.sheet, style: .continuous)
         VStack(alignment: .leading, spacing: Space.m) {
-            HStack(spacing: Space.xs) {
-                Caption(text: read ? "Read again" : "Read next", color: Palette.accent)
-                Text("·")
-                    .foregroundStyle(Palette.ink3)
-                Caption(text: "\(passage.level.label) · \(passage.genre)")
-                Spacer(minLength: 0)
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: Space.xs) {
+                    Caption(text: read ? "Read again" : "Read next", color: Palette.accent)
+                    Text("·")
+                        .foregroundStyle(Palette.ink3)
+                    Caption(text: "\(passage.level.label) · \(passage.genre)")
+                    Spacer(minLength: 0)
+                }
+                VStack(alignment: .leading, spacing: Space.xxs) {
+                    Caption(text: read ? "Read again" : "Read next", color: Palette.accent, lines: 2)
+                    Caption(text: "\(passage.level.label) · \(passage.genre)", lines: 2)
+                }
             }
             VStack(alignment: .leading, spacing: Space.xxs) {
                 Text(Ruby.plain(passage.title))
@@ -6907,7 +7429,9 @@ struct CoverageRing: View {
                 .font(.figure(.caption2, weight: .bold))
                 .monospacedDigit()
                 .foregroundStyle(Palette.ink2)
-                .minimumScaleFactor(0.7)
+                .lineLimit(1)
+                .minimumScaleFactor(0.6)
+                .dynamicTypeSize(...DynamicTypeSize.xLarge)
         }
         .frame(width: 46, height: 46)
         .onAppear {
@@ -6937,25 +7461,33 @@ struct KanjiView: View {
     }
 
     var body: some View {
-        ScrollView {
-            KanjiArticle(glyph: glyph, detailed: true)
-                .padding(.horizontal, Space.l)
-                .padding(.top, Space.s)
-                .padding(.bottom, NavMetrics.clearance + Space.l)
-                .readableColumn()
-                .background(alignment: .top) {
-                    ScrollProbe { y in
-                        if let down = sense.update(y) { router.scrolled(down: down) }
+        ScrollViewReader { proxy in
+            ScrollView {
+                KanjiArticle(glyph: glyph, detailed: true)
+                    .padding(.horizontal, Space.l)
+                    .padding(.top, Space.s)
+                    .padding(.bottom, NavMetrics.clearance + Space.l)
+                    .readableColumn()
+                    .background(alignment: .top) {
+                        ScrollProbe { y in
+                            if let down = sense.update(y) { router.scrolled(down: down) }
+                        }
                     }
-                }
-        }
-        .onScrollTravel { y in
-            if let down = sense.update(y, rest: 0) { router.scrolled(down: down) }
-        }
-        .scrollDismissesKeyboard(.interactively)
-        .defaultScrollAnchor(Showcase.anchor)
-        .background {
-            AmbientBackground(wash: level.wash, animated: false)
+            }
+            .onScrollTravel { y in
+                if let down = sense.update(y, rest: 0) { router.scrolled(down: down) }
+            }
+            .scrollDismissesKeyboard(.interactively)
+            .defaultScrollAnchor(Showcase.anchor)
+            .background {
+                AmbientBackground(wash: level.wash, animated: false)
+            }
+            // Strokes in the bar writes the kanji at the top of the page. If
+            // the page has been scrolled, it comes back to the kanji first,
+            // so the answer to the tap is always in view (origin awareness).
+            .onChange(of: router.strokeToken) { _, _ in
+                withAnimation(Motion.settle) { proxy.scrollTo("hero", anchor: .top) }
+            }
         }
         .navigationTitle(glyph)
         .navigationBarTitleDisplayMode(.inline)
@@ -8842,31 +9374,129 @@ struct StrokeGlyph: View {
     }
 }
 
-/// The bookmark that pops when something is saved, with a ring of light.
+/// The bookmark that pops on a kanji's page when it is saved: tall as it
+/// leaves, wide as it lands, then itself again (squash and stretch), with a
+/// ring of light spreading behind it (secondary action).
 struct SaveBurst: View {
     let saved: Bool
-    @State private var pop = false
-    @State private var ring = false
+    @State private var go = false
+
+    private struct Pose {
+        var scale = 0.4
+        var stretchX = 1.0
+        var stretchY = 1.0
+        var opacity = 0.0
+        var ring = 0.0
+    }
 
     var body: some View {
-        ZStack {
-            Circle()
-                .stroke(Palette.accent.opacity(ring ? 0 : 0.4), lineWidth: ring ? 1 : 6)
-                .frame(width: 96, height: 96)
-                .scaleEffect(ring ? 1.9 : 0.5)
-            Image(systemName: saved ? "bookmark.fill" : "bookmark.slash")
-                .font(.system(size: 60, weight: .semibold))
-                .foregroundStyle(saved ? Palette.accent : Palette.ink2)
-                .shadow(color: Palette.accent.opacity(saved ? 0.3 : 0), radius: 14, x: 0, y: 6)
-                .scaleEffect(pop ? 1 : 0.4)
-                .opacity(pop ? 1 : 0)
+        KeyframeAnimator(initialValue: Pose(), trigger: go) { pose in
+            ZStack {
+                Circle()
+                    .stroke(Palette.accent.opacity(0.4 * (1 - pose.ring)), lineWidth: 1 + 5 * CGFloat(1 - pose.ring))
+                    .frame(width: 96, height: 96)
+                    .scaleEffect(0.5 + 1.4 * CGFloat(pose.ring))
+                Image(systemName: saved ? "bookmark.fill" : "bookmark.slash")
+                    .font(.system(size: 60, weight: .semibold))
+                    .foregroundStyle(saved ? Palette.accent : Palette.ink2)
+                    .shadow(color: Palette.accent.opacity(saved ? 0.3 : 0), radius: 14, x: 0, y: 6)
+                    .scaleEffect(x: CGFloat(pose.stretchX), y: CGFloat(pose.stretchY), anchor: .bottom)
+                    .scaleEffect(CGFloat(pose.scale))
+                    .opacity(pose.opacity)
+            }
+        } keyframes: { _ in
+            KeyframeTrack(\.scale) {
+                SpringKeyframe(1.0, duration: 0.3, spring: .bouncy)
+            }
+            KeyframeTrack(\.stretchX) {
+                CubicKeyframe(0.86, duration: 0.09)
+                CubicKeyframe(1.13, duration: 0.09)
+                SpringKeyframe(1.0, duration: 0.26, spring: .bouncy)
+            }
+            KeyframeTrack(\.stretchY) {
+                CubicKeyframe(1.14, duration: 0.09)
+                CubicKeyframe(0.87, duration: 0.09)
+                SpringKeyframe(1.0, duration: 0.26, spring: .bouncy)
+            }
+            KeyframeTrack(\.opacity) {
+                LinearKeyframe(1.0, duration: 0.08)
+            }
+            KeyframeTrack(\.ring) {
+                CubicKeyframe(1.0, duration: 0.6)
+            }
         }
-        .onAppear {
-            withAnimation(.spring(duration: 0.35, bounce: 0.45)) { pop = true }
-            withAnimation(.easeOut(duration: 0.6)) { ring = true }
-        }
+        .onAppear { go = true }
         .allowsHitTesting(false)
         .accessibilityHidden(true)
+    }
+}
+
+/// A bookmark leaving the Save panel and travelling along a curve into the
+/// ribbon's place on the card's top edge, shrinking as it goes, so the eye
+/// follows the save to where it now lives (origin awareness, arcs). Taken
+/// off, the bookmark drops away from the ribbon under its own weight.
+struct RibbonFlight: View {
+    let saving: Bool
+    let from: CGPoint
+    let to: CGPoint
+    @State private var go = false
+
+    private struct Pose {
+        var t = 0.0
+        var scale = 0.6
+        var spin = Angle.zero
+        var opacity = 0.0
+    }
+
+    var body: some View {
+        let flight: Double = saving ? 0.42 : 0.55
+        let launch: Double = saving ? 1.3 : 1.0
+        let land: Double = saving ? 0.5 : 0.8
+        let tilt: Angle = Angle.degrees(saving ? -14 : 24)
+        let settle: Angle = Angle.degrees(saving ? 0 : 40)
+        let curve: UnitCurve = saving ? UnitCurve.easeInOut : UnitCurve.easeIn
+        KeyframeAnimator(initialValue: Pose(), trigger: go) { pose in
+            Image(systemName: saving ? "bookmark.fill" : "bookmark.slash.fill")
+                .font(.system(size: 30, weight: .semibold))
+                .foregroundStyle(saving ? Palette.accent : Palette.ink2)
+                .scaleEffect(CGFloat(pose.scale))
+                .rotationEffect(pose.spin)
+                .opacity(pose.opacity)
+                .position(point(pose.t))
+        } keyframes: { _ in
+            KeyframeTrack(\.t) {
+                LinearKeyframe(1.0, duration: flight, timingCurve: curve)
+            }
+            KeyframeTrack(\.scale) {
+                SpringKeyframe(launch, duration: 0.14, spring: .bouncy)
+                CubicKeyframe(land, duration: flight - 0.14)
+            }
+            KeyframeTrack(\.spin) {
+                CubicKeyframe(tilt, duration: flight * 0.5)
+                CubicKeyframe(settle, duration: flight * 0.5)
+            }
+            KeyframeTrack(\.opacity) {
+                LinearKeyframe(1.0, duration: 0.06)
+                LinearKeyframe(1.0, duration: flight - 0.18)
+                LinearKeyframe(0.0, duration: 0.12)
+            }
+        }
+        .onAppear { go = true }
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
+    }
+
+    /// A point on a curve that bows away from the straight line: out to the
+    /// side on the way up to the ribbon, tossed up a little before it falls.
+    private func point(_ t: Double) -> CGPoint {
+        let s = CGFloat(t)
+        let bow = CGPoint(x: min(from.x, to.x) - (saving ? 110 : 30),
+                          y: saving ? (from.y + to.y) / 2 - 40 : from.y - 26)
+        let a: CGFloat = (1 - s) * (1 - s)
+        let b: CGFloat = 2 * (1 - s) * s
+        let c: CGFloat = s * s
+        return CGPoint(x: a * from.x + b * bow.x + c * to.x,
+                       y: a * from.y + b * bow.y + c * to.y)
     }
 }
 
@@ -8972,6 +9602,7 @@ struct ReelsFeed: View {
     @State private var dragY: CGFloat = 0
     @State private var pinch: CGFloat = 1
     @State private var vanishing = false
+    @State private var touch = FeedTouch()
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     /// Pulling the first card down closes the session.
@@ -9014,6 +9645,12 @@ struct ReelsFeed: View {
             }
             if returning, let previous = model.previousItem {
                 incoming(previous, g: g, travel: travel)
+            }
+            if model.current != nil {
+                GestureSurface(handlers: forwarding)
+                    .frame(width: g.cardWidth, height: g.cardHeight)
+                    .offset(y: g.top)
+                    .accessibilityHidden(true)
             }
             topBar(g)
         }
@@ -9078,7 +9715,7 @@ struct ReelsFeed: View {
         let shade: Double = Double(recede) * 0.04
         return ReelPage(model: model, item: item, live: true, dragY: $dragY, pageSize: g.cardSize,
                         cornerRadius: g.cornerRadius, travel: g.size.height, frozen: pinching,
-                        onClose: onClose, onPinch: pinchChanged)
+                        onClose: onClose, onPinch: pinchChanged, touch: touch)
             .id(item.id)
             .overlay {
                 RoundedRectangle(cornerRadius: g.cornerRadius, style: .continuous)
@@ -9177,6 +9814,29 @@ struct ReelsFeed: View {
         .animation(Motion.flick, value: model.combo >= 3)
     }
 
+    /// The deck's one touch surface, passing every gesture to the card on
+    /// top. A finger landing while a card is still flying away first ends
+    /// that turn (see `FeedTouch`).
+    private var forwarding: GestureSurface.Handlers {
+        let touch = self.touch
+        var h = GestureSurface.Handlers()
+        h.pressChanged = { down, point in
+            if down { touch.hurry() }
+            touch.handlers.pressChanged(down, point)
+        }
+        h.tap = { point in touch.handlers.tap(point) }
+        h.doubleTap = { point in touch.handlers.doubleTap(point) }
+        h.holdBegan = { touch.handlers.holdBegan() }
+        h.holdEnded = { touch.handlers.holdEnded() }
+        h.panChanged = { translation, point in touch.handlers.panChanged(translation, point) }
+        h.panEnded = { translation, velocity in touch.handlers.panEnded(translation, velocity) }
+        h.pinchChanged = { scale in touch.handlers.pinchChanged(scale) }
+        h.pinchEnded = { scale in touch.handlers.pinchEnded(scale) }
+        h.hover = { point in touch.handlers.hover(point) }
+        h.epoch = model.current.map { $0.id.hashValue } ?? 0
+        return h
+    }
+
     /// Pinching shrinks the card under the fingers, as when closing a
     /// photo; let go small enough and it's gone.
     private func pinchChanged(_ scale: CGFloat, ended: Bool) {
@@ -9210,12 +9870,91 @@ struct ReelsFeed: View {
     }
 }
 
+/// The deck's touch surface and the card that answers it.
+///
+/// The surface stays where the top card rests instead of riding on the
+/// card, so a finger that lands while a card is still flying away takes
+/// hold of the next one at once: the turn in flight finishes on the spot
+/// and the same touch carries on — a tap reveals, a swipe turns again.
+/// Nothing waits for an animation to end (interruptible motion, Doherty
+/// threshold).
+final class FeedTouch {
+    /// The live card's gestures; the card puts them here each time it draws.
+    var handlers = GestureSurface.Handlers()
+    private var pending: (() -> Void)? = nil
+    private var ticket = 0
+
+    /// Holds the end of a page turn until its animation finishes or a new
+    /// touch hurries it; returns the ticket that finishes it.
+    func hold(_ end: @escaping () -> Void) -> Int {
+        ticket += 1
+        pending = end
+        return ticket
+    }
+
+    /// The animation of the turn with this ticket has finished.
+    func complete(_ ticket: Int) {
+        guard ticket == self.ticket, let end = pending else { return }
+        pending = nil
+        end()
+    }
+
+    /// A finger landed: whatever turn is in flight ends now.
+    func hurry() {
+        guard let end = pending else { return }
+        pending = nil
+        end()
+    }
+}
+
 /// Consecutive first-try answers. It appears at three, rolls up with the
-/// run and simply disappears on a miss — no penalty, no lost streak.
+/// run and simply disappears on a miss — no penalty, no lost streak. Each
+/// step up is a small bump; the milestones — 5, 10, 20, 30, 50, 100 — are
+/// the session's peaks and are allowed to be more than life-size: the chip
+/// leaps, wobbles and flashes amber (exaggeration, peak–end).
 struct ComboChip: View {
     let combo: Int
 
+    private static let milestones: Set<Int> = [5, 10, 20, 30, 50, 100]
+
+    private struct Pop {
+        var scale = 1.0
+        var tilt = Angle.zero
+        var glow = 0.0
+    }
+
     var body: some View {
+        let big: Bool = ComboChip.milestones.contains(combo)
+        let peak: Double = big ? 1.45 : 1.08
+        let rise: Double = big ? 0.18 : 0.12
+        let swing: Double = big ? 1 : 0
+        KeyframeAnimator(initialValue: Pop(), trigger: combo) { pop in
+            chip
+                .background(Palette.kohaku.opacity(0.3 * pop.glow), in: Capsule())
+                .scaleEffect(CGFloat(pop.scale))
+                .rotationEffect(pop.tilt)
+                .shadow(color: Palette.kohaku.opacity(0.45 * pop.glow), radius: 10, x: 0, y: 3)
+        } keyframes: { _ in
+            KeyframeTrack(\.scale) {
+                SpringKeyframe(peak, duration: rise, spring: .bouncy)
+                SpringKeyframe(1.0, duration: 0.3, spring: .bouncy)
+            }
+            KeyframeTrack(\.tilt) {
+                CubicKeyframe(Angle.degrees(-9 * swing), duration: 0.08)
+                CubicKeyframe(Angle.degrees(7 * swing), duration: 0.1)
+                CubicKeyframe(Angle.degrees(-3 * swing), duration: 0.1)
+                SpringKeyframe(Angle.zero, duration: 0.2, spring: .smooth)
+            }
+            KeyframeTrack(\.glow) {
+                CubicKeyframe(swing, duration: 0.1)
+                CubicKeyframe(0.0, duration: 0.7)
+            }
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(combo) in a row")
+    }
+
+    private var chip: some View {
         HStack(spacing: 3) {
             Image(systemName: "flame.fill")
                 .font(.caption2.weight(.bold))
@@ -9230,20 +9969,38 @@ struct ComboChip: View {
         .frame(height: 26)
         .background(Palette.matcha.opacity(0.14), in: Capsule())
         .animation(Motion.flick, value: combo)
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(combo) in a row")
     }
 }
 
 /// The ribbon that hangs from a saved card's top edge, as a bookmark hangs
-/// from a page.
+/// from a page. Saved just now, it lands and swings on its top edge before
+/// it comes to rest, like cloth (follow-through, arcs).
 struct BookmarkRibbon: View {
+    var swings = false
+    @State private var go = false
+
+    private struct Swing {
+        var angle = Angle.zero
+    }
+
     var body: some View {
-        RibbonShape()
-            .fill(Palette.accent.gradient)
-            .frame(width: 18, height: 34)
-            .shadow(color: Color.black.opacity(0.12), radius: 2, x: 0, y: 1)
-            .accessibilityHidden(true)
+        KeyframeAnimator(initialValue: Swing(), trigger: go) { swing in
+            RibbonShape()
+                .fill(Palette.accent.gradient)
+                .frame(width: 18, height: 34)
+                .shadow(color: Color.black.opacity(0.12), radius: 2, x: 0, y: 1)
+                .rotationEffect(swing.angle, anchor: .top)
+        } keyframes: { _ in
+            KeyframeTrack(\.angle) {
+                LinearKeyframe(Angle.zero, duration: 0.55)
+                CubicKeyframe(Angle.degrees(7), duration: 0.16)
+                CubicKeyframe(Angle.degrees(-4), duration: 0.2)
+                CubicKeyframe(Angle.degrees(1.5), duration: 0.2)
+                CubicKeyframe(Angle.zero, duration: 0.22)
+            }
+        }
+        .onAppear { if swings { go = true } }
+        .accessibilityHidden(true)
     }
 }
 
@@ -9290,6 +10047,8 @@ struct ReelPage: View {
     let onClose: (Bool) -> Void
     /// The pinch's scale, and whether it has ended.
     let onPinch: (CGFloat, Bool) -> Void
+    /// The deck's touch surface; given to the card on top only.
+    var touch: FeedTouch? = nil
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     @State private var revealed = false
@@ -9306,6 +10065,10 @@ struct ReelPage: View {
     @State private var heartToken = 0
     @State private var showSaveBurst = false
     @State private var saveToken = 0
+    /// Where the last double-tap landed, for the heart.
+    @State private var heartAt: CGPoint? = nil
+    /// Saved while this card was in hand, so its ribbon lands and swings.
+    @State private var justSaved = false
     @State private var shownAt = Date()
     @State private var answerMs = 0
     @State private var typed = ""
@@ -9366,10 +10129,9 @@ struct ReelPage: View {
     // MARK: Layout
 
     private func livePage(_ k: Kanji) -> some View {
-        withAccessibility(pageContent(k), k)
-            .overlay {
-                GestureSurface(handlers: surfaceHandlers(k))
-            }
+        // The deck's one touch surface serves whichever card is on top.
+        touch?.handlers = surfaceHandlers(k)
+        return withAccessibility(pageContent(k), k)
             .background(hiddenKeys(k))
             .onAppear { appear(k) }
     }
@@ -9407,7 +10169,7 @@ struct ReelPage: View {
         }
         .overlay(alignment: .topTrailing) {
             if saved {
-                BookmarkRibbon()
+                BookmarkRibbon(swings: justSaved && !reduceMotion)
                     .padding(.trailing, Space.xl)
                     .transition(.move(edge: .top).combined(with: .opacity))
             }
@@ -9420,9 +10182,27 @@ struct ReelPage: View {
         .litEdge(shape)
         .background {
             shape.fill(Palette.card)
-                .elevation(1)
+                .elevation(cardLift)
+                .animation(Motion.press, value: pressing)
         }
-        .animation(Motion.flick, value: saved)
+        .animation(ribbonMotion, value: saved)
+    }
+
+    /// The card lies on the page. A finger on it presses it in; pushed or
+    /// pulled away, its shadow softens and widens like a sheet lifted from
+    /// a desk (solid drawing).
+    private var cardLift: CGFloat {
+        guard live else { return 1 }
+        let moved: CGFloat = min(abs(dragX) + abs(min(dragY, 0)) * 0.5, 160)
+        if moved == 0 && pressing { return 0.7 }
+        return 1 + moved / 220
+    }
+
+    /// A ribbon being saved drops in just as the bookmark flying to it
+    /// arrives; one taken off goes at once.
+    private var ribbonMotion: Animation {
+        if reduceMotion { return .easeOut(duration: 0.2) }
+        return saved ? Animation.spring(duration: 0.4, bounce: 0.3).delay(0.3) : Motion.settle
     }
 
     private var cardFill: some View {
@@ -9543,22 +10323,42 @@ struct ReelPage: View {
             }
             .foregroundStyle(Color.white)
             .frame(width: ReelPage.sideLimit)
-            .scaleEffect(armed ? 1.08 : 0.88 + 0.12 * CGFloat(shown))
+            // Past the point of no return the icon jumps to a little more
+            // than life-size (exaggeration), so the threshold can't be missed.
+            .scaleEffect(armed ? 1.22 : 0.88 + 0.12 * CGFloat(shown))
             .opacity(shown)
         }
-        .animation(Motion.flick, value: armed)
+        .animation(armed ? Animation.spring(duration: 0.3, bounce: 0.45) : Motion.press, value: armed)
     }
 
     @ViewBuilder
     private var bursts: some View {
         if showHeart {
-            HeartBurst()
+            HeartBurst(at: heartAt)
                 .id(heartToken)
+                .transition(.identity)
         }
         if showSaveBurst {
-            SaveBurst(saved: saved)
+            RibbonFlight(saving: saved,
+                         from: saved ? savePanelPoint : ribbonPoint,
+                         to: saved ? ribbonPoint : dropPoint)
                 .id(saveToken)
+                .transition(.identity)
         }
+    }
+
+    /// Where the Save panel's icon sits behind the card; where the ribbon
+    /// hangs from its top edge; where a ribbon taken off falls to.
+    private var savePanelPoint: CGPoint {
+        CGPoint(x: pageSize.width - ReelPage.sideLimit / 2, y: pageSize.height / 2)
+    }
+
+    private var ribbonPoint: CGPoint {
+        CGPoint(x: pageSize.width - Space.xl - 9, y: 17)
+    }
+
+    private var dropPoint: CGPoint {
+        CGPoint(x: pageSize.width - Space.xl - 60, y: pageSize.height * 0.42)
     }
 
     /// The content column: centred, a little above the middle, never wider
@@ -9593,8 +10393,9 @@ struct ReelPage: View {
         VStack(spacing: Space.xl) {
             prompt(k)
             if revealed {
+                // The lines unveil themselves, one after another.
                 answer(k)
-                    .transition(reduceMotion ? AnyTransition.opacity : AnyTransition.blurFade)
+                    .transition(.identity)
             }
         }
         .animation(Motion.reveal, value: revealed)
@@ -9627,7 +10428,8 @@ struct ReelPage: View {
     }
 
     /// Meaning, then readings, then — when it helps — the memory hook: each
-    /// line a step quieter than the one above.
+    /// line a step quieter than the one above, and each arriving a beat
+    /// after it, so the eye is led down the card in reading order.
     private func answer(_ k: Kanji) -> some View {
         VStack(spacing: Space.l) {
             RevealRule()
@@ -9652,15 +10454,18 @@ struct ReelPage: View {
                     }
                 }
             }
+            .modifier(Unveil(order: 0))
             if needsSupport {
                 MixedText(hookText(k), style: .callout)
                     .foregroundStyle(Palette.ink2)
                     .multilineTextAlignment(.center)
                     .lineSpacing(4)
                     .fixedSize(horizontal: false, vertical: true)
+                    .modifier(Unveil(order: 1))
             }
             if card?.leech ?? false {
                 lookAlikes(k)
+                    .modifier(Unveil(order: 2))
             }
         }
     }
@@ -9915,8 +10720,8 @@ struct ReelPage: View {
         h.tap = { _ in
             tap(k)
         }
-        h.doubleTap = { _ in
-            doubleTap(k)
+        h.doubleTap = { point in
+            doubleTap(k, at: point)
         }
         h.holdBegan = {
             startHold(k)
@@ -10062,11 +10867,11 @@ struct ReelPage: View {
         }
     }
 
-    private func doubleTap(_ k: Kanji) {
+    private func doubleTap(_ k: Kanji, at point: CGPoint? = nil) {
         guard !leaving else { return }
         switch item.kind {
         case .teach:
-            knowAlready()
+            knowAlready(at: point)
         case .card:
             if !revealed { reveal(k) }
             let nowEasy = !easy
@@ -10074,7 +10879,7 @@ struct ReelPage: View {
                 easy = nowEasy
                 if nowEasy { marked = false }
             }
-            if nowEasy { celebrate() } else { Haptics.tap() }
+            if nowEasy { celebrate(at: point) } else { Haptics.tap() }
         case .context:
             listen(k)
         }
@@ -10082,9 +10887,9 @@ struct ReelPage: View {
 
     /// "I already know this" on a lesson card: a heart, then the kanji and
     /// its checks dissolve away; a spaced check verifies it later.
-    private func knowAlready() {
+    private func knowAlready(at point: CGPoint? = nil) {
         leaving = true
-        celebrate()
+        celebrate(at: point)
         let glyph = item.glyph
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
             withAnimation(Motion.settle) {
@@ -10093,8 +10898,9 @@ struct ReelPage: View {
         }
     }
 
-    private func celebrate() {
+    private func celebrate(at point: CGPoint? = nil) {
         heartToken += 1
+        heartAt = point
         let token = heartToken
         showHeart = true
         Haptics.heart()
@@ -10174,10 +10980,11 @@ struct ReelPage: View {
     private func toggleSave(_ k: Kanji) {
         guard !leaving, item.kind != .context else { return }
         withAnimation(Motion.flick) { store.toggleSaved(k.glyph) }
+        justSaved = store.isSaved(k.glyph)
         Haptics.saved()
         saveToken += 1
         let token = saveToken
-        showSaveBurst = true
+        showSaveBurst = !reduceMotion
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
             if saveToken == token {
                 withAnimation(.easeOut(duration: 0.2)) { showSaveBurst = false }
@@ -10216,15 +11023,25 @@ struct ReelPage: View {
     private func slide(to target: CGFloat, velocity: CGFloat, then action: @escaping () -> Void) {
         let remaining = target - dragY
         let relative = remaining == 0 ? 0 : min(max(Double(velocity / remaining), 0), 6)
-        withAnimation(Motion.page(velocity: relative)) {
-            dragY = target
-        } completion: {
+        let land: () -> Void = {
             Haptics.snap()
             var transaction = Transaction()
             transaction.disablesAnimations = true
             withTransaction(transaction) {
                 dragY = 0
                 action()
+            }
+        }
+        // A finger landing on the deck before the card has gone ends the
+        // turn there and then (see FeedTouch).
+        let ticket: Int? = touch?.hold(land)
+        withAnimation(Motion.page(velocity: relative)) {
+            dragY = target
+        } completion: {
+            if let ticket = ticket, let touch = touch {
+                touch.complete(ticket)
+            } else {
+                land()
             }
         }
     }
@@ -10474,7 +11291,6 @@ struct RecapView: View {
         .gesture(finishGesture)
         .background(finishKey)
         .onAppear {
-            if model.mode != .practice { Haptics.success() }
             withAnimation(Motion.reveal.delay(0.15)) { appeared = true }
             withAnimation(.spring(duration: 1.0, bounce: 0.1).delay(0.45)) { counted = true }
             // Ask about reminders once, in context, after a real session.
@@ -10484,7 +11300,7 @@ struct RecapView: View {
 
     private var summary: some View {
         VStack(spacing: Space.xl) {
-            Hanko(glyph: model.mode == .lesson ? "学" : "済", size: 104)
+            Hanko(glyph: model.mode == .lesson ? "学" : "済", size: 104, thud: model.mode != .practice)
             VStack(spacing: Space.xs) {
                 Text(title)
                     .font(.display(.largeTitle, weight: .bold))
@@ -10503,6 +11319,9 @@ struct RecapView: View {
             if model.mode == .lesson && !glyphs.isEmpty {
                 learnedRow
             }
+            if !model.result.recovered.isEmpty {
+                recoveredLine
+            }
             if let comboLine = comboLine {
                 Label(comboLine, systemImage: "flame.fill")
                     .font(.subheadline.weight(.semibold))
@@ -10518,6 +11337,26 @@ struct RecapView: View {
         .accessibilityAddTraits(.isButton)
         .accessibilityHint(Text("Finishes the session"))
         .accessibilityAction { finish() }
+    }
+
+    /// The best moment of the session, kept for its end (peak–end): kanji
+    /// once forgotten, remembered first time today.
+    private var recoveredLine: some View {
+        let glyphs: [String] = Array(model.result.recovered.prefix(6))
+        let note: String = glyphs.count == 1
+            ? "Once forgotten — remembered today"
+            : "Once forgotten — all remembered today"
+        return VStack(spacing: Space.xxs) {
+            Text(glyphs.joined(separator: " "))
+                .font(.jp(24, bold: true, relativeTo: .title3))
+                .foregroundStyle(Palette.ink)
+            Text(note)
+                .font(.footnote.weight(.medium))
+                .foregroundStyle(Palette.ink2)
+        }
+        .opacity(appeared ? 1 : 0)
+        .offset(y: appeared || reduceMotion ? 0 : 10)
+        .animation(Motion.reveal.delay(0.35), value: appeared)
     }
 
     /// Three numbers on a sheet, rolling up from zero.
